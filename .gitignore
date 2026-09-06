@@ -1,0 +1,10 @@
+# godot
+.godot/
+*.import.tmp
+
+# extension build outputs
+gdextension/build/
+gdextension/build-web/
+bin/windows/
+bin/web/
+export/
