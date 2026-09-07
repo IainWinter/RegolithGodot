@@ -3,15 +3,15 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://b34qy66bw64dc"
-path="res://.godot/imported/fighter_mask.png-3c31b9b98b44e476d3c7c81801cddfcf.ctex"
+path="res://.godot/imported/fighter_mask.png-4dc45852b5a0d0b2a35d6dd366a98f9f.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://art/sprites/fighter_mask.png"
-dest_files=["res://.godot/imported/fighter_mask.png-3c31b9b98b44e476d3c7c81801cddfcf.ctex"]
+source_file="res://game/images/sprites/fighter_mask.png"
+dest_files=["res://.godot/imported/fighter_mask.png-4dc45852b5a0d0b2a35d6dd366a98f9f.ctex"]
 
 [params]
 

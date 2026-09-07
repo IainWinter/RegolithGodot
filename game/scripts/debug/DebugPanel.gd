@@ -154,7 +154,6 @@ func set_all_names(on: bool) -> void:
 	for check in name_checks:
 		check.set_pressed_no_signal(on)
 
-# run one physics tick and the frame after it, then hold again
 func step_once() -> void:
 	get_tree().paused = false
 	await get_tree().physics_frame

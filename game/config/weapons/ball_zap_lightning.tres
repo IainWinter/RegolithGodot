@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="LightningProps" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://game/scripts/effects/LightningProps.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+point_count = 15
+expected_splits_per_bolt = 1.0
+head_takeover_chance = 0.25
+jitter_step_size = 0.7
+branch_scale = 0.6
+start_angle_min = -0.45
+start_angle_max = 0.45
+bias_angle_min = -0.2
+bias_angle_max = 0.2
+speed = 48.0
+lifetime = 0.0
+color = Color(0.576471, 0.54902, 0.996078, 0.996078)
+fade_color = Color(0.352941, 0.156863, 0.705882, 0)
+emission = 0.3333
+emit_spark = true
+particle_density = 6.85
+spark_color = Color(0.6, 0.7, 1, 0.8)
+spark_speed = 3.0
+burn_strength = 0
+burn_damage = 0

@@ -19,6 +19,8 @@ public:
     void _draw() override;
     void _exit_tree() override;
 
+    int get_instance_count() const;
+
 protected:
     static void _bind_methods();
 

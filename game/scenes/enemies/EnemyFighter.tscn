@@ -1,0 +1,18 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://game/scripts/enemies/EnemyFighter.gd" id="1"]
+[ext_resource type="Texture2D" path="res://game/images/sprites/fighter.png" id="2"]
+[ext_resource type="Texture2D" path="res://game/images/sprites/fighter_mask.png" id="3"]
+[ext_resource type="Resource" path="res://game/config/enemies/fighter_cannon.tres" id="4"]
+[ext_resource type="Material" path="res://game/shaders/regolith_sprite_material.tres" id="6"]
+[ext_resource type="Material" path="res://game/shaders/regolith_rope_material.tres" id="7"]
+
+[node name="EnemyFighter" type="RegolithSprite" groups=["enemy", "regolith"]]
+material = ExtResource("6")
+rope_material = ExtResource("7")
+texture = ExtResource("2")
+mask_texture = ExtResource("3")
+angle_fixed = true
+angular_damping = 1.0
+script = ExtResource("1")
+weapon_props = ExtResource("4")

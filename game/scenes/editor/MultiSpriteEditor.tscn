@@ -1,8 +1,8 @@
 [gd_scene load_steps=4 format=3]
 
-[ext_resource type="Script" path="res://scenes/editor/MultiSpriteEditor.gd" id="1"]
-[ext_resource type="Material" path="res://shaders/regolith_sprite_material.tres" id="2"]
-[ext_resource type="Material" path="res://shaders/regolith_rope_material.tres" id="3"]
+[ext_resource type="Script" path="res://game/scripts/editor/MultiSpriteEditor.gd" id="1"]
+[ext_resource type="Material" path="res://game/shaders/regolith_sprite_material.tres" id="2"]
+[ext_resource type="Material" path="res://game/shaders/regolith_rope_material.tres" id="3"]
 
 [node name="MultiSpriteEditor" type="CanvasLayer"]
 script = ExtResource("1")

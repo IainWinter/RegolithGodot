@@ -6,7 +6,7 @@ var main: Node2D
 var player: Player
 
 func before_each() -> void:
-	main = load("res://scenes/Main.tscn").instantiate()
+	main = load("res://game/scenes/Main.tscn").instantiate()
 	add_child_autofree(main)
 	player = main.get_node("Player")
 	await wait_physics_frames(3)
@@ -53,3 +53,18 @@ func test_dash_adds_impulse_and_starts_cooldown() -> void:
 	assert_gt(player.dash_timer, 0.0, "cooldown running")
 	assert_lt(player.linear_velocity.y, before.y - 1.0, "dash pushed up")
 	Input.action_release("move_up")
+
+func test_losing_the_core_emits_core_destroyed_once() -> void:
+	watch_signals(player)
+	var count := player.get_cell_count()
+
+	for y in count.y:
+		for x in count.x:
+			if player.get_cell_type(Vector2i(x, y)) == RegolithSprite.CELL_CORE:
+				player.remove_cell(Vector2i(x, y))
+
+	await wait_physics_frames(6)
+
+	assert_eq(player.count_cells_of_type(RegolithSprite.CELL_CORE), 0)
+	assert_gt(player.get_active_cell_count(), 0, "the hull is still there")
+	assert_signal_emit_count(player, "core_destroyed", 1)

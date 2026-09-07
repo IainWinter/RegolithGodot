@@ -13,6 +13,7 @@
 #include "Math/MathUtil.h"
 
 #include <godot_cpp/classes/engine.hpp>
+#include <godot_cpp/classes/rendering_server.hpp>
 #include <godot_cpp/classes/scene_tree.hpp>
 #include <godot_cpp/classes/shader_material.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
@@ -38,11 +39,27 @@ RegolithSprite::RegolithSprite() {}
 
 RegolithSprite::~RegolithSprite() {
     detach();
+
+    if (m_preview.is_valid()) {
+        RenderingServer::get_singleton()->free_rid(m_preview);
+    }
 }
 
-// lifecycle
+void RegolithSprite::_exit_tree() {
+    detach();
+}
 
-void RegolithSprite::_ready() {
+void RegolithSprite::_notification(int what) {
+    if (what == NOTIFICATION_READY) {
+        ready();
+    }
+
+    else if (what == NOTIFICATION_EXTENSION_RELOADED && is_inside_tree() && !Engine::get_singleton()->is_editor_hint()) {
+        call_deferred("_reload");
+    }
+}
+
+void RegolithSprite::ready() {
     if (Engine::get_singleton()->is_editor_hint()) {
         queue_redraw();
         return;
@@ -60,17 +77,6 @@ void RegolithSprite::_ready() {
     }
 
     load(world);
-}
-
-void RegolithSprite::_exit_tree() {
-    detach();
-}
-
-// after a hot reload the world has a new pool, load into it again. pieces have no texture and are gone
-void RegolithSprite::_notification(int what) {
-    if (what == NOTIFICATION_EXTENSION_RELOADED && is_inside_tree() && !Engine::get_singleton()->is_editor_hint()) {
-        call_deferred("_reload");
-    }
 }
 
 void RegolithSprite::_reload() {
@@ -178,7 +184,6 @@ void RegolithSprite::release() {
     m_world = nullptr;
 }
 
-// any material works, only a shader material gets the atlas
 void RegolithSprite::bind_material() {
     Ref<Material> material = get_material();
     Ref<ShaderMaterial> shader_material = material;
@@ -191,7 +196,6 @@ void RegolithSprite::bind_material() {
     m_bound_material = material;
 }
 
-// a child so visibility and material apply to the ropes on their own, kept across hot reloads
 void RegolithSprite::ensure_rope_render() {
     if (!has_ropes()) {
         return;
@@ -207,8 +211,6 @@ void RegolithSprite::ensure_rope_render() {
 
     render->set_material(m_rope_material);
 }
-
-// world side
 
 RegolithWorld* RegolithSprite::world() const {
     return m_world;
@@ -245,7 +247,7 @@ const Grid& RegolithSprite::rope_grid() const {
 Transform RegolithSprite::render_pose(float fraction) const {
     Transform pose = m_transform;
 
-    if (m_dynamic && !m_editing) {
+    if (m_dynamic) {
         pose.position = mix(m_body.last_position, m_body.position, fraction);
         pose.angle = lerp_angle(m_body.last_angle, m_body.angle, fraction);
     }
@@ -294,20 +296,13 @@ void RegolithSprite::apply_mass() {
     }
 }
 
-// draw
-
 void RegolithSprite::_draw() {
     if (!is_loaded()) {
-        if (Engine::get_singleton()->is_editor_hint() && m_texture.is_valid()) {
-            RegolithWorld* world = RegolithWorld::active();
-            float pixels_per_cell = world ? static_cast<float>(world->get_pixels_per_cell()) : 1.f;
-
-            Vector2 size = m_texture->get_size() * pixels_per_cell;
-            draw_texture_rect(m_texture, Rect2(-size * 0.5f, size), false);
-        }
-
+        draw_preview();
         return;
     }
+
+    clear_preview();
 
     if (get_material() != m_bound_material) {
         bind_material();
@@ -331,7 +326,6 @@ void RegolithSprite::_draw() {
         vec2 l0 = grid.to_local_point(chunk->gridPixelOffset) * scale;
         vec2 l1 = grid.to_local_point(chunk->gridPixelOffset + ivec2(chunk_size)) * scale;
 
-        // u carries the atlas layer in its integer part
         float layer = static_cast<float>(chunk->atlasPixelOffset.z) * 2.f;
         float u0 = layer + chunk->atlasPixelOffset.x / page_size;
         float u1 = layer + (chunk->atlasPixelOffset.x + chunk_size) / page_size;
@@ -352,7 +346,33 @@ void RegolithSprite::_draw() {
     }
 }
 
-// properties
+void RegolithSprite::draw_preview() {
+    if (m_texture.is_null()) {
+        clear_preview();
+        return;
+    }
+
+    RenderingServer* rs = RenderingServer::get_singleton();
+
+    if (!m_preview.is_valid()) {
+        m_preview = rs->canvas_item_create();
+        rs->canvas_item_set_parent(m_preview, get_canvas_item());
+        rs->canvas_item_set_default_texture_filter(m_preview, RenderingServer::CANVAS_ITEM_TEXTURE_FILTER_NEAREST);
+    }
+
+    RegolithWorld* world = RegolithWorld::active();
+    float pixels_per_cell = world ? static_cast<float>(world->get_pixels_per_cell()) : 1.f;
+    Vector2 size = m_texture->get_size() * pixels_per_cell;
+
+    rs->canvas_item_clear(m_preview);
+    rs->canvas_item_add_texture_rect(m_preview, Rect2(-size * 0.5f, size), m_texture->get_rid(), false);
+}
+
+void RegolithSprite::clear_preview() {
+    if (m_preview.is_valid()) {
+        RenderingServer::get_singleton()->canvas_item_clear(m_preview);
+    }
+}
 
 void RegolithSprite::set_texture(const Ref<Texture2D>& texture) {
     m_texture = texture;
@@ -431,25 +451,6 @@ void RegolithSprite::set_rope_material(const Ref<Material>& material) {
 Ref<Material> RegolithSprite::get_rope_material() const {
     return m_rope_material;
 }
-
-void RegolithSprite::set_editing(bool editing) {
-    if (m_editing == editing) {
-        return;
-    }
-
-    m_editing = editing;
-
-    if (!editing && is_loaded()) {
-        apply_mass();
-        m_sprite.build_distance_field();
-    }
-}
-
-bool RegolithSprite::is_editing() const {
-    return m_editing;
-}
-
-// editor api
 
 void RegolithSprite::create_blank(Vector2i size) {
     RegolithWorld* world = m_world ? m_world : RegolithWorld::active();
@@ -546,8 +547,6 @@ void RegolithSprite::clear_rect(Rect2i rect) {
 
     queue_redraw();
 }
-
-// cells
 
 Vector2i RegolithSprite::world_to_cell(Vector2 world_position) const {
     if (!is_loaded()) {
@@ -703,8 +702,6 @@ TypedArray<Vector2i> RegolithSprite::trace_cells(Vector2 from, Vector2 to, int m
     return out;
 }
 
-// body
-
 float RegolithSprite::get_mass() const {
     return m_body.mass();
 }
@@ -744,8 +741,6 @@ void RegolithSprite::apply_impulse(Vector2 impulse, Vector2 world_position) {
     vec2 r = m_world->to_units(world_position) - center;
     m_body.apply_impulse_r(vec2(impulse.x, impulse.y), r);
 }
-
-// ropes
 
 int RegolithSprite::get_rope_count() const {
     return static_cast<int>(m_ropes.ropes.size());
@@ -807,7 +802,6 @@ Dictionary RegolithSprite::hit_rope(Vector2 from, Vector2 to) {
         }
     }
 
-    // cut on the cell the hit landed in so the gap sits on the pixel grid
     vec2 grid_pos = grid.to_grid_point(m_transform.to_local_point(hit.position));
     vec2 pixel_world = m_transform.to_world_point(grid.to_local_point_centered(ivec2(floor(grid_pos))));
 
@@ -845,7 +839,6 @@ bool RegolithSprite::cut_rope(int rope_index, int node_index) {
     return true;
 }
 
-// the pixels in a cut's gap fly off with the body they hung on
 void RegolithSprite::spawn_loose_pixels(const std::vector<std::pair<vec2, Color4>>& pixels) {
     if (!m_world || pixels.empty()) {
         return;
@@ -859,8 +852,6 @@ void RegolithSprite::spawn_loose_pixels(const std::vector<std::pair<vec2, Color4
     m_world->emit_signal("cells_removed", this, static_cast<int>(pixels.size()));
 }
 
-// a sprite's anchor chunks go dirty so the next commit re-resolves its ropes,
-// a rope piece has no commit so the world re-splits it now
 void RegolithSprite::after_rope_cut(const std::vector<ivec2>& anchor_cells) {
     if (!is_loaded()) {
         if (m_world) {

@@ -1,6 +1,6 @@
-[gd_resource type="ShaderMaterial" load_steps=2 format=3]
+[gd_resource type="ShaderMaterial" format=3 uid="uid://b7bdqliowpujk"]
 
-[ext_resource type="Shader" uid="uid://dv2rrx57l3kak" path="res://shaders/regolith_rope.gdshader" id="1"]
+[ext_resource type="Shader" uid="uid://dv2rrx57l3kak" path="res://game/shaders/regolith_rope.gdshader" id="1"]
 
 [resource]
 shader = ExtResource("1")

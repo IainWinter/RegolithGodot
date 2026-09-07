@@ -4,6 +4,8 @@ extends GutTest
 # it down, cutting the anchor detaches it, cutting the wall above the anchor
 # moves it onto the split piece, and a bullet sweep cuts the rope itself
 
+const ROPE_MATERIAL := preload("res://game/shaders/regolith_rope_material.tres")
+
 var world: RegolithWorld
 
 func before_each() -> void:
@@ -14,8 +16,6 @@ func before_each() -> void:
 	world.sprite_split.connect(func(_source, piece): autofree(piece))
 
 func after_each() -> void:
-	# rope pieces cut loose by hit_ropes are spawned by the world without
-	# a split signal, sweep any sprite still hanging under the test
 	for child in get_children():
 		if child is RegolithSprite:
 			child.free()
@@ -40,6 +40,7 @@ func spawn_wall(width := 32, rope_row := 16) -> RegolithSprite:
 	var wall := RegolithSprite.new()
 	wall.texture = ImageTexture.create_from_image(images[0])
 	wall.mask_texture = ImageTexture.create_from_image(images[1])
+	wall.rope_material = ROPE_MATERIAL
 	wall.dynamic = false
 	wall.position = Vector2(300, 100)
 	add_child_autofree(wall)
@@ -77,8 +78,6 @@ func test_rope_is_scanned_from_mask() -> void:
 	assert_gt(wall.get_rope_points(0).size(), 2)
 
 func test_rope_sags_under_gravity_but_keeps_shape() -> void:
-	# ropes are shape stiff (solve_rope_shape), so a sideways rope only
-	# sags a little instead of swinging down like a pendulum
 	var wall := spawn_wall()
 	await wait_physics_frames(3)
 	var before: PackedVector2Array = wall.get_rope_points(0)

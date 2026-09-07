@@ -13,10 +13,13 @@ void RegolithWorld::_bind_methods() {
     ClassDB::bind_method(D_METHOD("ray_cast", "from", "to", "exclude"), &RegolithWorld::ray_cast, DEFVAL(nullptr));
     ClassDB::bind_method(D_METHOD("hit_ropes", "from", "to", "exclude"), &RegolithWorld::hit_ropes, DEFVAL(nullptr));
     ClassDB::bind_method(D_METHOD("add_joint", "a", "b", "world_point"), &RegolithWorld::add_joint);
+    ClassDB::bind_method(D_METHOD("add_distance_joint", "a", "b", "world_point_a", "world_point_b", "rest_distance"), &RegolithWorld::add_distance_joint, DEFVAL(-1.f));
     ClassDB::bind_method(D_METHOD("remove_joint", "joint_id"), &RegolithWorld::remove_joint);
     ClassDB::bind_method(D_METHOD("clear_joints"), &RegolithWorld::clear_joints);
     ClassDB::bind_method(D_METHOD("get_joint_count"), &RegolithWorld::get_joint_count);
-    ClassDB::bind_method(D_METHOD("get_joint_position", "joint_id"), &RegolithWorld::get_joint_position);
+    ClassDB::bind_method(D_METHOD("get_joint_anchors", "joint_id"), &RegolithWorld::get_joint_anchors);
+    ClassDB::bind_method(D_METHOD("get_joint_sprites", "joint_id"), &RegolithWorld::get_joint_sprites);
+    ClassDB::bind_method(D_METHOD("get_joint_type", "joint_id"), &RegolithWorld::get_joint_type);
     ClassDB::bind_method(D_METHOD("get_color_atlas"), &RegolithWorld::get_color_atlas);
     ClassDB::bind_method(D_METHOD("get_mask_atlas"), &RegolithWorld::get_mask_atlas);
     ClassDB::bind_method(D_METHOD("get_commit_time_ms"), &RegolithWorld::get_commit_time_ms);
@@ -28,6 +31,7 @@ void RegolithWorld::_bind_methods() {
 
     ClassDB::bind_static_method("RegolithWorld", D_METHOD("active"), &RegolithWorld::active);
     ClassDB::bind_static_method("RegolithWorld", D_METHOD("pixels_per_unit"), &RegolithWorld::active_pixels_per_unit);
+    ClassDB::bind_static_method("RegolithWorld", D_METHOD("pixels_per_cell"), &RegolithWorld::active_pixels_per_cell);
 
     ClassDB::bind_method(D_METHOD("set_pixels_per_cell", "pixels"), &RegolithWorld::set_pixels_per_cell);
     ClassDB::bind_method(D_METHOD("get_pixels_per_cell"), &RegolithWorld::get_pixels_per_cell);
@@ -40,6 +44,9 @@ void RegolithWorld::_bind_methods() {
     ClassDB::bind_method(D_METHOD("set_substeps", "substeps"), &RegolithWorld::set_substeps);
     ClassDB::bind_method(D_METHOD("get_substeps"), &RegolithWorld::get_substeps);
     ADD_PROPERTY(PropertyInfo(Variant::INT, "substeps", PROPERTY_HINT_RANGE, "1,32,1"), "set_substeps", "get_substeps");
+
+    BIND_ENUM_CONSTANT(JOINT_PIN);
+    BIND_ENUM_CONSTANT(JOINT_DISTANCE);
 
     BIND_CONSTANT(CELLS_PER_CHUNK);
     BIND_CONSTANT(SDF_BAND_CELLS);

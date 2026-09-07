@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="HomingWeaponProps" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://game/scripts/weapons/HomingWeaponProps.gd" id="1"]
+[ext_resource type="PackedScene" path="res://game/scenes/weapons/ForceBullet.tscn" id="2"]
+[ext_resource type="Resource" path="res://game/config/weapons/explosion_shrapnel.tres" id="3"]
+[ext_resource type="Resource" path="res://game/config/weapons/explosion_shrapnel_long.tres" id="4"]
+
+[resource]
+script = ExtResource("1")
+projectile_scene = ExtResource("2")
+ammo = -1
+shots_per_ammo = 1
+delay_cooldown = 1.2
+inaccuracy_angle = 2.356
+inaccuracy_tangent = 0.0
+speed = 2.0
+lifetime = 10.0
+trail_length = 5.0
+color_front = Color(1, 0.588235, 0.117647, 1)
+color_back = Color(0.784314, 0.313726, 0.0392157, 0)
+turn_speed = 2.2
+acceleration = 8.0
+max_speed = 14.0
+width = 0.125
+explosion_radius = 0.125
+shrapnel = ExtResource("3")
+shrapnel_count = 14
+shrapnel_long = ExtResource("4")
+shrapnel_long_count = 6

@@ -6,7 +6,7 @@ extends GutTest
 var main: Node2D
 
 func before_each() -> void:
-	main = load("res://scenes/Main.tscn").instantiate()
+	main = load("res://game/scenes/Main.tscn").instantiate()
 	add_child_autofree(main)
 
 func test_background_builds_layers() -> void:
@@ -20,9 +20,10 @@ func test_all_sprites_register_with_world() -> void:
 	await wait_physics_frames(3)
 	var world: RegolithWorld = main.get_node("RegolithWorld")
 	var expected := 0
-	for child in main.get_children():
-		if child is RegolithSprite:
+	for node in main.find_children("*", "RegolithSprite", true, false):
+		if node.is_loaded():
 			expected += 1
+	assert_gt(expected, 6, "scene sprites plus spawned rocks and snake segments")
 	assert_eq(world.get_sprite_count(), expected)
 
 func test_world_has_no_gravity_so_rock_floats() -> void:

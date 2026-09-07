@@ -2,14 +2,16 @@ extends CanvasLayer
 class_name MultiSpriteEditor
 
 # in game tool to lay out several RegolithSprites and pin them together with
-# joints. arrange while static, press play to let the world solve them
+# joints. arrange while static, press play to let the world solve them.
+# files are what MultiSprite spawns: sprites carry optional mask, dynamic,
+# joints an optional type (pin or distance with point_b and distance), and
+# head names the sprite that gets a SnakeHead
 
 enum Mode { MOVE, JOINT }
 
 @export var world: RegolithWorld
 @export var root: Node2D
 
-# the look every sprite placed here gets
 @export var sprite_material: Material
 @export var rope_material: Material
 
@@ -17,10 +19,9 @@ var mode := Mode.MOVE
 var playing := false
 
 var sprites: Array[RegolithSprite] = []
-var sources := {}
-var rest_positions := {}
-var rest_rotations := {}
-var joints: Array[Dictionary] = []
+var placed := {}
+var joints: Array[int] = []
+var head := -1
 
 var dragging: RegolithSprite
 var drag_offset := Vector2.ZERO
@@ -148,15 +149,17 @@ func mouse_world() -> Vector2:
 	return root.get_global_mouse_position()
 
 func sprite_at(point: Vector2) -> RegolithSprite:
-	for sprite in world.query_rect(Rect2(point, Vector2.ONE)):
-		if sprite in sprites and sprite.has_cell(sprite.world_to_cell(point)):
-			return sprite
+	var fallback: RegolithSprite = null
 
 	for sprite in world.query_rect(Rect2(point, Vector2.ONE)):
-		if sprite in sprites:
+		if sprite not in sprites:
+			continue
+		if sprite.has_cell(sprite.world_to_cell(point)):
 			return sprite
+		if fallback == null:
+			fallback = sprite
 
-	return null
+	return fallback
 
 func _unhandled_input(event: InputEvent) -> void:
 	if playing or mouse_over_ui():
@@ -189,14 +192,14 @@ func _unhandled_input(event: InputEvent) -> void:
 		if hit and (event.keycode == KEY_Q or event.keycode == KEY_E):
 			hit.global_rotation += (-1.0 if event.keycode == KEY_Q else 1.0) * PI / 16.0
 
-func add_sprite(texture_path: String, position: Vector2, rotation: float) -> RegolithSprite:
-	var color := Image.load_from_file(texture_path)
+func add_sprite(texture_path: String, position: Vector2, rotation: float, extra := {}) -> RegolithSprite:
+	var color := MultiSprite.load_image(texture_path)
 	if color == null:
 		status.text = "could not load " + texture_path.get_file()
 		return null
 
-	var mask_path := texture_path.get_basename() + "_mask.png"
-	var mask: Image = Image.load_from_file(mask_path) if FileAccess.file_exists(mask_path) else null
+	var mask_path: String = extra["mask"] if extra.has("mask") else MultiSprite.mask_path_for({"texture": texture_path})
+	var mask: Image = MultiSprite.load_image(mask_path) if mask_path != "" else null
 
 	var sprite := RegolithSprite.new()
 	sprite.material = sprite_material
@@ -208,7 +211,9 @@ func add_sprite(texture_path: String, position: Vector2, rotation: float) -> Reg
 	sprite.load_from_images(color, mask)
 
 	sprites.append(sprite)
-	sources[sprite] = texture_path
+	placed[sprite] = {"texture": texture_path, "dynamic": extra.get("dynamic", true)}
+	if extra.has("mask"):
+		placed[sprite]["mask"] = extra["mask"]
 	update_status()
 	return sprite
 
@@ -216,23 +221,26 @@ func remove_last() -> void:
 	if sprites.is_empty():
 		return
 
+	if head == sprites.size() - 1:
+		head = -1
+
 	var sprite: RegolithSprite = sprites.pop_back()
-	sources.erase(sprite)
+	placed.erase(sprite)
 
 	for i in range(joints.size() - 1, -1, -1):
-		if joints[i]["a"] == sprite or joints[i]["b"] == sprite:
-			world.remove_joint(joints[i]["id"])
+		if sprite in world.get_joint_sprites(joints[i]):
+			world.remove_joint(joints[i])
 			joints.remove_at(i)
 
 	sprite.queue_free()
 	update_status()
 
 func add_joint(a: RegolithSprite, b: RegolithSprite, point: Vector2) -> void:
-	var id := world.add_joint(a, b, point)
-	if id < 0:
-		return
+	track_joint(world.add_joint(a, b, point))
 
-	joints.append({"id": id, "a": a, "b": b, "point": point})
+func track_joint(id: int) -> void:
+	if id >= 0:
+		joints.append(id)
 	update_status()
 
 func clear_joints() -> void:
@@ -246,17 +254,15 @@ func toggle_play() -> void:
 
 	if playing:
 		for sprite in sprites:
-			rest_positions[sprite] = sprite.global_position
-			rest_rotations[sprite] = sprite.global_rotation
-			sprite.dynamic = true
+			placed[sprite]["rest"] = sprite.global_transform
+			sprite.dynamic = placed[sprite]["dynamic"]
 	else:
 		for sprite in sprites:
 			sprite.dynamic = false
 			sprite.linear_velocity = Vector2.ZERO
 			sprite.angular_velocity = 0.0
-			if rest_positions.has(sprite):
-				sprite.global_position = rest_positions[sprite]
-				sprite.global_rotation = rest_rotations[sprite]
+			if placed[sprite].has("rest"):
+				sprite.global_transform = placed[sprite]["rest"]
 
 	update_status()
 
@@ -279,21 +285,41 @@ func on_file_selected(path: String) -> void:
 
 func save_to(path: String) -> void:
 	var ppu := RegolithWorld.pixels_per_unit()
+	var to_units := func(v: Vector2) -> Array: return [v.x / ppu, v.y / ppu]
 	var data := {"sprites": [], "joints": []}
 
 	for sprite in sprites:
-		data["sprites"].append({
-			"texture": sources.get(sprite, ""),
-			"position": [sprite.global_position.x / ppu, sprite.global_position.y / ppu],
+		var info: Dictionary = placed[sprite]
+		var entry := {
+			"texture": info["texture"],
+			"position": to_units.call(sprite.global_position),
 			"rotation": sprite.global_rotation,
-		})
+			"dynamic": info["dynamic"],
+		}
+		if info.has("mask"):
+			entry["mask"] = info["mask"]
+		data["sprites"].append(entry)
 
-	for joint in joints:
-		data["joints"].append({
-			"a": sprites.find(joint["a"]),
-			"b": sprites.find(joint["b"]),
-			"point": [joint["point"].x / ppu, joint["point"].y / ppu],
-		})
+	for id in joints:
+		var anchors := world.get_joint_anchors(id)
+		var pair := world.get_joint_sprites(id)
+		if anchors.size() != 2 or pair.size() != 2:
+			continue
+
+		var is_distance := world.get_joint_type(id) == RegolithWorld.JOINT_DISTANCE
+		var entry := {
+			"a": sprites.find(pair[0]),
+			"b": sprites.find(pair[1]),
+			"point": to_units.call(anchors[0]),
+			"type": "distance" if is_distance else "pin",
+		}
+		if is_distance:
+			entry["point_b"] = to_units.call(anchors[1])
+			entry["distance"] = anchors[0].distance_to(anchors[1]) / ppu
+		data["joints"].append(entry)
+
+	if head >= 0 and head < sprites.size():
+		data["head"] = head
 
 	var file := FileAccess.open(path, FileAccess.WRITE)
 	if file:
@@ -301,9 +327,8 @@ func save_to(path: String) -> void:
 		status.text = "saved " + path.get_file()
 
 func load_from(path: String) -> void:
-	var text := FileAccess.get_file_as_string(path)
-	var data = JSON.parse_string(text)
-	if not data is Dictionary:
+	var data := MultiSprite.read_file(path)
+	if data.is_empty():
 		status.text = "bad file " + path.get_file()
 		return
 
@@ -317,16 +342,18 @@ func load_from(path: String) -> void:
 	var ppu := RegolithWorld.pixels_per_unit()
 
 	for entry in data.get("sprites", []):
-		add_sprite(entry["texture"], Vector2(entry["position"][0], entry["position"][1]) * ppu, entry["rotation"])
+		add_sprite(entry["texture"], MultiSprite.entry_vector(entry, "position", ppu), entry["rotation"], entry)
 
 	for entry in data.get("joints", []):
 		var a: int = entry["a"]
 		var b: int = entry["b"]
-		if a >= 0 and b >= 0 and a < sprites.size() and b < sprites.size():
-			add_joint(sprites[a], sprites[b], Vector2(entry["point"][0], entry["point"][1]) * ppu)
+		if a < 0 or b < 0 or a >= sprites.size() or b >= sprites.size():
+			continue
 
+		track_joint(MultiSprite.spawn_joint(world, sprites[a], sprites[b], entry, ppu))
+
+	head = int(data.get("head", -1))
 	update_status()
-
 
 class JointOverlay extends Node2D:
 	var editor: MultiSpriteEditor
@@ -342,9 +369,12 @@ class JointOverlay extends Node2D:
 
 		var cell_px := RegolithWorld.pixels_per_unit() / RegolithWorld.CELLS_PER_CHUNK
 
-		for joint in editor.joints:
-			var point: Vector2 = editor.world.get_joint_position(joint["id"])
-			draw_circle(point, cell_px * 2.0, Color(1.0, 0.85, 0.2, 0.9))
+		for id in editor.joints:
+			var anchors: PackedVector2Array = editor.world.get_joint_anchors(id)
+			for point in anchors:
+				draw_circle(point, cell_px * 2.0, Color(1.0, 0.85, 0.2, 0.9))
+			if anchors.size() == 2 and editor.world.get_joint_type(id) == RegolithWorld.JOINT_DISTANCE:
+				draw_line(anchors[0], anchors[1], Color(1.0, 0.85, 0.2, 0.9), 1.0)
 
 		if editor.joint_first:
 			draw_arc(editor.joint_first.global_position, cell_px * 6.0, 0.0, TAU, 24, Color(1.0, 0.85, 0.2, 0.9), 1.0)

@@ -12,7 +12,7 @@ func _init() -> void:
 			if edge < 1.0:
 				var shade := rng.randf_range(0.75, 1.0)
 				rock.set_pixel(x, y, Color(0.55 * shade, 0.45 * shade, 0.38 * shade, 1.0))
-	rock.save_png("res://art/sprites/rock.png")
+	rock.save_png("res://game/images/sprites/rock.png")
 
 	var slab := Image.create(160, 32, false, Image.FORMAT_RGBA8)
 	for y in range(32):
@@ -20,7 +20,7 @@ func _init() -> void:
 			var shade := rng.randf_range(0.8, 1.0)
 			var band := 0.9 if (y / 8) % 2 == 0 else 1.0
 			slab.set_pixel(x, y, Color(0.35 * shade * band, 0.4 * shade * band, 0.45 * shade * band, 1.0))
-	slab.save_png("res://art/sprites/slab.png")
+	slab.save_png("res://game/images/sprites/slab.png")
 
 	print("art written")
 	quit()

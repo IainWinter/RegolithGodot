@@ -1,0 +1,33 @@
+[gd_resource type="Resource" script_class="LightningWeaponProps" load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://game/scripts/weapons/LightningWeaponProps.gd" id="1"]
+[ext_resource type="Resource" path="res://game/config/weapons/ball_arc_lightning.tres" id="2"]
+[ext_resource type="Resource" path="res://game/config/weapons/ball_zap_lightning.tres" id="3"]
+[ext_resource type="ShaderMaterial" path="res://game/shaders/regolith_lightning_material.tres" id="4"]
+[ext_resource type="PackedScene" path="res://game/scenes/weapons/LightningBall.tscn" id="5"]
+[ext_resource type="Resource" path="res://game/config/weapons/ball_center_lightning.tres" id="6"]
+[ext_resource type="Resource" path="res://game/config/weapons/ball_outside_lightning.tres" id="7"]
+
+[resource]
+script = ExtResource("1")
+ammo = -1
+shots_per_ammo = 1
+delay_cooldown = 1.0
+inaccuracy_angle = 0.0
+inaccuracy_tangent = 0.0
+speed = 8.0
+lifetime = 6.0
+cell_life = 8
+color_front = Color(0.576471, 0.54902, 0.996078, 1)
+projectile_scene = ExtResource("5")
+lightning = ExtResource("2")
+lightning_hit = ExtResource("3")
+lightning_material = ExtResource("4")
+ball_radius = 2.0
+ball_emit_radius = 0.4
+ball_center_lightning = ExtResource("6")
+ball_outside_lightning = ExtResource("7")
+ball_segments = 6
+ball_delay_per_hit = 0.02
+ball_zaps_per_hit = 10
+ball_pixels_per_second = 80.0

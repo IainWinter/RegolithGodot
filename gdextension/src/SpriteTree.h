@@ -24,7 +24,6 @@ public:
 
     void query(const AxisAlignedBox& box, std::vector<RegolithSprite*>& out) const;
 
-    // nearest filled cell along the segment across every sprite it touches
     std::optional<Hit> ray_cast(vec2 origin, vec2 end, const RegolithSprite* exclude) const;
 
     const AxisAlignedAreaTreeIndex& index() const;

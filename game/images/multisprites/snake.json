@@ -1,0 +1,245 @@
+{
+  "sprites": [
+	{
+	  "texture": "res://game/images/multisprites/snake_chunk.png",
+	  "mask": "res://game/images/multisprites/snake_chunk_mask.png",
+	  "position": [
+		-2.33462,
+		0.05328
+	  ],
+	  "rotation": -0.01751,
+	  "dynamic": true
+	},
+	{
+	  "texture": "res://game/images/multisprites/snake_chunk.png",
+	  "mask": "res://game/images/multisprites/snake_chunk_mask.png",
+	  "position": [
+		-1.15866,
+		0.02457
+	  ],
+	  "rotation": 0.0316,
+	  "dynamic": true
+	},
+	{
+	  "texture": "res://game/images/multisprites/snake_chunk.png",
+	  "mask": "res://game/images/multisprites/snake_chunk_mask.png",
+	  "position": [
+		0.09409,
+		0.03609
+	  ],
+	  "rotation": 0.04431,
+	  "dynamic": true
+	},
+	{
+	  "texture": "res://game/images/multisprites/snake_chunk.png",
+	  "mask": "res://game/images/multisprites/snake_chunk_mask.png",
+	  "position": [
+		1.30237,
+		0.09242
+	  ],
+	  "rotation": 0.1056,
+	  "dynamic": true
+	},
+	{
+	  "texture": "res://game/images/multisprites/snake_chunk.png",
+	  "mask": "res://game/images/multisprites/snake_chunk_mask.png",
+	  "position": [
+		2.61348,
+		0.14186
+	  ],
+	  "rotation": -0.02573,
+	  "dynamic": true
+	},
+	{
+	  "texture": "res://game/images/multisprites/snake_chunk.png",
+	  "mask": "res://game/images/multisprites/snake_chunk_mask.png",
+	  "position": [
+		3.85021,
+		0.2371
+	  ],
+	  "rotation": 0.19165,
+	  "dynamic": true
+	},
+	{
+	  "texture": "res://game/images/multisprites/snake_chunk.png",
+	  "mask": "res://game/images/multisprites/snake_chunk_mask.png",
+	  "position": [
+		-3.45558,
+		0.06377
+	  ],
+	  "rotation": -0.10084,
+	  "dynamic": true
+	}
+  ],
+  "joints": [
+	{
+	  "a": 0,
+	  "b": 1,
+	  "type": "distance",
+	  "point": [
+		-2.08794,
+		-0.13857
+	  ],
+	  "point_b": [
+		-1.40261,
+		-0.17074
+	  ],
+	  "distance": 0.68608
+	},
+	{
+	  "a": 0,
+	  "b": 1,
+	  "type": "distance",
+	  "point": [
+		-2.08137,
+		0.23637
+	  ],
+	  "point_b": [
+		-1.41446,
+		0.20408
+	  ],
+	  "distance": 0.6677
+	},
+	{
+	  "a": 1,
+	  "b": 2,
+	  "type": "distance",
+	  "point": [
+		-0.90286,
+		-0.15494
+	  ],
+	  "point_b": [
+		-0.14735,
+		-0.1623
+	  ],
+	  "distance": 0.75554
+	},
+	{
+	  "a": 1,
+	  "b": 2,
+	  "type": "distance",
+	  "point": [
+		-0.91471,
+		0.21987
+	  ],
+	  "point_b": [
+		-0.16396,
+		0.21233
+	  ],
+	  "distance": 0.75078
+	},
+	{
+	  "a": 2,
+	  "b": 3,
+	  "type": "distance",
+	  "point": [
+		0.35215,
+		-0.14015
+	  ],
+	  "point_b": [
+		1.07353,
+		-0.12039
+	  ],
+	  "distance": 0.72164
+	},
+	{
+	  "a": 2,
+	  "b": 3,
+	  "type": "distance",
+	  "point": [
+		0.33554,
+		0.23448
+	  ],
+	  "point_b": [
+		1.034,
+		0.25252
+	  ],
+	  "distance": 0.69869
+	},
+	{
+	  "a": 3,
+	  "b": 4,
+	  "type": "distance",
+	  "point": [
+		1.57074,
+		-0.06769
+	  ],
+	  "point_b": [
+		2.35874,
+		-0.03915
+	  ],
+	  "distance": 0.78852
+	},
+	{
+	  "a": 3,
+	  "b": 4,
+	  "type": "distance",
+	  "point": [
+		1.53121,
+		0.30523
+	  ],
+	  "point_b": [
+		2.36839,
+		0.33572
+	  ],
+	  "distance": 0.83773
+	},
+	{
+	  "a": 4,
+	  "b": 5,
+	  "type": "distance",
+	  "point": [
+		2.85857,
+		-0.05201
+	  ],
+	  "point_b": [
+		3.6405,
+		0.00542
+	  ],
+	  "distance": 0.78403
+	},
+	{
+	  "a": 4,
+	  "b": 5,
+	  "type": "distance",
+	  "point": [
+		2.86822,
+		0.32286
+	  ],
+	  "point_b": [
+		3.56907,
+		0.37355
+	  ],
+	  "distance": 0.70268
+	},
+	{
+	  "a": 6,
+	  "b": 0,
+	  "type": "distance",
+	  "point": [
+		-3.22573,
+		-0.14795
+	  ],
+	  "point_b": [
+		-2.58787,
+		-0.12982
+	  ],
+	  "distance": 0.63812
+	},
+	{
+	  "a": 6,
+	  "b": 0,
+	  "type": "distance",
+	  "point": [
+		-3.18797,
+		0.22515
+	  ],
+	  "point_b": [
+		-2.5813,
+		0.24512
+	  ],
+	  "distance": 0.607
+	}
+  ],
+  "head": 5
+}

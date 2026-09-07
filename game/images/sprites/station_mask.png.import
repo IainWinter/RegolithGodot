@@ -3,15 +3,15 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://dlyyievijy11"
-path="res://.godot/imported/station_mask.png-6c026072c948ea878f4e4a2422cc475c.ctex"
+path="res://.godot/imported/station_mask.png-7df32dd79811902d9f1579a828ac3484.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://art/sprites/station_mask.png"
-dest_files=["res://.godot/imported/station_mask.png-6c026072c948ea878f4e4a2422cc475c.ctex"]
+source_file="res://game/images/sprites/station_mask.png"
+dest_files=["res://.godot/imported/station_mask.png-7df32dd79811902d9f1579a828ac3484.ctex"]
 
 [params]
 

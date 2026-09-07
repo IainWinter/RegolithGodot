@@ -7,6 +7,7 @@
 #include "DestructibleSprite/Algorithm/SpriteRopeHit.h"
 
 #include <godot_cpp/classes/engine.hpp>
+#include <godot_cpp/classes/engine_debugger.hpp>
 
 using namespace godot;
 
@@ -34,6 +35,9 @@ static const RegolithDebugDraw::NameEntry k_names[] = {
     {DebugName_Ai_Flocker, "AI_FLOCKER"},
     {DebugName_Ai_Los_Clear, "AI_LOS_CLEAR"},
     {DebugName_Ai_Los_Blocked, "AI_LOS_BLOCKED"},
+    {DebugName_Ai_Thrower, "AI_THROWER"},
+    {DebugName_Ai_Shield, "AI_SHIELD"},
+    {DebugName_Ai_Trap, "AI_TRAP"},
     {DebugName_Sprite, "SPRITE"},
     {DebugName_Sprite_Chunk, "SPRITE_CHUNK"},
     {DebugName_World_Tree, "WORLD_TREE"},
@@ -78,12 +82,124 @@ RegolithDebugDraw::RegolithDebugDraw() {
     set_z_index(4096);
 }
 
+// the node that holds the "regolith" debugger capture, one per process
+static RegolithDebugDraw* s_capture_owner = nullptr;
+
 void RegolithDebugDraw::_enter_tree() {
     add_to_group("regolith_debug_draw");
+    apply();
+
+    EngineDebugger* debugger = EngineDebugger::get_singleton();
+
+    if (!Engine::get_singleton()->is_editor_hint() && debugger->is_active() && s_capture_owner == nullptr) {
+        debugger->register_message_capture("regolith", Callable(this, "debugger_message"));
+        debugger->send_message("regolith:ready", Array());
+        s_capture_owner = this;
+    }
 }
 
-// the fixed list belongs to the solver and holds until the next step, the
-// rest drains every frame even when hidden so script lines never pile up
+void RegolithDebugDraw::apply() {
+    debug_color_map() = m_map;
+    debug_render_invalidate_cache();
+}
+
+// editor debugger link
+
+static const char* k_layer_labels[DebugLayer_Count] = {"DEFAULT", "A", "B"};
+
+int RegolithDebugDraw::name_index(const String& label) {
+    for (int i = 0; i < DebugName_Count; i++) {
+        if (label == k_names[i].label) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+int RegolithDebugDraw::layer_index(const String& label) {
+    for (int i = 0; i < DebugLayer_Count; i++) {
+        if (label == k_layer_labels[i]) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+void RegolithDebugDraw::_exit_tree() {
+    if (s_capture_owner == this) {
+        EngineDebugger::get_singleton()->unregister_message_capture("regolith");
+        s_capture_owner = nullptr;
+    }
+}
+
+void RegolithDebugDraw::apply_settings(const Dictionary& settings) {
+    if (settings.has("visible")) {
+        set_visible(settings["visible"]);
+    }
+
+    Dictionary names = settings.get("names", Dictionary());
+    Dictionary colors = settings.get("colors", Dictionary());
+    Dictionary layers = settings.get("layers", Dictionary());
+    Dictionary tints = settings.get("tints", Dictionary());
+
+    Array keys = names.keys();
+    for (int i = 0; i < keys.size(); i++) {
+        int name = name_index(keys[i]);
+        if (name >= 0) m_map.set_name_enabled(static_cast<DebugName>(name), names[keys[i]]);
+    }
+
+    keys = colors.keys();
+    for (int i = 0; i < keys.size(); i++) {
+        int name = name_index(keys[i]);
+        if (name >= 0) m_map.set_name_color(static_cast<DebugName>(name), to_color4(colors[keys[i]]));
+    }
+
+    keys = layers.keys();
+    for (int i = 0; i < keys.size(); i++) {
+        int layer = layer_index(keys[i]);
+        if (layer >= 0) m_map.set_layer_enabled(static_cast<DebugLayer>(layer), layers[keys[i]]);
+    }
+
+    keys = tints.keys();
+    for (int i = 0; i < keys.size(); i++) {
+        int layer = layer_index(keys[i]);
+        if (layer >= 0) m_map.set_layer_tint(static_cast<DebugLayer>(layer), to_color4(tints[keys[i]]));
+    }
+
+    apply();
+}
+
+Dictionary RegolithDebugDraw::get_settings() const {
+    Dictionary names, colors, layers, tints;
+
+    for (int i = 0; i < DebugName_Count; i++) {
+        names[k_names[i].label] = m_map.colors()[i].second;
+        colors[k_names[i].label] = to_color(m_map.colors()[i].first);
+    }
+
+    for (int i = 0; i < DebugLayer_Count; i++) {
+        layers[k_layer_labels[i]] = m_map.tints()[i].second;
+        tints[k_layer_labels[i]] = to_color(m_map.tints()[i].first);
+    }
+
+    Dictionary out;
+    out["visible"] = is_visible();
+    out["names"] = names;
+    out["colors"] = colors;
+    out["layers"] = layers;
+    out["tints"] = tints;
+    return out;
+}
+
+bool RegolithDebugDraw::debugger_message(const String& message, const Array& data) {
+    if (message == "settings" && data.size() > 0) {
+        apply_settings(data[0]);
+        return true;
+    }
+
+    return false;
+}
+
 void RegolithDebugDraw::_process(double delta) {
     if (Engine::get_singleton()->is_editor_hint()) {
         return;
@@ -108,7 +224,6 @@ void RegolithDebugDraw::_process(double delta) {
     queue_redraw();
 }
 
-// sprite quads, chunk bounds, rope nodes, joints and the query tree
 void RegolithDebugDraw::emit_world_lines(const RegolithWorld& world) {
     DebugRendererLineList& lines = debug_render();
     const DebugRendererColorMap& map = debug_color_map();
@@ -185,20 +300,20 @@ void RegolithDebugDraw::set_name_enabled(int name, bool enabled) {
         return;
     }
 
-    debug_color_map().set_name_enabled(static_cast<DebugName>(name), enabled);
-    debug_render_invalidate_cache();
+    m_map.set_name_enabled(static_cast<DebugName>(name), enabled);
+    apply();
 }
 
 bool RegolithDebugDraw::is_name_enabled(int name) const {
-    return name_valid(name) && debug_color_map().colors()[name].second;
+    return name_valid(name) && m_map.colors()[name].second;
 }
 
 void RegolithDebugDraw::set_all_names_enabled(bool enabled) {
     for (int name = 0; name < DebugName_Count; name++) {
-        debug_color_map().set_name_enabled(static_cast<DebugName>(name), enabled);
+        m_map.set_name_enabled(static_cast<DebugName>(name), enabled);
     }
 
-    debug_render_invalidate_cache();
+    apply();
 }
 
 void RegolithDebugDraw::set_name_color(int name, Color color) {
@@ -206,12 +321,12 @@ void RegolithDebugDraw::set_name_color(int name, Color color) {
         return;
     }
 
-    debug_color_map().set_name_color(static_cast<DebugName>(name), to_color4(color));
-    debug_render_invalidate_cache();
+    m_map.set_name_color(static_cast<DebugName>(name), to_color4(color));
+    apply();
 }
 
 Color RegolithDebugDraw::get_name_color(int name) const {
-    return name_valid(name) ? to_color(debug_color_map().colors()[name].first) : Color();
+    return name_valid(name) ? to_color(m_map.colors()[name].first) : Color();
 }
 
 int RegolithDebugDraw::get_layer_count() const {
@@ -223,12 +338,12 @@ void RegolithDebugDraw::set_layer_enabled(int layer, bool enabled) {
         return;
     }
 
-    debug_color_map().set_layer_enabled(static_cast<DebugLayer>(layer), enabled);
-    debug_render_invalidate_cache();
+    m_map.set_layer_enabled(static_cast<DebugLayer>(layer), enabled);
+    apply();
 }
 
 bool RegolithDebugDraw::is_layer_enabled(int layer) const {
-    return layer_valid(layer) && debug_color_map().tints()[layer].second;
+    return layer_valid(layer) && m_map.tints()[layer].second;
 }
 
 void RegolithDebugDraw::set_layer_tint(int layer, Color tint) {
@@ -236,15 +351,13 @@ void RegolithDebugDraw::set_layer_tint(int layer, Color tint) {
         return;
     }
 
-    debug_color_map().set_layer_tint(static_cast<DebugLayer>(layer), to_color4(tint));
-    debug_render_invalidate_cache();
+    m_map.set_layer_tint(static_cast<DebugLayer>(layer), to_color4(tint));
+    apply();
 }
 
 Color RegolithDebugDraw::get_layer_tint(int layer) const {
-    return layer_valid(layer) ? to_color(debug_color_map().tints()[layer].first) : Color();
+    return layer_valid(layer) ? to_color(m_map.tints()[layer].first) : Color();
 }
-
-// script emitters, pixels in
 
 static RegolithWorld* emit_world(int name, int layer) {
     return RegolithDebugDraw::name_valid(name) && RegolithDebugDraw::layer_valid(layer) ? RegolithWorld::active() : nullptr;

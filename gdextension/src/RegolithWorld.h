@@ -11,7 +11,9 @@
 #include <godot_cpp/classes/gpu_particles2d.hpp>
 #include <godot_cpp/classes/node.hpp>
 #include <godot_cpp/classes/texture2d_array.hpp>
+#include <godot_cpp/core/binder_common.hpp>
 #include <godot_cpp/variant/dictionary.hpp>
+#include <godot_cpp/variant/packed_vector2_array.hpp>
 #include <godot_cpp/variant/typed_array.hpp>
 
 #include <vector>
@@ -37,7 +39,6 @@ public:
     RegolithWorld();
     ~RegolithWorld();
 
-    // the first world in the tree, group "regolith_world"
     static RegolithWorld* active();
 
     float pixels_per_unit() const;
@@ -50,39 +51,36 @@ public:
     void _physics_process(double delta) override;
     void _notification(int what);
 
-    // runs each frame before drawing, call it to see changes before then
     void commit_sprites();
-
-    // queries, pixels in and out
 
     int get_sprite_count() const;
     godot::TypedArray<RegolithSprite> query_rect(godot::Rect2 rect) const;
     godot::TypedArray<RegolithSprite> query_segment(godot::Vector2 from, godot::Vector2 to) const;
 
-    // nearest filled cell along the segment: sprite, cell, position, distance
     godot::Dictionary ray_cast(godot::Vector2 from, godot::Vector2 to, RegolithSprite* exclude) const;
 
-    // sweeps every rope with a bullet path, returns how many were hit
     int hit_ropes(godot::Vector2 from, godot::Vector2 to, RegolithSprite* exclude);
 
-    // pin joints between two sprites at a world point
+    enum JointType {
+        JOINT_PIN = RegolithJoints::Pin,
+        JOINT_DISTANCE = RegolithJoints::Distance,
+    };
 
     int add_joint(RegolithSprite* a, RegolithSprite* b, godot::Vector2 world_point);
+
+    int add_distance_joint(RegolithSprite* a, RegolithSprite* b, godot::Vector2 world_point_a, godot::Vector2 world_point_b, float rest_distance);
+
     void remove_joint(int joint_id);
     void clear_joints();
     int get_joint_count() const;
-    godot::Vector2 get_joint_position(int joint_id) const;
-
-    // every cell that leaves a sprite becomes a particle in the GPUParticles2D
-    // child, which needs a process_material running the cell particle shader.
-    // no child or hidden, nothing spawns
+    godot::PackedVector2Array get_joint_anchors(int joint_id) const;
+    godot::TypedArray<RegolithSprite> get_joint_sprites(int joint_id) const;
+    int get_joint_type(int joint_id) const;
 
     godot::GPUParticles2D* get_cell_particles();
     void spawn_cell_particle(godot::Vector2 position, godot::Vector2 velocity, godot::Color color, float angle);
     void spawn_cell_pixel(vec2 position, vec2 velocity, float angle, Color4 color);
     void spawn_rope_pixels(RegolithSprite* source, const std::vector<SpriteRope>& ropes);
-
-    // properties
 
     void set_pixels_per_cell(int pixels);
     int get_pixels_per_cell() const;
@@ -96,14 +94,10 @@ public:
     godot::Ref<godot::Texture2DArray> get_color_atlas() const;
     godot::Ref<godot::Texture2DArray> get_mask_atlas() const;
 
-    // stats, also debugger monitors under regolith/
-
     float get_commit_time_ms() const;
     float get_physics_time_ms() const;
     int get_contact_count() const;
     int get_rope_count() const;
-
-    // sprite side
 
     SpriteChunkPool& pool();
     PhysicsWorld& physics();
@@ -111,7 +105,6 @@ public:
     void register_sprite(RegolithSprite* sprite);
     void unregister_sprite(RegolithSprite* sprite);
 
-    // a rope piece was cut, groups still tied together become pieces of their own
     void resplit_rope_piece(RegolithSprite* node);
 
     const std::vector<RegolithSprite*>& sprites() const;
@@ -123,6 +116,7 @@ protected:
 
 private:
     static float active_pixels_per_unit();
+    static float active_pixels_per_cell();
 
     void start();
     void find_cell_particles();
@@ -154,3 +148,5 @@ private:
     float m_physics_ms = 0.f;
     bool m_owns_monitors = false;
 };
+
+VARIANT_ENUM_CAST(RegolithWorld::JointType);

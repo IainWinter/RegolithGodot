@@ -31,7 +31,10 @@ void RegolithDebugDraw::_bind_methods() {
 
     ClassDB::bind_method(D_METHOD("get_line_count"), &RegolithDebugDraw::get_line_count);
 
-    // RegolithDebugDraw.PHYSICS_CONTACT_POINT and friends
+    ClassDB::bind_method(D_METHOD("apply_settings", "settings"), &RegolithDebugDraw::apply_settings);
+    ClassDB::bind_method(D_METHOD("get_settings"), &RegolithDebugDraw::get_settings);
+    ClassDB::bind_method(D_METHOD("debugger_message", "message", "data"), &RegolithDebugDraw::debugger_message);
+
     int count = 0;
     const NameEntry* entries = names(&count);
 

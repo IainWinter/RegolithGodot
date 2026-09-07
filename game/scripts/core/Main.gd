@@ -7,7 +7,10 @@ var debug_panel: DebugPanel
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and event.keycode == KEY_F2:
-		open_editor()
+		if editor:
+			editor.close()
+		else:
+			open_editor()
 		return
 
 	if event is InputEventKey and event.pressed and event.keycode == KEY_F3:
@@ -29,9 +32,6 @@ func _unhandled_input(event: InputEvent) -> void:
 						sprite.remove_cell(cell)
 					elif event.button_index == MOUSE_BUTTON_RIGHT:
 						sprite.burn_cell(cell, 200, 1)
-
-# f2 opens the sprite editor on the sprite under the mouse, or the player.
-# the world pauses while it is open and resumes when it closes
 
 func sprite_under_mouse() -> RegolithSprite:
 	var point := get_global_mouse_position()
@@ -55,11 +55,8 @@ func open_editor() -> void:
 	if sprite == null:
 		sprite = get_tree().get_first_node_in_group("player") as RegolithSprite
 
-	if sprite == null:
-		return
-
 	editor = SpriteEditor.new()
-	editor.target = sprite
+	editor.path = sprite_source_path(sprite)
 	editor.closed.connect(on_editor_closed)
 	add_child(editor)
 	get_tree().paused = true
@@ -68,10 +65,16 @@ func on_editor_closed() -> void:
 	editor = null
 	get_tree().paused = false
 
-func _on_sprite_split(_source: RegolithSprite, piece: RegolithSprite) -> void:
-	piece.add_to_group("regolith")
+# the png a sprite was loaded from, the editor edits that file, not the sprite
+static func sprite_source_path(sprite: RegolithSprite) -> String:
+	if sprite == null or sprite.texture == null:
+		return ""
 
-# f3 toggles the debug panel: monitors, pause and step, debug lines
+	var res_path := sprite.texture.resource_path
+	if res_path.get_extension() != "png":
+		return ""
+
+	return ProjectSettings.globalize_path(res_path)
 
 func toggle_debug_panel() -> void:
 	if debug_panel:

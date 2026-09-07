@@ -2,19 +2,36 @@ extends CanvasLayer
 class_name SpriteEditor
 
 # in game pixel editor, a port of the old imgui SpriteEditorTool built from
-# Control nodes. edits a SpriteDocument, applies it to a RegolithSprite in the
-# world, saves and loads png plus _mask.png pairs. runs with the tree paused
+# Control nodes. edits a SpriteDocument backed by a png plus _mask.png pair on
+# disk, the source files sprites are made from. it never touches a live
+# RegolithSprite, sprites pick the change up when they next load the texture.
+# runs with the tree paused, as a window floating over the dimmed game so it
+# reads as part of the game and not a separate tool. looks come from PixelTheme
 
 enum Tool { PENCIL, ERASER, FILL, PICKER, SELECT, MOVE, RECT, LINE }
 
-const TOOL_LABELS := [["Pencil", "B"], ["Eraser", "E"], ["Fill", "G"], ["Picker", "I"], ["Select", "M"], ["Move", "V"], ["Rect", "R"], ["Line", "L"]]
-const MODE_LABELS := ["Graphics", "Mask", "Class", "Emission"]
-const SIDEBAR_WIDTH := 340
-const ACCENT := Color8(90, 150, 255)
+const TOOL_LABELS := [["Pen", "B"], ["Erase", "E"], ["Fill", "G"], ["Pick", "I"], ["Select", "M"], ["Move", "V"], ["Rect", "R"], ["Line", "L"]]
+const MODE_LABELS := ["Paint", "Mask", "Class", "Glow"]
+const WINDOW_SIZE := Vector2(816, 512)
+const WINDOW_MARGIN := 24
+const SIDEBAR_WIDTH := 208
+const PALETTE_COLUMNS := 8
+const PALETTE_ROWS := 4
+const SWATCH := 20
+const ACCENT := PixelTheme.ACCENT
+
+# the fixed first rows of the palette, the rest fills with colors in the sprite
+const PALETTE_BASE: Array[Color] = [
+	Color8(255, 255, 255), Color8(194, 195, 199), Color8(131, 118, 156), Color8(95, 87, 79),
+	Color8(41, 40, 48), Color8(16, 14, 20), Color8(255, 241, 232), Color8(255, 236, 39),
+	Color8(255, 163, 0), Color8(255, 0, 77), Color8(126, 37, 83), Color8(171, 82, 54),
+	Color8(0, 228, 54), Color8(0, 135, 81), Color8(41, 173, 255), Color8(29, 43, 83),
+]
 
 static var clipboard := {}
 
-@export var target: RegolithSprite
+# png to open on ready, empty starts a blank document
+@export var path := ""
 
 var doc := SpriteDocument.new(32, 32)
 var canvas: SpriteCanvas
@@ -47,12 +64,19 @@ var float_src := Vector2i.ZERO
 var float_grab := Vector2i.ZERO
 
 var root: Control
+var window: PanelContainer
 var mode_buttons: Array[Button] = []
 var tool_buttons: Array[Button] = []
 var type_buttons: Array[Button] = []
 var class_buttons: Array[Button] = []
 var mode_sections: Array[Control] = []
-var color_picker: ColorPicker
+var color_button: ColorPickerButton
+var hex_edit: LineEdit
+var palette_grid: GridContainer
+var palette_buttons: Array[Button] = []
+var palette_colors: Array[Color] = []
+var palette_dirty := true
+var palette_shown := Color(-1, -1, -1, -1)
 var brush_slider: HSlider
 var brush_label: Label
 var opacity_slider: HSlider
@@ -63,7 +87,6 @@ var zoom_label: Label
 var status: Label
 var undo_button: Button
 var redo_button: Button
-var apply_button: Button
 var paste_all_check: CheckBox
 var file_dialog: FileDialog
 var message := ""
@@ -75,66 +98,49 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	build_ui()
 
-	if target:
-		open(target)
-	else:
+	if path == "" or not load_from(path):
 		canvas.fit_to_view()
-
-func open(sprite: RegolithSprite) -> void:
-	target = sprite
-
-	if target and target.is_loaded():
-		doc.from_images(target.get_color_image(), target.get_mask_image())
-		if target.texture:
-			filename = target.texture.resource_path.get_file().get_basename()
-	else:
-		doc.resize(32, 32)
-		doc.clear()
-		doc.clear_history()
-
-	name_edit.text = filename
-	size_x.value = doc.width
-	size_y.value = doc.height
-	apply_button.disabled = target == null
-	canvas.fit_to_view()
-	sync_ui()
-
-func apply_to_target() -> void:
-	if target == null:
-		return
-
-	commit_float()
-	target.load_from_images(doc.to_color_image(), doc.to_mask_image() if doc.has_mask() else null)
-	message = "applied to " + target.name
 
 func close() -> void:
 	closed.emit()
 	queue_free()
 
-# ui
-
 func build_ui() -> void:
 	root = Control.new()
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_STOP
+	root.theme = PixelTheme.theme()
 	add_child(root)
 
-	var backdrop := ColorRect.new()
-	backdrop.color = Color8(30, 31, 36)
-	backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	root.add_child(backdrop)
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.55)
+	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	root.add_child(dim)
 
-	var split := HBoxContainer.new()
-	split.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	split.add_theme_constant_override("separation", 0)
-	root.add_child(split)
+	window = PanelContainer.new()
+	window.add_theme_stylebox_override("panel", PixelTheme.box(PixelTheme.PAPER, PixelTheme.LINE, PixelTheme.BORDER, PixelTheme.BORDER, PixelTheme.BORDER, PixelTheme.BORDER, 0, 0))
+	root.add_child(window)
+	root.resized.connect(layout_window)
+	layout_window()
 
-	split.add_child(build_sidebar())
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 0)
+	window.add_child(column)
+
+	column.add_child(build_title())
+
+	var body := HBoxContainer.new()
+	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	body.add_theme_constant_override("separation", 0)
+	column.add_child(body)
+
+	body.add_child(build_sidebar())
 
 	var right := VBoxContainer.new()
 	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	right.add_theme_constant_override("separation", 0)
-	split.add_child(right)
+	body.add_child(right)
 
 	right.add_child(build_toolbar())
 
@@ -142,32 +148,12 @@ func build_ui() -> void:
 	canvas.editor = self
 	canvas.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	canvas.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	canvas.cell_input.connect(canvas_input)
+	canvas.cell_picked.connect(pick_at)
+	canvas.hovered.connect(set_hover)
 	right.add_child(canvas)
 
-	var status_panel := PanelContainer.new()
-	right.add_child(status_panel)
-	var status_row := HBoxContainer.new()
-	status_panel.add_child(status_row)
-	status = Label.new()
-	status.add_theme_font_size_override("font_size", 13)
-	status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	status.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	status_row.add_child(status)
-	status_row.add_child(action("-", func(): canvas.zoom_by(1.0 / 1.25), false))
-	status_row.add_child(action("+", func(): canvas.zoom_by(1.25), false))
-	status_row.add_child(action("Fit", func(): canvas.fit_to_view(), false))
-	zoom_label = Label.new()
-	zoom_label.custom_minimum_size.x = 56
-	zoom_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	status_row.add_child(zoom_label)
-
-	file_dialog = FileDialog.new()
-	file_dialog.access = FileDialog.ACCESS_FILESYSTEM
-	file_dialog.filters = PackedStringArray(["*.png ; PNG"])
-	file_dialog.size = Vector2i(760, 500)
-	file_dialog.current_dir = ProjectSettings.globalize_path("res://art/sprites")
-	file_dialog.file_selected.connect(on_file_selected)
-	root.add_child(file_dialog)
+	right.add_child(build_status())
 
 	for button in root.find_children("*", "BaseButton", true, false):
 		button.focus_mode = Control.FOCUS_NONE
@@ -175,12 +161,63 @@ func build_ui() -> void:
 	for slider in root.find_children("*", "Slider", true, false):
 		slider.focus_mode = Control.FOCUS_NONE
 
+	file_dialog = FileDialog.new()
+	file_dialog.access = FileDialog.ACCESS_FILESYSTEM
+	file_dialog.filters = PackedStringArray(["*.png ; PNG"])
+	file_dialog.size = Vector2i(640, 420)
+	file_dialog.current_dir = ProjectSettings.globalize_path("res://game/images/sprites")
+	file_dialog.file_selected.connect(on_file_selected)
+	root.add_child(file_dialog)
+
 	set_mode(doc.mode)
 	sync_ui()
+
+# the window sits centered, shrinking when the viewport is smaller than it
+func layout_window() -> void:
+	var view := root.size
+	var wanted := WINDOW_SIZE.min(view - Vector2.ONE * (WINDOW_MARGIN * 2))
+	wanted = wanted.max(Vector2(480, 320)).floor()
+	window.size = wanted
+	window.position = ((view - wanted) * 0.5).floor()
+
+func build_title() -> Control:
+	var bar := PanelContainer.new()
+	bar.add_theme_stylebox_override("panel", PixelTheme.box(PixelTheme.INK, PixelTheme.LINE, 0, 0, 0, PixelTheme.BORDER, 8, 4))
+
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	bar.add_child(row)
+
+	var title := Label.new()
+	title.text = "SPRITE"
+	title.add_theme_font_size_override("font_size", PixelTheme.TITLE_FONT_SIZE)
+	title.add_theme_color_override("font_color", ACCENT)
+	row.add_child(title)
+
+	name_edit = LineEdit.new()
+	name_edit.text = filename
+	name_edit.custom_minimum_size.x = 160
+	name_edit.placeholder_text = "name"
+	name_edit.text_changed.connect(func(t): filename = t)
+	row.add_child(name_edit)
+
+	row.add_child(action("Load", func(): show_dialog(FileDialog.FILE_MODE_OPEN_FILE), false))
+	row.add_child(action("Save", func(): show_dialog(FileDialog.FILE_MODE_SAVE_FILE), false))
+
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(spacer)
+
+	var close_button := action("X", close, false)
+	close_button.tooltip_text = "Close (F2)"
+	row.add_child(close_button)
+
+	return bar
 
 func build_sidebar() -> Control:
 	var panel := PanelContainer.new()
 	panel.custom_minimum_size.x = SIDEBAR_WIDTH
+	panel.add_theme_stylebox_override("panel", PixelTheme.box(PixelTheme.PAPER, PixelTheme.LINE, 0, 0, PixelTheme.BORDER, 0, 0, 0))
 
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -189,26 +226,12 @@ func build_sidebar() -> Control:
 	var margin := MarginContainer.new()
 	margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	for side in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
-		margin.add_theme_constant_override(side, 12)
+		margin.add_theme_constant_override(side, 8)
 	scroll.add_child(margin)
 
 	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 6)
+	box.add_theme_constant_override("separation", 4)
 	margin.add_child(box)
-
-	var head := HBoxContainer.new()
-	box.add_child(head)
-	var title := Label.new()
-	title.text = "Sprite"
-	title.add_theme_font_size_override("font_size", 22)
-	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	head.add_child(title)
-	name_edit = LineEdit.new()
-	name_edit.text = filename
-	name_edit.custom_minimum_size.x = 150
-	name_edit.placeholder_text = "name"
-	name_edit.text_changed.connect(func(t): filename = t)
-	head.add_child(name_edit)
 
 	var history := HBoxContainer.new()
 	box.add_child(history)
@@ -235,31 +258,51 @@ func build_sidebar() -> Control:
 		button.toggle_mode = true
 		button.button_group = mode_group
 		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		button.add_theme_font_size_override("font_size", PixelTheme.SMALL_FONT_SIZE)
 		button.pressed.connect(func(): set_mode(i))
 		modes.add_child(button)
 		mode_buttons.append(button)
 
-	# graphics
 	var graphics := VBoxContainer.new()
 	box.add_child(graphics)
 	graphics.add_child(section("Color"))
-	color_picker = ColorPicker.new()
-	color_picker.edit_alpha = true
-	color_picker.presets_visible = false
-	color_picker.sampler_visible = false
-	color_picker.can_add_swatches = false
-	color_picker.color_modes_visible = false
-	color_picker.color = doc.paint_color
-	color_picker.color_changed.connect(func(c): doc.paint_color = c)
-	graphics.add_child(color_picker)
+
+	var color_row := HBoxContainer.new()
+	graphics.add_child(color_row)
+	color_button = ColorPickerButton.new()
+	color_button.edit_alpha = true
+	color_button.color = doc.paint_color
+	color_button.custom_minimum_size = Vector2(SWATCH * 2, SWATCH + 2)
+	color_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	color_button.color_changed.connect(func(c): doc.paint_color = c)
+	color_button.picker_created.connect(setup_picker)
+	color_row.add_child(color_button)
+	hex_edit = LineEdit.new()
+	hex_edit.custom_minimum_size.x = 84
+	hex_edit.placeholder_text = "hex"
+	hex_edit.text_submitted.connect(on_hex_submitted)
+	color_row.add_child(hex_edit)
+
+	palette_grid = GridContainer.new()
+	palette_grid.columns = PALETTE_COLUMNS
+	palette_grid.add_theme_constant_override("h_separation", 2)
+	palette_grid.add_theme_constant_override("v_separation", 2)
+	graphics.add_child(palette_grid)
+	for i in PALETTE_COLUMNS * PALETTE_ROWS:
+		var button := Button.new()
+		button.custom_minimum_size = Vector2(SWATCH, SWATCH)
+		button.pressed.connect(func(): pick_palette(i))
+		palette_grid.add_child(button)
+		palette_buttons.append(button)
 	mode_sections.append(graphics)
 
-	# mask
 	var mask := VBoxContainer.new()
 	box.add_child(mask)
 	mask.add_child(section("Mask Type"))
 	var type_grid := GridContainer.new()
 	type_grid.columns = 2
+	type_grid.add_theme_constant_override("h_separation", 2)
+	type_grid.add_theme_constant_override("v_separation", 2)
 	mask.add_child(type_grid)
 	var type_group := ButtonGroup.new()
 	for i in SpriteDocument.TYPE_COUNT:
@@ -269,28 +312,30 @@ func build_sidebar() -> Control:
 		type_buttons.append(button)
 	mode_sections.append(mask)
 
-	# class
 	var armor := VBoxContainer.new()
 	box.add_child(armor)
 	armor.add_child(section("Armor Class"))
 	var class_grid := GridContainer.new()
-	class_grid.columns = 2
+	class_grid.columns = 4
+	class_grid.add_theme_constant_override("h_separation", 2)
+	class_grid.add_theme_constant_override("v_separation", 2)
 	armor.add_child(class_grid)
 	var class_group := ButtonGroup.new()
 	for i in SpriteDocument.CLASS_COUNT:
-		var button := swatch_button("Class %d" % i, SpriteDocument.CLASS_DISPLAY[i], class_group)
+		var button := swatch_button("%d" % i, SpriteDocument.CLASS_DISPLAY[i], class_group)
 		button.pressed.connect(func(): doc.paint_class = i)
 		class_grid.add_child(button)
 		class_buttons.append(button)
 	mode_sections.append(armor)
 
-	# emission
 	var emission := VBoxContainer.new()
 	box.add_child(emission)
-	emission.add_child(section("Emission"))
+	emission.add_child(section("Glow"))
 	var hint := Label.new()
-	hint.text = "Paint cells that glow. Left adds, right erases. Core cells always glow."
+	hint.text = "Cells that glow. Left adds, right erases. Core cells always glow."
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD
+	hint.add_theme_font_size_override("font_size", PixelTheme.SMALL_FONT_SIZE)
+	hint.add_theme_color_override("font_color", PixelTheme.TEXT_DIM)
 	emission.add_child(hint)
 	mode_sections.append(emission)
 
@@ -304,51 +349,34 @@ func build_sidebar() -> Control:
 	box.add_child(labeled("Opacity", opacity_slider))
 
 	box.add_child(section("Paint"))
-	box.add_child(check("Filled Rect", rect_filled, func(on): rect_filled = on))
-	paste_all_check = check("Paste All Layers", doc.paste_all_layers, func(on): doc.paste_all_layers = on)
+	box.add_child(check("Filled rect", rect_filled, func(on): rect_filled = on))
+	paste_all_check = check("Paste all layers", doc.paste_all_layers, func(on): doc.paste_all_layers = on)
 	box.add_child(paste_all_check)
 
 	box.add_child(section("Canvas"))
 	var size_row := HBoxContainer.new()
 	box.add_child(size_row)
-	var size_label := Label.new()
-	size_label.text = "Size"
-	size_label.custom_minimum_size.x = 56
-	size_row.add_child(size_label)
 	size_x = spin(1, SpriteDocument.MAX_SIZE, doc.width)
 	size_y = spin(1, SpriteDocument.MAX_SIZE, doc.height)
 	size_row.add_child(size_x)
+	var by := Label.new()
+	by.text = "x"
+	by.add_theme_color_override("font_color", PixelTheme.TEXT_DIM)
+	size_row.add_child(by)
 	size_row.add_child(size_y)
 
 	var canvas_row := HBoxContainer.new()
 	box.add_child(canvas_row)
 	canvas_row.add_child(action("Resize", func(): commit_float(); doc.resize_recorded(int(size_x.value), int(size_y.value)); canvas.fit_to_view()))
 	canvas_row.add_child(action("Clear", func(): commit_float(); doc.clear_recorded()))
-	canvas_row.add_child(action("Fit", func(): canvas.fit_to_view()))
-
-	box.add_child(section("File"))
-	var files := HBoxContainer.new()
-	box.add_child(files)
-	files.add_child(action("Load", func(): show_dialog(FileDialog.FILE_MODE_OPEN_FILE)))
-	files.add_child(action("Save", func(): show_dialog(FileDialog.FILE_MODE_SAVE_FILE)))
-
-	var spacer := Control.new()
-	spacer.custom_minimum_size.y = 8
-	box.add_child(spacer)
-
-	var finish := HBoxContainer.new()
-	box.add_child(finish)
-	apply_button = action("Apply", apply_to_target)
-	apply_button.disabled = target == null
-	finish.add_child(apply_button)
-	finish.add_child(action("Close", close))
 
 	return panel
 
 func build_toolbar() -> Control:
 	var panel := PanelContainer.new()
+	panel.add_theme_stylebox_override("panel", PixelTheme.box(PixelTheme.PAPER, PixelTheme.LINE, 0, 0, 0, PixelTheme.BORDER, 6, 3))
 	var bar := HBoxContainer.new()
-	bar.add_theme_constant_override("separation", 4)
+	bar.add_theme_constant_override("separation", 2)
 	panel.add_child(bar)
 
 	var tool_group := ButtonGroup.new()
@@ -366,14 +394,14 @@ func build_toolbar() -> Control:
 
 	brush_label = Label.new()
 	brush_label.text = "Brush 1"
-	brush_label.custom_minimum_size.x = 64
+	brush_label.custom_minimum_size.x = 56
 	bar.add_child(brush_label)
 	brush_slider = HSlider.new()
 	brush_slider.min_value = 1
 	brush_slider.max_value = 16
 	brush_slider.step = 1
 	brush_slider.value = brush_size
-	brush_slider.custom_minimum_size.x = 100
+	brush_slider.custom_minimum_size.x = 80
 	brush_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	brush_slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	brush_slider.value_changed.connect(func(v): brush_size = int(v))
@@ -381,18 +409,119 @@ func build_toolbar() -> Control:
 
 	return panel
 
+func build_status() -> Control:
+	var panel := PanelContainer.new()
+	panel.add_theme_stylebox_override("panel", PixelTheme.box(PixelTheme.INK, PixelTheme.LINE, 0, PixelTheme.BORDER, 0, 0, 6, 2))
+	var row := HBoxContainer.new()
+	panel.add_child(row)
+
+	status = Label.new()
+	status.add_theme_font_size_override("font_size", PixelTheme.SMALL_FONT_SIZE)
+	status.add_theme_color_override("font_color", PixelTheme.TEXT_DIM)
+	status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	status.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	status.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	row.add_child(status)
+
+	for button in [action("-", func(): canvas.zoom_by(1.0 / 1.25), false), action("+", func(): canvas.zoom_by(1.25), false), action("Fit", func(): canvas.fit_to_view(), false)]:
+		button.add_theme_font_size_override("font_size", PixelTheme.SMALL_FONT_SIZE)
+		row.add_child(button)
+
+	zoom_label = Label.new()
+	zoom_label.custom_minimum_size.x = 48
+	zoom_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	zoom_label.add_theme_font_size_override("font_size", PixelTheme.SMALL_FONT_SIZE)
+	zoom_label.add_theme_color_override("font_color", PixelTheme.TEXT_DIM)
+	row.add_child(zoom_label)
+
+	return panel
+
+func setup_picker() -> void:
+	var picker := color_button.get_picker()
+	picker.presets_visible = false
+	picker.sampler_visible = false
+	picker.can_add_swatches = false
+	picker.color_modes_visible = false
+	picker.picker_shape = ColorPicker.SHAPE_HSV_RECTANGLE
+
+func on_hex_submitted(text: String) -> void:
+	var html := text.strip_edges()
+	if not html.begins_with("#"):
+		html = "#" + html
+
+	if Color.html_is_valid(html):
+		doc.paint_color = Color.html(html)
+
+	hex_edit.release_focus()
+
+func pick_palette(i: int) -> void:
+	if i < palette_colors.size():
+		doc.paint_color = palette_colors[i]
+
+# fixed base colors first, then the colors in the sprite by how often they
+# appear. runs after every edit, sampling big sprites so it stays cheap
+func refresh_palette() -> void:
+	palette_dirty = false
+
+	var counts := {}
+	var total := doc.cell_count()
+	var stride := maxi(1, ceili(total / 65536.0))
+	var i := 0
+	while i < total:
+		var c := doc.get_cell_color(i)
+		if c.a > 0.0:
+			var key := c.to_rgba32()
+			counts[key] = counts.get(key, 0) + 1
+		i += stride
+
+	var keys := counts.keys()
+	keys.sort_custom(func(a, b): return counts[a] > counts[b])
+
+	palette_colors.clear()
+	for c in PALETTE_BASE:
+		palette_colors.append(c)
+
+	var base_keys := {}
+	for c in PALETTE_BASE:
+		base_keys[c.to_rgba32()] = true
+
+	for key in keys:
+		if palette_colors.size() >= palette_buttons.size():
+			break
+		if base_keys.has(key):
+			continue
+		palette_colors.append(Color.hex(key))
+
+	for b in palette_buttons.size():
+		var button := palette_buttons[b]
+		button.visible = b < palette_colors.size()
+
+	palette_shown = Color(-1, -1, -1, -1)
+
+func highlight_palette() -> void:
+	palette_shown = doc.paint_color
+
+	for b in palette_colors.size():
+		var c := palette_colors[b]
+		var picked := c.is_equal_approx(doc.paint_color)
+		var button := palette_buttons[b]
+		button.add_theme_stylebox_override("normal", PixelTheme.box(c, ACCENT if picked else PixelTheme.INK, 2, 2, 2, 2, 0, 0))
+		button.add_theme_stylebox_override("hover", PixelTheme.box(c, PixelTheme.TEXT, 2, 2, 2, 2, 0, 0))
+		button.add_theme_stylebox_override("pressed", PixelTheme.box(c, ACCENT, 2, 2, 2, 2, 0, 0))
+		button.add_theme_stylebox_override("hover_pressed", PixelTheme.box(c, ACCENT, 2, 2, 2, 2, 0, 0))
+
 func section(text: String) -> Label:
 	var label := Label.new()
-	label.text = text
-	label.add_theme_font_size_override("font_size", 12)
-	label.modulate = Color(1, 1, 1, 0.6)
+	label.text = text.to_upper()
+	label.add_theme_font_size_override("font_size", PixelTheme.SMALL_FONT_SIZE)
+	label.add_theme_color_override("font_color", PixelTheme.TEXT_DIM)
 	return label
 
 func labeled(text: String, control: Control) -> Control:
 	var row := HBoxContainer.new()
 	var label := Label.new()
 	label.text = text
-	label.custom_minimum_size.x = 56
+	label.custom_minimum_size.x = 48
 	row.add_child(label)
 	control.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	control.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -428,27 +557,19 @@ func swatch_button(text: String, color: Color, group: ButtonGroup) -> Button:
 	button.toggle_mode = true
 	button.button_group = group
 	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	button.add_theme_font_size_override("font_size", PixelTheme.SMALL_FONT_SIZE)
 
-	var shown := color if color.a > 0.0 else Color8(40, 40, 46)
+	var shown := color if color.a > 0.0 else PixelTheme.PAPER_SUNKEN
 	var lum := 0.299 * shown.r + 0.587 * shown.g + 0.114 * shown.b
-	button.add_theme_color_override("font_color", Color8(20, 20, 24) if lum > 0.5 else Color.WHITE)
-	button.add_theme_color_override("font_pressed_color", Color8(20, 20, 24) if lum > 0.5 else Color.WHITE)
-	button.add_theme_color_override("font_hover_color", Color8(20, 20, 24) if lum > 0.5 else Color.WHITE)
+	var ink := PixelTheme.ACCENT_TEXT if lum > 0.5 else Color.WHITE
+	for state in ["font_color", "font_pressed_color", "font_hover_color", "font_hover_pressed_color"]:
+		button.add_theme_color_override(state, ink)
 
-	button.add_theme_stylebox_override("normal", swatch_style(shown, Color(0, 0, 0, 0)))
-	button.add_theme_stylebox_override("hover", swatch_style(shown.lightened(0.2), Color(0, 0, 0, 0)))
-	button.add_theme_stylebox_override("pressed", swatch_style(shown, ACCENT))
-	button.add_theme_stylebox_override("hover_pressed", swatch_style(shown.lightened(0.2), ACCENT))
+	button.add_theme_stylebox_override("normal", PixelTheme.box(shown, PixelTheme.INK, 2, 2, 2, 2, 4, 1))
+	button.add_theme_stylebox_override("hover", PixelTheme.box(shown.lightened(0.15), PixelTheme.TEXT, 2, 2, 2, 2, 4, 1))
+	button.add_theme_stylebox_override("pressed", PixelTheme.box(shown, ACCENT, 2, 2, 2, 2, 4, 1))
+	button.add_theme_stylebox_override("hover_pressed", PixelTheme.box(shown.lightened(0.15), ACCENT, 2, 2, 2, 2, 4, 1))
 	return button
-
-func swatch_style(fill: Color, border: Color) -> StyleBoxFlat:
-	var style := StyleBoxFlat.new()
-	style.bg_color = fill
-	style.border_color = border
-	style.set_border_width_all(2)
-	style.set_corner_radius_all(3)
-	style.set_content_margin_all(6)
-	return style
 
 func _process(_delta: float) -> void:
 	sync_ui()
@@ -469,8 +590,22 @@ func sync_ui() -> void:
 	for i in class_buttons.size():
 		class_buttons[i].set_pressed_no_signal(i == doc.paint_class)
 
-	if color_picker.color != doc.paint_color:
-		color_picker.color = doc.paint_color
+	if color_button.color != doc.paint_color:
+		color_button.color = doc.paint_color
+
+	if not hex_edit.has_focus():
+		var html := doc.paint_color.to_html(doc.paint_color.a < 1.0)
+		if hex_edit.text != html:
+			hex_edit.text = html
+
+	if doc.color_dirty and not doc.editing():
+		palette_dirty = true
+
+	if palette_dirty and not doc.editing():
+		refresh_palette()
+
+	if palette_shown != doc.paint_color:
+		highlight_palette()
 
 	if int(brush_slider.value) != brush_size:
 		brush_slider.set_value_no_signal(brush_size)
@@ -520,8 +655,6 @@ func typing() -> bool:
 	var owner := root.get_viewport().gui_get_focus_owner()
 	return owner is LineEdit or owner is TextEdit
 
-# modes and tools
-
 func set_mode(mode: int) -> void:
 	if mode != doc.mode:
 		commit_float()
@@ -556,8 +689,6 @@ func undo() -> void:
 func redo() -> void:
 	cancel_float()
 	doc.redo()
-
-# canvas interaction, mirrors the old canvas_input
 
 func canvas_input(hovered: bool, gx: int, gy: int, left_click: bool, right_click: bool, left_down: bool, right_down: bool) -> void:
 	if doc.width <= 0:
@@ -667,8 +798,6 @@ func canvas_input(hovered: bool, gx: int, gy: int, left_click: bool, right_click
 
 	if doc.editing() and not any_down:
 		doc.end_edit()
-
-# selection, clipboard and floating region
 
 func has_float() -> bool:
 	return not SpriteDocument.region_empty(float_region)
@@ -785,8 +914,6 @@ func nudge(dx: int, dy: int) -> void:
 		var s := doc.selection
 		doc.set_selection(s.position.x + dx, s.position.y + dy, s.end.x - 1 + dx, s.end.y - 1 + dy)
 
-# keyboard
-
 func _unhandled_key_input(event: InputEvent) -> void:
 	if not event.pressed or typing():
 		return
@@ -845,8 +972,6 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	if handled:
 		root.get_viewport().set_input_as_handled()
 
-# files
-
 func show_dialog(mode: FileDialog.FileMode) -> void:
 	file_dialog.file_mode = mode
 	file_dialog.title = "Save sprite" if mode == FileDialog.FILE_MODE_SAVE_FILE else "Load sprite"
@@ -899,6 +1024,7 @@ func load_from(path: String) -> bool:
 
 	reset_float()
 	doc.from_images(color, mask)
+	palette_dirty = true
 	filename = path.get_file().get_basename()
 	name_edit.text = filename
 	size_x.value = doc.width

@@ -12,7 +12,6 @@ func before_each() -> void:
 
 	sprite = RegolithSprite.new()
 	sprite.dynamic = false
-	sprite.editing = true
 	add_child_autofree(sprite)
 	await wait_process_frames(1)
 
@@ -41,15 +40,8 @@ func test_paint_and_clear_cells() -> void:
 	assert_false(sprite.has_cell(Vector2i(5, 5)), "clear_cell")
 	assert_false(sprite.has_cell(Vector2i(21, 4)), "clear_rect")
 
-func test_editing_sprite_keeps_cells_across_frames() -> void:
-	paint_sample()
-	await wait_physics_frames(3)
-	assert_eq(sprite.get_active_cell_count(), 192)
-	assert_eq(world.get_sprite_count(), 1)
-
 func test_images_reload_into_another_sprite() -> void:
 	paint_sample()
-	await wait_physics_frames(1)
 
 	var color := sprite.get_color_image()
 	var mask := sprite.get_mask_image()
@@ -61,7 +53,6 @@ func test_images_reload_into_another_sprite() -> void:
 
 	var copy := RegolithSprite.new()
 	copy.dynamic = false
-	copy.editing = true
 	copy.position = Vector2(400, 0)
 	add_child_autofree(copy)
 	copy.load_from_images(color, mask)
@@ -71,10 +62,8 @@ func test_images_reload_into_another_sprite() -> void:
 	assert_eq(copy.get_cell_class(Vector2i(10, 10)), 3)
 	assert_eq(copy.get_cell_class(Vector2i(38, 22)), 5)
 
-func test_editing_off_commits_and_isolated_cell_drops() -> void:
+func test_commit_drops_isolated_cell() -> void:
 	paint_sample()
-	await wait_physics_frames(1)
-	sprite.editing = false
 	await wait_physics_frames(3)
 	assert_eq(sprite.get_active_cell_count(), 191, "the lone cell at 38,22 falls away")
 	assert_eq(world.get_sprite_count(), 1, "a single cell is too small to become a piece")
@@ -85,18 +74,15 @@ func test_joints_add_and_remove() -> void:
 	paint_sample()
 	var other := RegolithSprite.new()
 	other.dynamic = false
-	other.editing = true
 	other.position = Vector2(400, 0)
 	add_child_autofree(other)
 	other.create_blank(Vector2i(8, 8))
 	other.fill_rect(Rect2i(0, 0, 8, 8), Color.WHITE, RegolithSprite.CELL_FILLED, 0)
-	sprite.editing = false
-	other.editing = false
 	await wait_physics_frames(2)
 
 	var joint := world.add_joint(sprite, other, other.global_position)
 	assert_gte(joint, 0)
 	assert_eq(world.get_joint_count(), 1)
-	assert_eq(world.get_joint_position(joint), other.global_position)
+	assert_eq(world.get_joint_anchors(joint)[0], other.global_position)
 	world.remove_joint(joint)
 	assert_eq(world.get_joint_count(), 0)

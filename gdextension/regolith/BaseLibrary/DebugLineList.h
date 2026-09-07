@@ -48,6 +48,9 @@ enum DebugName {
     DebugName_Ai_Flocker,
     DebugName_Ai_Los_Clear,
     DebugName_Ai_Los_Blocked,
+    DebugName_Ai_Thrower,
+    DebugName_Ai_Shield,
+    DebugName_Ai_Trap,
 
     DebugName_Sprite,
     DebugName_Sprite_Chunk,
@@ -83,6 +86,9 @@ public:
 
     auto& colors() { return m_debug_name_color; }
     auto& tints() { return m_debug_layer_tint; }
+
+    const auto& colors() const { return m_debug_name_color; }
+    const auto& tints() const { return m_debug_layer_tint; }
 
 private:
     std::array<std::pair<Color4, bool>, static_cast<size_t>(DebugName_Count)> m_debug_name_color;

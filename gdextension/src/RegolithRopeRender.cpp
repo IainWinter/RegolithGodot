@@ -9,7 +9,6 @@
 
 using namespace godot;
 
-// xy pads around the segment, uv.x picks endpoint a or b
 static Ref<ArrayMesh> make_segment_quad() {
     PackedVector2Array quad;
     quad.push_back(Vector2(-1, -1));
@@ -52,6 +51,10 @@ void RegolithRopeRender::_exit_tree() {
     m_render.free();
 }
 
+int RegolithRopeRender::get_instance_count() const {
+    return m_render.instance_count();
+}
+
 void RegolithRopeRender::_process(double delta) {
     if (Engine::get_singleton()->is_editor_hint() || !is_visible_in_tree()) {
         return;
@@ -62,6 +65,8 @@ void RegolithRopeRender::_process(double delta) {
     if (!sprite || !sprite->world()) {
         return;
     }
+
+    CRASH_COND_MSG(get_material().is_null(), vformat("%s has ropes but no rope_material", sprite->get_path()));
 
     SceneTree* tree = get_tree();
     bool interpolated = tree && tree->is_physics_interpolation_enabled();

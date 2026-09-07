@@ -45,7 +45,6 @@ const CLASS_DISPLAY: Array[Color] = [
 const EMISSION_ON := Color8(255, 190, 60)
 const EMISSION_OFF := Color8(70, 74, 82)
 
-# mask png channel codes, red picks joints and rope, green picks the rest
 const TYPE_RED := [0, 0, 0, 0, 0, 0, 0, 50, 100, 150, 200, 250]
 const TYPE_GREEN := [0, 100, 200, 250, 251, 252, 253, 0, 0, 0, 0, 0]
 
@@ -74,8 +73,6 @@ var edit_before := {}
 
 func _init(w := 0, h := 0) -> void:
 	resize(w, h)
-
-# buffers
 
 func cell_count() -> int:
 	return width * height
@@ -175,8 +172,6 @@ func has_mask() -> bool:
 			return true
 	return false
 
-# snapshots and history
-
 func snapshot() -> Dictionary:
 	return {"w": width, "h": height, "color": color.duplicate(), "mask": mask.duplicate(), "cls": cls.duplicate()}
 
@@ -245,8 +240,6 @@ func redo() -> void:
 	restore(entry["after"])
 	undo_stack.append(entry)
 
-# recorded whole-document edits
-
 func resize_recorded(w: int, h: int) -> void:
 	var before := snapshot()
 	resize(w, h)
@@ -256,8 +249,6 @@ func clear_recorded() -> void:
 	var before := snapshot()
 	clear()
 	push_history(before, snapshot())
-
-# selection
 
 func set_selection(x0: int, y0: int, x1: int, y1: int) -> void:
 	var ax := maxi(mini(x0, x1), 0)
@@ -288,8 +279,6 @@ func index_selected(i: int) -> bool:
 		return true
 	return cell_selected(i % width, i / width)
 
-# layers touched by region ops
-
 func layer_pixels() -> bool:
 	return paste_all_layers or mode == Mode.GRAPHICS
 
@@ -298,8 +287,6 @@ func layer_mask() -> bool:
 
 func layer_class() -> bool:
 	return paste_all_layers or mode == Mode.CLASS or mode == Mode.EMISSION
-
-# painting
 
 func paint_at(x: int, y: int, erase: bool) -> void:
 	if not in_bounds(x, y) or not cell_selected(x, y):
@@ -465,8 +452,6 @@ func pick_at(x: int, y: int) -> void:
 		Mode.CLASS:
 			paint_class = get_cell_class(i)
 
-# regions, used by selection copy, paste and float
-
 func copy_region(rect: Rect2i) -> Dictionary:
 	if rect.size.x <= 0 or rect.size.y <= 0:
 		return {}
@@ -498,8 +483,6 @@ func copy_region(rect: Rect2i) -> Dictionary:
 			out_mask[di] = mask[si]
 			out_cls[di] = cls[si]
 
-	# packed arrays inside a dictionary are copy on write, so build them
-	# first and store them once
 	return {"w": rw, "h": rh, "color": out_color, "mask": out_mask, "cls": out_cls}
 
 static func region_empty(region: Dictionary) -> bool:
@@ -584,8 +567,6 @@ func region_display_color(region: Dictionary, i: int) -> Color:
 		_:
 			return Color8(region["color"][i * 4], region["color"][i * 4 + 1], region["color"][i * 4 + 2], region["color"][i * 4 + 3])
 
-# images, same encoding RegolithSprite reads and writes
-
 func to_color_image() -> Image:
 	if width <= 0 or height <= 0:
 		return null
@@ -637,7 +618,6 @@ func from_images(color_image: Image, mask_image: Image) -> void:
 			if type != RegolithSprite.CELL_EMPTY:
 				cls[i] = ((255 - data[i * 4 + 2]) & CLASS_BITS) | (EMISSION_BIT if data[i * 4 + 3] == 254 else 0)
 	else:
-		# no mask, the engine treats any visible non black pixel as filled
 		for i in cell_count():
 			var a := color[i * 4 + 3]
 			if a > 0 and (color[i * 4] > 0 or color[i * 4 + 1] > 0 or color[i * 4 + 2] > 0):
@@ -668,7 +648,11 @@ static func decode_mask_pixel(r: int, g: int, b: int) -> int:
 
 	return RegolithSprite.CELL_EMPTY
 
-# display images for the canvas layers
+static func encode_mask_pixel(type: int, cell_class: int, emissive := false) -> Color:
+	if type == RegolithSprite.CELL_EMPTY:
+		return Color(0, 0, 0, 0)
+
+	return Color8(TYPE_RED[type], TYPE_GREEN[type], 255 - (cell_class & CLASS_BITS), 254 if emissive else 255)
 
 func color_display_image() -> Image:
 	return to_color_image()

@@ -49,7 +49,7 @@ void feed_ropes(PhysicsWorld& physics, const std::vector<RegolithSprite*>& sprit
     };
 
     for (RegolithSprite* node : sprites) {
-        if (!node->has_ropes() || node->is_editing()) {
+        if (!node->has_ropes()) {
             continue;
         }
 
@@ -75,8 +75,6 @@ void feed_ropes(PhysicsWorld& physics, const std::vector<RegolithSprite*>& sprit
                 && anchor.rope_index >= 0 && anchor.rope_index < static_cast<int>(ropes.size());
         };
 
-        // ropes that only hold children still count as held
-
         std::vector<int> incoming(ropes.size(), 0);
 
         for (const SpriteRope& rope : ropes) {
@@ -88,10 +86,6 @@ void feed_ropes(PhysicsWorld& physics, const std::vector<RegolithSprite*>& sprit
                 incoming[rope.b.rope_index] += 1;
             }
         }
-
-        // shape matching aims nodes at rest_local, which only means anything
-        // while the rope still hangs off its own body. a piece cut loose that
-        // only holds a far sprite would drag that sprite back to this rest pose
 
         std::vector<uint8_t> owner_rooted(ropes.size(), 0);
 
@@ -117,7 +111,6 @@ void feed_ropes(PhysicsWorld& physics, const std::vector<RegolithSprite*>& sprit
             }
         }
 
-        // skipped short ropes shift solver indices, map set index -> solver index
         std::vector<int> solver_index(ropes.size(), -1);
 
         for (int rope_i = 0; rope_i < static_cast<int>(ropes.size()); rope_i++) {
@@ -132,7 +125,6 @@ void feed_ropes(PhysicsWorld& physics, const std::vector<RegolithSprite*>& sprit
 
             PhysicsRope out = sprite_physics_create_rope(rope, rope_set, own_proxy, delta_time);
 
-            // pixel wide collision
             out.radius = sprite_rope_radius(node->transform(), grid);
 
             sprite_physics_wiggle_rope(out, rope_set.wiggle, rope.wiggle_amount, rope.wiggle_phase, time, delta_time);
@@ -156,7 +148,7 @@ void feed_ropes(PhysicsWorld& physics, const std::vector<RegolithSprite*>& sprit
                 }
 
                 else if (rope_anchor_valid(anchor)) {
-                    out_anchor.rope_index = base + anchor.rope_index; // fixed up below
+                    out_anchor.rope_index = base + anchor.rope_index;
                     out_anchor.node_index = anchor.node_index;
                     held = true;
                 }
@@ -164,8 +156,6 @@ void feed_ropes(PhysicsWorld& physics, const std::vector<RegolithSprite*>& sprit
 
             resolve(rope.a, rope.entity_a, out.anchor_a);
             resolve(rope.b, rope.entity_b, out.anchor_b);
-
-            // a rope holding onto nothing keeps its root at its rest pose
 
             if (!held && own_proxy != -1 && !rope.rest_local.empty()) {
                 out.anchor_a = {own_proxy, rope.rest_local.front()};
@@ -179,8 +169,6 @@ void feed_ropes(PhysicsWorld& physics, const std::vector<RegolithSprite*>& sprit
             solver_ropes.push_back(std::move(out));
             sources.push_back(&rope);
         }
-
-        // rope anchors recorded set local indices, point them at solver ropes
 
         for (int rope_i = 0; rope_i < static_cast<int>(ropes.size()); rope_i++) {
             if (solver_index[rope_i] == -1) {

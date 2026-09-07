@@ -18,10 +18,9 @@ void SpriteChunkPool::create(int chunk_size, int atlas_page_size, int atlas_page
     m_atlas_page_count = atlas_page_count;
 
     int total_chunk_size = m_chunk_size * m_chunk_size;
-    int blocks_per_page = (m_atlas_page_size / m_chunk_size) * (m_atlas_page_size / m_chunk_size);
+    int blocks_per_page = chunks_per_page() * chunks_per_page();
 
     m_free = FreeList<uint32_t>(blocks_per_page * m_atlas_page_count);
-
     m_sprite_chunk_allocator = FreeListChunkAllocator<SpriteChunk>(1, blocks_per_page);
     m_color_allocator = FreeListChunkAllocator<Color4>(total_chunk_size, blocks_per_page);
     m_normal_allocator = FreeListChunkAllocator<Color4>(total_chunk_size, blocks_per_page);
@@ -77,6 +76,14 @@ int SpriteChunkPool::atlas_page_count() const {
     return m_atlas_page_count;
 }
 
+int SpriteChunkPool::atlas_slot_size() const {
+    return m_chunk_size + 2 * k_atlas_chunk_padding;
+}
+
+int SpriteChunkPool::chunks_per_page() const {
+    return m_chunk_size == 0 ? 0 : m_atlas_page_size / atlas_slot_size();
+}
+
 size_t SpriteChunkPool::alive_count() const {
     return m_alive.size();
 }
@@ -86,11 +93,7 @@ bool SpriteChunkPool::is_created() const {
 }
 
 size_t SpriteChunkPool::capacity() const {
-    if (m_chunk_size == 0) {
-        return 0;
-    }
-
-    int per_page = (m_atlas_page_size / m_chunk_size) * (m_atlas_page_size / m_chunk_size);
+    int per_page = chunks_per_page() * chunks_per_page();
     return static_cast<size_t>(per_page) * m_atlas_page_count;
 }
 
@@ -99,10 +102,9 @@ SpriteChunk* SpriteChunkPool::create_chunk_empty() {
 
     SpriteChunkId id = m_free.allocate();
 
-    int chunks_per_page = m_atlas_page_size / m_chunk_size;
-
-    ivec3 atlas_offset = atlas_index_to_xyz(id);
-    vec3 uvw_offset = vec3(vec2(atlas_offset) / float(chunks_per_page), float(atlas_offset.z));
+    ivec3 slot = atlas_index_to_xyz(id);
+    ivec3 pixel_offset = slot * ivec3(atlas_slot_size(), atlas_slot_size(), 1) + ivec3(k_atlas_chunk_padding, k_atlas_chunk_padding, 0);
+    vec3 uvw_offset = vec3(vec2(pixel_offset) / float(m_atlas_page_size), float(slot.z));
 
     SpriteChunk* chunk = m_sprite_chunk_allocator.allocate(id).data();
     chunk->id = id;
@@ -113,7 +115,7 @@ SpriteChunk* SpriteChunkPool::create_chunk_empty() {
     chunk->distance = m_distance_allocator.allocate(id, k_sdf_band_cells);
     chunk->activePixelCount = 0;
     chunk->gridPixelOffset = ivec2(0);
-    chunk->atlasPixelOffset = atlas_offset * ivec3(m_chunk_size, m_chunk_size, 1);
+    chunk->atlasPixelOffset = pixel_offset;
     chunk->uvwOffset = uvw_offset;
 
     m_alive.insert(id);
@@ -267,12 +269,12 @@ SpriteChunk* SpriteChunkPool::get_chunk(SpriteChunkId id) {
 }
 
 ivec3 SpriteChunkPool::atlas_index_to_xyz(size_t index) const {
-    int chunks_per_page = m_atlas_page_size / m_chunk_size;
+    int per_row = chunks_per_page();
 
     int i = int(index);
 
-    int x = i % chunks_per_page;
-    int y = (i / chunks_per_page) % chunks_per_page;
-    int z = i / (chunks_per_page * chunks_per_page);
+    int x = i % per_row;
+    int y = (i / per_row) % per_row;
+    int z = i / (per_row * per_row);
     return ivec3(x, y, z);
 }

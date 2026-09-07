@@ -5,8 +5,9 @@ extends GutTest
 # cells_removed and spawned into the world's GPUParticles2D child. the
 # counts must match what actually went away
 
-const SPRITE_MATERIAL := preload("res://shaders/regolith_sprite_material.tres")
-const CELL_MATERIAL := preload("res://shaders/regolith_cell_particles_material.tres")
+const SPRITE_MATERIAL := preload("res://game/shaders/regolith_sprite_material.tres")
+const CELL_MATERIAL := preload("res://game/shaders/regolith_cell_particles_material.tres")
+const ROPE_MATERIAL := preload("res://game/shaders/regolith_rope_material.tres")
 
 var world: RegolithWorld
 var particles: GPUParticles2D
@@ -53,6 +54,7 @@ func spawn_wall(rope_len := 24) -> RegolithSprite:
 	var wall := RegolithSprite.new()
 	wall.texture = ImageTexture.create_from_image(images[0])
 	wall.mask_texture = ImageTexture.create_from_image(images[1])
+	wall.rope_material = ROPE_MATERIAL
 	wall.dynamic = false
 	wall.position = Vector2(300, 100)
 	add_child_autofree(wall)
@@ -133,8 +135,6 @@ func test_rope_cut_gap_pixels_become_particles() -> void:
 	assert_eq(batches, 1)
 
 func test_short_rope_bursts_into_one_pixel_per_drawn_cell() -> void:
-	# the engine's rope pixel estimate over counts on small sprites, so
-	# only a two cell rope falls under the piece floor here
 	var stub := spawn_wall(2)
 	await settle(3)
 	assert_eq(stub.get_rope_count(), 1)

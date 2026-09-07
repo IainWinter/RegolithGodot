@@ -3,15 +3,15 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://ldwcshemmg7p"
-path="res://.godot/imported/player_big_mask.png-9a2f4c69c761d413df760bbcaf91acbf.ctex"
+path="res://.godot/imported/player_big_mask.png-56e9ecf8b684571c7483d88c6c73db6c.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://art/sprites/player_big_mask.png"
-dest_files=["res://.godot/imported/player_big_mask.png-9a2f4c69c761d413df760bbcaf91acbf.ctex"]
+source_file="res://game/images/sprites/player_big_mask.png"
+dest_files=["res://.godot/imported/player_big_mask.png-56e9ecf8b684571c7483d88c6c73db6c.ctex"]
 
 [params]
 

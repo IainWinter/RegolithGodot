@@ -8,20 +8,24 @@ class_name SpriteCanvas
 const ZOOM_MIN := 0.5
 const ZOOM_MAX := 200.0
 
-const BG := Color8(24, 25, 29)
-const CHECKER_A := Color8(52, 54, 60)
-const CHECKER_B := Color8(64, 66, 73)
+const BG := PixelTheme.PAPER_SUNKEN
+const CHECKER_A := Color8(44, 43, 52)
+const CHECKER_B := Color8(56, 55, 66)
 const GRID_MINOR := Color(1, 1, 1, 0.12)
 const GRID_MAJOR := Color(1, 1, 1, 0.28)
-const OUTLINE := Color8(140, 144, 156)
-const SELECTION_FILL := Color(0.35, 0.6, 1.0, 0.18)
-const SELECTION_OUTLINE := Color8(120, 180, 255)
-const FLOAT_OUTLINE := Color8(255, 200, 80)
+const OUTLINE := PixelTheme.LINE
+const SELECTION_FILL := Color(PixelTheme.SELECT, 0.18)
+const SELECTION_OUTLINE := PixelTheme.SELECT
+const FLOAT_OUTLINE := PixelTheme.ACCENT
 const GUIDE := Color8(255, 255, 255, 220)
-const ACCENT := Color(0.35, 0.6, 1.0, 0.25)
+const ACCENT := Color(PixelTheme.SELECT, 0.25)
 const CURSOR := Color8(255, 255, 255, 230)
 
 var editor: SpriteEditor
+
+signal cell_input(hovered: bool, x: int, y: int, left_click: bool, right_click: bool, left_down: bool, right_down: bool)
+signal cell_picked(x: int, y: int)
+signal hovered(x: int, y: int)
 
 var view_offset := Vector2.ZERO
 var view_zoom := 16.0
@@ -45,13 +49,11 @@ func _ready() -> void:
 	focus_mode = Control.FOCUS_CLICK
 	clip_contents = true
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	mouse_exited.connect(func(): mouse_inside = false; editor.set_hover(-1, -1))
+	mouse_exited.connect(func(): mouse_inside = false; hovered.emit(-1, -1))
 	mouse_entered.connect(func(): mouse_inside = true)
 
 func _process(_delta: float) -> void:
 	queue_redraw()
-
-# view transform, cell space to local pixels
 
 func center() -> Vector2:
 	return size * 0.5
@@ -85,8 +87,6 @@ func apply_fit() -> void:
 	view_offset = Vector2(doc.width, doc.height) * 0.5
 	fit_pending = false
 
-# input
-
 func hovered_cell() -> Vector2i:
 	var p := local_to_cell(mouse_local)
 	return Vector2i(floori(p.x), floori(p.y))
@@ -101,7 +101,7 @@ func _gui_input(event: InputEvent) -> void:
 			view_offset -= event.relative / view_zoom
 
 		var cell := hovered_cell()
-		editor.canvas_input(true, cell.x, cell.y, false, false, left_down, right_down)
+		cell_input.emit(true, cell.x, cell.y, false, false, left_down, right_down)
 		accept_event()
 		return
 
@@ -123,19 +123,17 @@ func _gui_input(event: InputEvent) -> void:
 				else:
 					mid_down = false
 					if not mid_dragged:
-						editor.pick_at(cell.x, cell.y)
+						cell_picked.emit(cell.x, cell.y)
 			MOUSE_BUTTON_LEFT:
 				grab_focus()
 				left_down = event.pressed
-				editor.canvas_input(true, cell.x, cell.y, event.pressed, false, left_down, right_down)
+				cell_input.emit(true, cell.x, cell.y, event.pressed, false, left_down, right_down)
 			MOUSE_BUTTON_RIGHT:
 				grab_focus()
 				right_down = event.pressed
-				editor.canvas_input(true, cell.x, cell.y, false, event.pressed, left_down, right_down)
+				cell_input.emit(true, cell.x, cell.y, false, event.pressed, left_down, right_down)
 
 		accept_event()
-
-# textures
 
 func ensure_textures() -> void:
 	var doc := editor.doc
@@ -172,8 +170,6 @@ func ensure_textures() -> void:
 		emission_tex.update(doc.emission_display_image())
 		doc.class_dirty = false
 
-# drawing
-
 func _draw() -> void:
 	if editor == null or editor.doc == null:
 		return
@@ -189,7 +185,7 @@ func _draw() -> void:
 
 	if mouse_inside:
 		var cell := hovered_cell()
-		editor.set_hover(cell.x, cell.y)
+		hovered.emit(cell.x, cell.y)
 
 	var img_min := cell_to_local(Vector2.ZERO)
 	var img_max := cell_to_local(Vector2(doc.width, doc.height))

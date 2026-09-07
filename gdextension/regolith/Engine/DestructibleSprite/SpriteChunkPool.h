@@ -22,7 +22,9 @@
     Sprites hold chunk pointers. Each atlas page is one layer of a
     Texture2DArray, color is RGBA8 and the cell mask bits are RG8. Dirty
     chunks write into their page's byte buffer and every touched page uploads
-    once per commit.
+    once per commit. Every chunk sits in a slot padded by k_atlas_chunk_padding
+    empty cells on each side so nearest sampling at a quad edge never bleeds
+    the neighbour chunk. atlasPixelOffset points at the chunk, not the slot.
 */
 class SpriteChunkPool {
 public:
@@ -38,6 +40,9 @@ public:
 
     int chunk_size() const;
     int atlas_page_size() const;
+    // chunk plus padding, the atlas grid step
+    int atlas_slot_size() const;
+    int chunks_per_page() const;
     int atlas_page_count() const;
     size_t alive_count() const;
     size_t capacity() const;

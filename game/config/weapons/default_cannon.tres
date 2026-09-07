@@ -1,9 +1,11 @@
-[gd_resource type="Resource" script_class="WeaponProps" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="WeaponProps" load_steps=3 format=3]
 
-[ext_resource type="Script" path="res://scenes/weapons/WeaponProps.gd" id="1"]
+[ext_resource type="Script" path="res://game/scripts/weapons/WeaponProps.gd" id="1"]
+[ext_resource type="PackedScene" path="res://game/scenes/weapons/Bullet.tscn" id="2"]
 
 [resource]
 script = ExtResource("1")
+projectile_scene = ExtResource("2")
 ammo = -1
 shots_per_ammo = 1
 delay_cooldown = 0.4

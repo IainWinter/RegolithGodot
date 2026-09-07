@@ -1,32 +1,38 @@
 extends GutTest
 
-# SpriteEditor: opening from a RegolithSprite, tool interaction through
-# canvas_input, selection and float, files, applying back to the sprite
+# SpriteEditor: opening a png plus _mask.png pair, tool interaction through
+# canvas_input, selection and float, files. the editor never touches a live
+# RegolithSprite, the fixture is a document saved to disk and opened by path
 
-var world: RegolithWorld
-var sprite: RegolithSprite
+var fixture := ProjectSettings.globalize_path("res://test/unit/tmp_fixture.png")
 var editor: SpriteEditor
 
 func before_each() -> void:
-	world = RegolithWorld.new()
-	world.pixels_per_cell = 3
-	add_child_autofree(world)
+	var source := SpriteDocument.new(16, 12)
+	for y in range(2, 8):
+		for x in range(2, 10):
+			var i := source.index(x, y)
+			source.set_cell_color(i, Color(0.5, 0.4, 0.3))
+			source.set_cell_type(i, RegolithSprite.CELL_FILLED)
+			source.set_cell_class(i, 2)
 
-	sprite = RegolithSprite.new()
-	sprite.dynamic = false
-	sprite.editing = true
-	add_child_autofree(sprite)
+	var core := source.index(4, 4)
+	source.set_cell_color(core, Color(1, 0.5, 0))
+	source.set_cell_type(core, RegolithSprite.CELL_CORE)
+	source.set_cell_class(core, 5)
+	source.set_cell_emissive(core, true)
 
-	await get_tree().process_frame
-
-	sprite.create_blank(Vector2i(16, 12))
-	sprite.fill_rect(Rect2i(2, 2, 8, 6), Color(0.5, 0.4, 0.3), RegolithSprite.CELL_FILLED, 2)
-	sprite.set_cell(Vector2i(4, 4), Color(1, 0.5, 0), RegolithSprite.CELL_CORE, 5)
+	assert_eq(source.to_color_image().save_png(fixture), OK)
+	assert_eq(source.to_mask_image().save_png(SpriteEditor.mask_path(fixture)), OK)
 
 	editor = SpriteEditor.new()
-	editor.target = sprite
+	editor.path = fixture
 	add_child_autofree(editor)
 	await get_tree().process_frame
+
+func after_each() -> void:
+	DirAccess.remove_absolute(fixture)
+	DirAccess.remove_absolute(SpriteEditor.mask_path(fixture))
 
 func press(x: int, y: int, right := false) -> void:
 	editor.canvas_input(true, x, y, not right, right, not right, right)
@@ -42,21 +48,22 @@ func stroke(from: Vector2i, to: Vector2i, right := false) -> void:
 	drag(to.x, to.y, right)
 	release(to.x, to.y)
 
-func test_open_reads_sprite_into_document() -> void:
+func test_open_reads_png_pair_into_document() -> void:
 	var doc := editor.doc
+	assert_eq(editor.filename, "tmp_fixture")
 	assert_eq(Vector2i(doc.width, doc.height), Vector2i(16, 12))
 	assert_eq(doc.get_cell_type(doc.index(4, 4)), RegolithSprite.CELL_CORE)
 	assert_eq(doc.get_cell_class(doc.index(4, 4)), 5)
-	assert_true(doc.get_cell_emissive(doc.index(4, 4)), "engine marks core cells emissive")
+	assert_true(doc.get_cell_emissive(doc.index(4, 4)), "emission bit survives the mask png")
 	assert_eq(doc.get_cell_class(doc.index(2, 2)), 2)
 	assert_eq(doc.get_cell_type(doc.index(0, 0)), RegolithSprite.CELL_EMPTY)
 
-func test_open_without_sprite_gives_blank_canvas() -> void:
+func test_open_without_path_gives_blank_canvas() -> void:
 	var blank := SpriteEditor.new()
 	add_child_autofree(blank)
 	await get_tree().process_frame
 	assert_eq(blank.doc.width, 32)
-	assert_true(blank.apply_button.disabled)
+	assert_eq(blank.filename, "new_sprite")
 
 func test_pencil_stroke_interpolates_and_records_undo() -> void:
 	var doc := editor.doc
@@ -217,7 +224,16 @@ func test_clear_selected_region_with_all_layers() -> void:
 	assert_eq(doc.get_cell_color(doc.index(2, 2)).a, 0.0)
 	assert_true(doc.can_undo())
 
-func test_apply_writes_document_into_sprite() -> void:
+func test_saved_images_load_into_a_sprite() -> void:
+	var world := RegolithWorld.new()
+	world.pixels_per_cell = 3
+	add_child_autofree(world)
+
+	var sprite := RegolithSprite.new()
+	sprite.dynamic = false
+	add_child_autofree(sprite)
+	await get_tree().process_frame
+
 	var doc := editor.doc
 	doc.mode = SpriteDocument.Mode.MASK
 	doc.paint_type = RegolithSprite.CELL_WEAKPOINT2
@@ -230,7 +246,7 @@ func test_apply_writes_document_into_sprite() -> void:
 	doc.paint_color = Color.RED
 	doc.paint_at(13, 9, false)
 
-	editor.apply_to_target()
+	sprite.load_from_images(doc.to_color_image(), doc.to_mask_image())
 	assert_eq(sprite.get_cell_type(Vector2i(9, 7)), RegolithSprite.CELL_WEAKPOINT2)
 	assert_eq(sprite.get_cell_class(Vector2i(9, 7)), 7)
 	assert_eq(sprite.get_cell_color(Vector2i(2, 2)), doc.get_cell_color(doc.index(2, 2)))

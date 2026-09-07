@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="BeamWeaponProps" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://game/scripts/weapons/BeamWeaponProps.gd" id="1"]
+[ext_resource type="PackedScene" path="res://game/scenes/weapons/SuperLaser.tscn" id="2"]
+
+[resource]
+script = ExtResource("1")
+projectile_scene = ExtResource("2")
+ammo = -1
+shots_per_ammo = 2
+delay_cooldown = 0.04
+inaccuracy_tangent = 0.2
+cell_life = 32
+color_front = Color(1, 0.156863, 0.156863, 0.901961)
+color_back = Color(1, 0.352941, 0.235294, 0.0392157)
+charge = 120.0
+charge_drain = 25.0
+width = 1.28
+range = 40.0

@@ -18,7 +18,6 @@ func before_each() -> void:
 	world.add_child(draw)
 
 func after_each() -> void:
-	# names and layers are global state, leave them how they started
 	draw.set_all_names_enabled(false)
 	draw.set_name_enabled(RegolithDebugDraw.DEFAULT, true)
 	get_tree().paused = false
@@ -33,8 +32,6 @@ func spawn_block(at: Vector2) -> RegolithSprite:
 	add_child_autofree(block)
 	return block
 
-# lines added between frames land one or two frames later depending on where
-# in the frame the test resumed, so look at the most seen over a few frames
 func peak_lines(frames := 3) -> int:
 	var peak := 0
 	for i in frames:
@@ -106,7 +103,7 @@ func test_monitors_report_the_world() -> void:
 
 func test_panel_shows_the_scene_drawer_and_steps() -> void:
 	draw.visible = false
-	var panel = load("res://scenes/debug/DebugPanel.gd").new(world)
+	var panel = load("res://game/scripts/debug/DebugPanel.gd").new(world)
 	add_child_autofree(panel)
 	await wait_process_frames(2)
 	assert_same(panel.draw, draw, "the scene's drawer, not a new one")
@@ -124,9 +121,36 @@ func test_panel_shows_the_scene_drawer_and_steps() -> void:
 func test_panel_makes_a_drawer_when_the_scene_has_none() -> void:
 	world.remove_child(draw)
 	draw.free()
-	var panel = load("res://scenes/debug/DebugPanel.gd").new(world)
+	var panel = load("res://game/scripts/debug/DebugPanel.gd").new(world)
 	add_child_autofree(panel)
 	await wait_process_frames(2)
 	draw = panel.draw
 	assert_true(draw is RegolithDebugDraw)
 	assert_same(world.get_node_or_null("DebugDraw"), draw)
+
+func test_settings_round_trip_through_a_dictionary() -> void:
+	draw.apply_settings({
+		"visible": true,
+		"names": {"AI_PATH": true, "NOT_A_NAME": true},
+		"colors": {"AI_PATH": Color(0, 1, 0)},
+		"layers": {"B": false},
+		"tints": {"A": Color(1, 0, 0)},
+	})
+	assert_true(draw.visible)
+	assert_true(draw.is_name_enabled(RegolithDebugDraw.AI_PATH))
+	assert_eq(draw.get_name_color(RegolithDebugDraw.AI_PATH), Color(0, 1, 0))
+	assert_false(draw.is_layer_enabled(RegolithDebugDraw.LAYER_B))
+	assert_eq(draw.get_layer_tint(RegolithDebugDraw.LAYER_A), Color(1, 0, 0))
+
+	var settings: Dictionary = draw.get_settings()
+	assert_eq(settings["names"]["AI_PATH"], true)
+	assert_eq(settings["colors"]["AI_PATH"], Color(0, 1, 0))
+	assert_eq(settings["layers"]["B"], false)
+	assert_eq(settings["names"].size(), draw.get_name_count())
+
+	draw.add_line(Vector2(0, 0), Vector2(10, 10), RegolithDebugDraw.AI_PATH, RegolithDebugDraw.LAYER_B)
+	assert_eq(await peak_lines(), 0, "layer off drops the line")
+
+	assert_true(draw.debugger_message("settings", [{"layers": {"B": true}}]))
+	assert_true(draw.is_layer_enabled(RegolithDebugDraw.LAYER_B))
+	assert_false(draw.debugger_message("nonsense", []))

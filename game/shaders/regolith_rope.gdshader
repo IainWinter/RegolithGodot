@@ -22,7 +22,6 @@ void vertex() {
     vec2 x_basis = len > 1e-6 ? dir / len : vec2(1.0, 0.0);
     vec2 y_basis = vec2(-x_basis.y, x_basis.x);
 
-    // pad the quad so every cell the frag can snap to is covered
     float margin = half_width + 1.5;
     vec2 p = mix(a, b, UV.x) + (x_basis * VERTEX.x + y_basis * VERTEX.y) * margin;
 

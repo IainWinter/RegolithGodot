@@ -1,0 +1,17 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://game/scripts/enemies/EnemyBomb.gd" id="1"]
+[ext_resource type="Texture2D" path="res://game/images/sprites/bomb.png" id="2"]
+[ext_resource type="Texture2D" path="res://game/images/sprites/bomb_mask.png" id="3"]
+[ext_resource type="Material" path="res://game/shaders/regolith_sprite_material.tres" id="4"]
+[ext_resource type="Material" path="res://game/shaders/regolith_rope_material.tres" id="5"]
+[ext_resource type="Resource" path="res://game/config/weapons/explosion_shrapnel.tres" id="6"]
+
+[node name="EnemyBomb" type="RegolithSprite" groups=["enemy", "regolith"]]
+material = ExtResource("4")
+rope_material = ExtResource("5")
+texture = ExtResource("2")
+mask_texture = ExtResource("3")
+angular_damping = 1.0
+script = ExtResource("1")
+shrapnel_props = ExtResource("6")

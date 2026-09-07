@@ -44,6 +44,9 @@ DebugRendererColorMap::DebugRendererColorMap() {
     set_name_color(DebugName_Ai_Flocker, {60, 255, 160, 255});
     set_name_color(DebugName_Ai_Los_Clear, {30, 255, 30, 255});
     set_name_color(DebugName_Ai_Los_Blocked, {255, 30, 30, 255});
+    set_name_color(DebugName_Ai_Thrower, {255, 160, 30, 255});
+    set_name_color(DebugName_Ai_Shield, {60, 220, 255, 255});
+    set_name_color(DebugName_Ai_Trap, {255, 80, 220, 255});
 
     set_name_color(DebugName_Sprite, {80, 220, 255, 255});
     set_name_color(DebugName_Sprite_Chunk, {40, 120, 160, 255});

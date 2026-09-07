@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="WeaponProps" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://game/scripts/weapons/WeaponProps.gd" id="1"]
+[ext_resource type="PackedScene" path="res://game/scenes/weapons/Bullet.tscn" id="2"]
+
+[resource]
+script = ExtResource("1")
+projectile_scene = ExtResource("2")
+speed = 5.0
+speed_random = 2.0
+lifetime = 2.5
+cell_life = 32
+trail_length = 1.2
+rotation_factor = 15.0
+color_front = Color(1, 0.784314, 0.784314, 1)
+color_back = Color(0.392157, 0.0392157, 0.0392157, 0)

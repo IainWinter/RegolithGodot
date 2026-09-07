@@ -9,12 +9,10 @@
 // Godot images in and out of the engine's sprite data. the mask image is the
 // same size as the color image, its colors pick each cell's type and class
 
-// a mask of another size is ignored and reported through mask_mismatch
 SpriteAsset sprite_asset_from_images(const godot::Ref<godot::Image>& color, const godot::Ref<godot::Image>& mask, bool* mask_mismatch = nullptr);
 
 SpriteAsset sprite_asset_blank(godot::Vector2i size);
 
 godot::Ref<godot::Image> sprite_color_image(const Sprite& sprite);
 
-// mask colors as the loader reads them, save it next to the color png
 godot::Ref<godot::Image> sprite_mask_image(const Sprite& sprite);

@@ -27,20 +27,11 @@ func _ready() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed
 
-	star_texture = texture_or_file(star_texture, "res://art/background/star.png")
-	dust_texture = texture_or_file(dust_texture, "res://art/background/smoke1.png")
-
 	dust_layers = build_layers(rng, dust_texture, dust_count, 4.0, func(r: RandomNumberGenerator) -> float: return r.randf_range(10.0, 20.0),
 		func(r: RandomNumberGenerator) -> Color: return Color8(100, r.randi_range(0, 200), 200, 100))
 
 	star_layers = build_layers(rng, star_texture, star_count, 3.0, func(r: RandomNumberGenerator) -> float: return r.randf_range(0.001, 0.01),
 		func(r: RandomNumberGenerator) -> Color: return Color8(r.randi_range(64, 128), 140, 140, 255))
-
-func texture_or_file(texture: Texture2D, path: String) -> Texture2D:
-	if texture:
-		return texture
-
-	return ImageTexture.create_from_image(Image.load_from_file(path))
 
 func build_layers(rng: RandomNumberGenerator, texture: Texture2D, count: int, base_depth: float, pick_scale: Callable, pick_color: Callable) -> Array[MultiMeshInstance2D]:
 	var ppu := RegolithWorld.pixels_per_unit()

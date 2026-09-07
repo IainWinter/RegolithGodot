@@ -3,15 +3,15 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://dde2g8hojvcrs"
-path="res://.godot/imported/bomb_mask.png-fec74d980ab3a2dd316f3f8c7e599cfd.ctex"
+path="res://.godot/imported/bomb_mask.png-45ed0e0f90d349d5ad7e7b7354c1cf06.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://art/sprites/bomb_mask.png"
-dest_files=["res://.godot/imported/bomb_mask.png-fec74d980ab3a2dd316f3f8c7e599cfd.ctex"]
+source_file="res://game/images/sprites/bomb_mask.png"
+dest_files=["res://.godot/imported/bomb_mask.png-45ed0e0f90d349d5ad7e7b7354c1cf06.ctex"]
 
 [params]
 

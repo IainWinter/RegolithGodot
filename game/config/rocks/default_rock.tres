@@ -1,0 +1,36 @@
+[gd_resource type="Resource" script_class="RockProps" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://game/scripts/rocks/RockProps.gd" id="1"]
+[ext_resource type="Texture2D" path="res://game/images/rocks/asteroid_source.jpg" id="2"]
+
+[resource]
+script = ExtResource("1")
+min_chunks = 1
+max_chunks = 3
+source_texture = ExtResource("2")
+uv_scale = 0.6
+shape_variants = true
+radius_scale = 0.45
+noise_frequency = 0.012
+noise_amplitude = 0.35
+noise_octaves = 4
+noise_persistence = 0.5
+burn_pixels = 8.0
+burn_strength = 0.85
+ore_chance = 0.25
+ore_colors = Array[Color]([Color(1, 0.352941, 0.27451, 1), Color(0.235294, 0.54902, 0.862745, 1)])
+ore_class = 1
+ore_cluster_count = 4
+ore_cluster_radius = 8.0
+ore_cluster_jitter = 3.0
+ore_shape_frequency = 0.1
+ore_shape_amount = 0.5
+ore_fill_frequency = 0.35
+ore_edge_noise = 0.8
+ore_core_hardness = 1.2
+ore_noise_threshold = 0.2
+ore_inset_pixels = 4.0
+min_speed = 0.15
+max_speed = 0.6
+max_spin = 0.4
+angular_damping = 1.0

@@ -16,6 +16,10 @@ constexpr float k_sdf_band_cells = 8.f;
 
 constexpr int k_atlas_page_size = 1024;
 
+// empty cells around every chunk in the atlas so a quad edge that lands on a
+// slot boundary never samples the neighbour chunk. 1 each side, 2 between
+constexpr int k_atlas_chunk_padding = 1;
+
 constexpr int k_atlas_page_count = 8;
 
 constexpr float k_sprite_density = 100.f;

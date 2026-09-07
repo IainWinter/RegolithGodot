@@ -26,7 +26,6 @@
 
 using namespace godot;
 
-// sim units per second, keeps cells from streaking across the screen
 constexpr float k_cell_particle_max_speed = 6.f;
 
 RegolithWorld::RegolithWorld() {}
@@ -47,6 +46,11 @@ float RegolithWorld::active_pixels_per_unit() {
     return world ? world->pixels_per_unit() : static_cast<float>(k_cells_per_chunk);
 }
 
+float RegolithWorld::active_pixels_per_cell() {
+    RegolithWorld* world = active();
+    return world ? static_cast<float>(world->get_pixels_per_cell()) : 1.f;
+}
+
 float RegolithWorld::pixels_per_unit() const {
     return static_cast<float>(m_pixels_per_cell * k_cells_per_chunk);
 }
@@ -58,8 +62,6 @@ vec2 RegolithWorld::to_units(Vector2 pixels) const {
 Vector2 RegolithWorld::to_pixels(vec2 units) const {
     return Vector2(units.x, units.y) * pixels_per_unit();
 }
-
-// lifecycle
 
 void RegolithWorld::_enter_tree() {
     add_to_group("regolith_world");
@@ -77,7 +79,6 @@ void RegolithWorld::_exit_tree() {
     remove_monitors();
 }
 
-// after a hot reload this instance was rebuilt in place, sprites reload into the new pool
 void RegolithWorld::_notification(int what) {
     if (what == NOTIFICATION_EXTENSION_RELOADED && is_inside_tree() && !Engine::get_singleton()->is_editor_hint()) {
         start();
@@ -95,9 +96,6 @@ void RegolithWorld::start() {
     add_monitors();
 }
 
-// the first GPUParticles2D child. it only ever emits through spawn, and steps
-// every drawn frame: the default 30 fps step shows a cell a frame or two after
-// it left the atlas
 void RegolithWorld::find_cell_particles() {
     m_cell_particles = nullptr;
 
@@ -138,19 +136,16 @@ void RegolithWorld::_physics_process(double delta) {
     step_physics(static_cast<float>(delta));
 }
 
-// physics
-
 void RegolithWorld::step_physics(float delta_time) {
     ScopeMs timer{m_physics_ms};
 
-    // the solver draws into the fixed list, it holds until the next step
     debug_render_fixed().clear_lines();
 
     std::vector<PhysicsProxy>& proxies = m_physics.proxies();
     proxies.clear();
 
     for (RegolithSprite* node : m_sprites) {
-        if (!node->is_loaded() || node->is_editing()) {
+        if (!node->is_loaded()) {
             continue;
         }
 
@@ -208,8 +203,6 @@ void RegolithWorld::decay_heat(float delta_time) {
     }
 }
 
-// commit
-
 void RegolithWorld::commit_sprites() {
     ScopeMs timer{m_commit_ms};
 
@@ -217,17 +210,9 @@ void RegolithWorld::commit_sprites() {
 
     std::vector<RegolithSprite*> dirty;
     std::vector<SpriteCommitProxy> proxies;
-    std::vector<std::pair<ivec2, Color4>> discard;
 
     for (RegolithSprite* node : m_sprites) {
         if (!node->is_loaded()) {
-            continue;
-        }
-
-        // cells erased in the editor are not destruction
-        if (node->is_editing()) {
-            discard.clear();
-            node->sprite().take_loose_pixels(discard);
             continue;
         }
 
@@ -250,9 +235,15 @@ void RegolithWorld::commit_sprites() {
         const std::vector<SpriteChunk*>* chunks;
     };
 
+    struct PieceWork {
+        RegolithSprite* source;
+        RegolithSprite* piece;
+        ivec2 grid_min;
+    };
+
     std::vector<DistanceWork> distance;
     std::vector<RegolithSprite*> dead;
-    std::vector<std::pair<RegolithSprite*, RegolithSprite*>> pieces;
+    std::vector<PieceWork> pieces;
 
     for (size_t i = 0; i < dirty.size(); i++) {
         RegolithSprite* node = dirty[i];
@@ -260,7 +251,6 @@ void RegolithWorld::commit_sprites() {
 
         node->apply_mass();
 
-        // loose cells fly off before the sprite changes under them
         std::vector<std::pair<ivec2, Color4>> loose;
         node->sprite().take_loose_pixels(loose);
 
@@ -289,12 +279,11 @@ void RegolithWorld::commit_sprites() {
             PhysicsBody body = sprite_commit_split_body(split_transform, node->body());
             RegolithSprite* piece = spawn_piece(node, std::move(split_sprite), split_transform, body);
 
-            pieces.emplace_back(node, piece);
+            pieces.push_back({node, piece, ivec2(grid_min)});
             distance.push_back({&piece->sprite(), true, nullptr});
             rope_targets.push_back({&piece->transform(), &piece->sprite(), ivec2(grid_min), &piece->ropes()});
         }
 
-        // ropes follow the piece holding their cells, groups holding nothing become rope pieces
         if (node->has_ropes()) {
             ObjectID owner(node->get_instance_id());
 
@@ -324,17 +313,28 @@ void RegolithWorld::commit_sprites() {
         }
     });
 
+    for (size_t i = 0; i < pieces.size();) {
+        RegolithSprite* source = pieces[i].source;
+        std::vector<RegolithJoints::Piece> own;
+
+        for (; i < pieces.size() && pieces[i].source == source; i++) {
+            own.push_back({pieces[i].piece, pieces[i].grid_min});
+        }
+
+        m_joints.resolve_split(source, own);
+    }
+
     for (RegolithSprite* node : dead) {
         emit_signal("sprite_destroyed", node);
         free_sprite(node);
     }
 
-    for (auto& [source, piece] : pieces) {
-        register_sprite(piece);
-        piece->apply_mass();
-        piece->sync_node_from_body();
-        piece->reset_physics_interpolation();
-        emit_signal("sprite_split", source, piece);
+    for (PieceWork& work : pieces) {
+        register_sprite(work.piece);
+        work.piece->apply_mass();
+        work.piece->sync_node_from_body();
+        work.piece->reset_physics_interpolation();
+        emit_signal("sprite_split", work.source, work.piece);
     }
 
     m_pool.commit_chunks();
@@ -344,12 +344,16 @@ void RegolithWorld::commit_sprites() {
     }
 }
 
-// pieces
-
 static RegolithSprite* make_piece(RegolithSprite* source, Node* fallback_parent) {
     RegolithSprite* piece = memnew(RegolithSprite);
     piece->set_material(source->get_material());
     piece->set_rope_material(source->get_rope_material());
+
+    TypedArray<StringName> groups = source->get_groups();
+
+    for (int i = 0; i < groups.size(); i++) {
+        piece->add_to_group(groups[i]);
+    }
 
     Node* parent = source->get_parent();
     (parent ? parent : fallback_parent)->add_child(piece);
@@ -382,7 +386,6 @@ RegolithSprite* RegolithWorld::spawn_rope_piece(RegolithSprite* source, std::vec
     return piece;
 }
 
-// big enough groups become rope pieces, the rest bursts into pixels
 void RegolithWorld::spawn_rope_group(RegolithSprite* source, std::vector<SpriteRope>&& group) {
     if (sprite_rope_group_pixels(group) >= k_rope_entity_min_pixels) {
         spawn_rope_piece(source, std::move(group));
@@ -412,7 +415,6 @@ void RegolithWorld::resplit_rope_piece(RegolithSprite* node) {
             spawn_rope_group(node, std::move(group));
         }
 
-        // what stays is still tied to a far sprite
         std::vector<SpriteRope>& ropes = node->ropes().ropes;
 
         if (!ropes.empty() && sprite_rope_group_pixels(ropes) < k_rope_entity_min_pixels) {
@@ -432,10 +434,40 @@ void RegolithWorld::free_sprite(RegolithSprite* node) {
     node->queue_free();
 }
 
-// joints
-
 int RegolithWorld::add_joint(RegolithSprite* a, RegolithSprite* b, Vector2 world_point) {
     return m_joints.add(a, b, to_units(world_point));
+}
+
+int RegolithWorld::add_distance_joint(RegolithSprite* a, RegolithSprite* b, Vector2 world_point_a, Vector2 world_point_b, float rest_distance) {
+    float rest = rest_distance < 0.f ? -1.f : rest_distance / pixels_per_unit();
+    return m_joints.add_distance(a, b, to_units(world_point_a), to_units(world_point_b), rest);
+}
+
+PackedVector2Array RegolithWorld::get_joint_anchors(int joint_id) const {
+    PackedVector2Array out;
+
+    if (std::optional<std::pair<vec2, vec2>> anchors = m_joints.anchors(joint_id)) {
+        out.push_back(to_pixels(anchors->first));
+        out.push_back(to_pixels(anchors->second));
+    }
+
+    return out;
+}
+
+TypedArray<RegolithSprite> RegolithWorld::get_joint_sprites(int joint_id) const {
+    TypedArray<RegolithSprite> out;
+
+    if (std::optional<std::pair<RegolithSprite*, RegolithSprite*>> sprites = m_joints.sprites(joint_id)) {
+        out.push_back(sprites->first);
+        out.push_back(sprites->second);
+    }
+
+    return out;
+}
+
+int RegolithWorld::get_joint_type(int joint_id) const {
+    std::optional<RegolithJoints::Type> type = m_joints.type(joint_id);
+    return type ? static_cast<int>(*type) : -1;
 }
 
 void RegolithWorld::remove_joint(int joint_id) {
@@ -449,13 +481,6 @@ void RegolithWorld::clear_joints() {
 int RegolithWorld::get_joint_count() const {
     return m_joints.count();
 }
-
-Vector2 RegolithWorld::get_joint_position(int joint_id) const {
-    std::optional<vec2> position = m_joints.position(joint_id);
-    return position ? to_pixels(*position) : Vector2();
-}
-
-// queries
 
 static TypedArray<RegolithSprite> to_array(const std::vector<RegolithSprite*>& sprites) {
     TypedArray<RegolithSprite> out;
@@ -522,11 +547,10 @@ int RegolithWorld::hit_ropes(Vector2 from, Vector2 to, RegolithSprite* exclude) 
     AxisAlignedBox sweep(to_units(from), to_units(to));
     int hits = 0;
 
-    // a hit can spawn or free nodes, walk a copy
     std::vector<RegolithSprite*> nodes = m_sprites;
 
     for (RegolithSprite* node : nodes) {
-        if (node == exclude || !node->has_ropes() || node->is_editing()) {
+        if (node == exclude || !node->has_ropes()) {
             continue;
         }
 
@@ -548,9 +572,6 @@ int RegolithWorld::hit_ropes(Vector2 from, Vector2 to, RegolithSprite* exclude) 
     return hits;
 }
 
-// cell particles
-
-// the child can be added after the world entered the tree
 GPUParticles2D* RegolithWorld::get_cell_particles() {
     if (!m_cell_particles || !m_cell_particles->is_inside_tree()) {
         find_cell_particles();
@@ -559,7 +580,6 @@ GPUParticles2D* RegolithWorld::get_cell_particles() {
     return m_cell_particles;
 }
 
-// custom carries the sprite angle and the cell size for the shader
 void RegolithWorld::spawn_cell_particle(Vector2 position, Vector2 velocity, Color color, float angle) {
     if (!get_cell_particles() || !m_cell_particles->is_visible_in_tree()) {
         return;
@@ -588,8 +608,6 @@ void RegolithWorld::spawn_cell_pixel(vec2 position, vec2 velocity, float angle, 
     spawn_cell_particle(to_pixels(position), to_pixels(velocity), tint, angle);
 }
 
-// monitors and stats
-
 struct MonitorEntry {
     const char* id;
     const char* method;
@@ -604,7 +622,6 @@ static const MonitorEntry k_monitors[] = {
     {"regolith/physics_ms", "get_physics_time_ms"},
 };
 
-// the first world in the tree owns the monitors
 void RegolithWorld::add_monitors() {
     Performance* performance = Performance::get_singleton();
 
@@ -661,8 +678,6 @@ int RegolithWorld::get_sprite_count() const {
     return static_cast<int>(m_sprites.size());
 }
 
-// properties
-
 void RegolithWorld::set_pixels_per_cell(int pixels) {
     m_pixels_per_cell = std::max(1, pixels);
 
@@ -699,8 +714,6 @@ Ref<Texture2DArray> RegolithWorld::get_color_atlas() const {
 Ref<Texture2DArray> RegolithWorld::get_mask_atlas() const {
     return m_pool.mask_texture();
 }
-
-// sprite side
 
 SpriteChunkPool& RegolithWorld::pool() {
     return m_pool;

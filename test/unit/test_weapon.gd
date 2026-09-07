@@ -9,18 +9,14 @@ var player: Player
 var rock: RegolithSprite
 
 func before_each() -> void:
-	# bullets spawn under the current scene, which must be a direct child
-	# of root, so main lives there instead of under the test
-	main = load("res://scenes/Main.tscn").instantiate()
+	main = load("res://game/scenes/Main.tscn").instantiate()
 	get_tree().root.add_child(main)
-	get_tree().current_scene = main
 	world = main.get_node("RegolithWorld")
 	player = main.get_node("Player")
 	rock = main.get_node("Rock")
 	await wait_physics_frames(3)
 
 func after_each() -> void:
-	get_tree().current_scene = null
 	main.free()
 
 func test_world_queries_find_rock() -> void:
@@ -67,8 +63,6 @@ func test_slow_bullets_with_trail_still_hit() -> void:
 
 	assert_lt(rock.get_active_cell_count(), rock_cells)
 
-# a slow bullet lodged in a fast sprite is carried along with it: frame to
-# frame it moves as far as the sprite does, not as far as its own speed allows
 func test_embedded_bullet_rides_fast_sprite() -> void:
 	var slow: WeaponProps = player.weapon.props.duplicate()
 	slow.speed = 1.0
@@ -78,12 +72,10 @@ func test_embedded_bullet_rides_fast_sprite() -> void:
 	slow.inaccuracy_angle = 0.0
 	slow.inaccuracy_tangent = 0.0
 	slow.rotation_factor = 0.0
-	# burn cells only, a fracture would shift the rock's body and muddy the ride
 	slow.damage = 0
 	slow.damage_ratio = 0.0
 	player.weapon.props = slow
 
-	# the player script steers from input, the test steers it directly
 	player.set_process(false)
 
 	var stuck: Array = []
@@ -92,16 +84,12 @@ func test_embedded_bullet_rides_fast_sprite() -> void:
 			if sprite == rock and stuck.is_empty():
 				stuck.append(bullet)))
 
-	# send the rock far up and right, clear of everything, then rush it
-	# back at the player
 	rock.linear_velocity = Vector2(6.0, -8.0)
 	await wait_physics_frames(60)
 
 	var to_rock := rock.global_position - player.global_position
 	rock.linear_velocity = -to_rock.normalized() * 10.0
 
-	# one slow bullet up the rock's line, then the player steps aside so
-	# the rock does not run into it
 	player.weapon.set_fire_state(true, to_rock)
 	await wait_physics_frames(1)
 	player.weapon.set_fire_state(false, to_rock)
@@ -127,9 +115,6 @@ func test_embedded_bullet_rides_fast_sprite() -> void:
 	var ticks_start := Engine.get_physics_frames()
 	var embedded_frames := 0
 
-	# a point stuck to the rock is expected to land where the rock's motion
-	# takes it, spin included. the bullet may add its own slow crawl plus a
-	# hop to a cell centre each tick
 	for i in frames:
 		if bullet.embedded_sprite == rock:
 			embedded_frames += 1

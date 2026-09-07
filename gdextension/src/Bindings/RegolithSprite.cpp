@@ -17,10 +17,6 @@ void RegolithSprite::_bind_methods() {
     ClassDB::bind_method(D_METHOD("is_repairable"), &RegolithSprite::is_repairable);
     ADD_PROPERTY(PropertyInfo(Variant::BOOL, "repairable"), "set_repairable", "is_repairable");
 
-    ClassDB::bind_method(D_METHOD("set_editing", "editing"), &RegolithSprite::set_editing);
-    ClassDB::bind_method(D_METHOD("is_editing"), &RegolithSprite::is_editing);
-    ADD_PROPERTY(PropertyInfo(Variant::BOOL, "editing"), "set_editing", "is_editing");
-
     ClassDB::bind_method(D_METHOD("create_blank", "size"), &RegolithSprite::create_blank);
     ClassDB::bind_method(D_METHOD("load_from_images", "color", "mask"), &RegolithSprite::load_from_images, DEFVAL(Ref<Image>()));
     ClassDB::bind_method(D_METHOD("get_color_image"), &RegolithSprite::get_color_image);

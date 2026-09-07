@@ -3,15 +3,15 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://dx8vhs334hja8"
-path="res://.godot/imported/boss1_mask.png-e0d7f193d2249e0f87db9d1b6e9b3b85.ctex"
+path="res://.godot/imported/boss1_mask.png-ed4dc649acbc168dac1c3de223a950f5.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://art/sprites/boss1_mask.png"
-dest_files=["res://.godot/imported/boss1_mask.png-e0d7f193d2249e0f87db9d1b6e9b3b85.ctex"]
+source_file="res://game/images/sprites/boss1_mask.png"
+dest_files=["res://.godot/imported/boss1_mask.png-ed4dc649acbc168dac1c3de223a950f5.ctex"]
 
 [params]
 

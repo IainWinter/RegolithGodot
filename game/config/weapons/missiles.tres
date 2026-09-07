@@ -1,0 +1,30 @@
+[gd_resource type="Resource" script_class="HomingWeaponProps" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://game/scripts/weapons/HomingWeaponProps.gd" id="1"]
+[ext_resource type="PackedScene" path="res://game/scenes/weapons/Missile.tscn" id="2"]
+[ext_resource type="Resource" path="res://game/config/weapons/explosion_shrapnel.tres" id="3"]
+[ext_resource type="Resource" path="res://game/config/weapons/explosion_shrapnel_long.tres" id="4"]
+
+[resource]
+script = ExtResource("1")
+projectile_scene = ExtResource("2")
+ammo = 12
+shots_per_ammo = 4
+delay_cooldown = 1.2
+inaccuracy_angle = 0.4
+inaccuracy_tangent = 0.4
+speed = 3.0
+lifetime = 6.0
+trail_length = 5.0
+color_front = Color(1, 0.588235, 0.117647, 1)
+color_back = Color(0.784314, 0.313726, 0.0392157, 0)
+turn_speed = 8.0
+acceleration = 18.0
+max_speed = 16.0
+width = 0.125
+coast_time = 0.4
+explosion_radius = 0.125
+shrapnel = ExtResource("3")
+shrapnel_count = 18
+shrapnel_long = ExtResource("4")
+shrapnel_long_count = 8

@@ -1,0 +1,54 @@
+[gd_scene load_steps=14 format=3]
+
+[ext_resource type="Script" path="res://game/scripts/enemies/EnemyBossCompass.gd" id="1"]
+[ext_resource type="Texture2D" path="res://game/images/sprites/boss1.png" id="2"]
+[ext_resource type="Texture2D" path="res://game/images/sprites/boss1_mask.png" id="3"]
+[ext_resource type="Resource" path="res://game/config/enemies/boss_bolt.tres" id="4"]
+[ext_resource type="Resource" path="res://game/config/rocks/default_rock.tres" id="5"]
+[ext_resource type="Material" path="res://game/shaders/regolith_sprite_material.tres" id="6"]
+[ext_resource type="Material" path="res://game/shaders/regolith_rope_material.tres" id="7"]
+[ext_resource type="Script" path="res://game/scripts/enemies/EnemyBossCompassController.gd" id="11"]
+[ext_resource type="Script" path="res://game/scripts/enemies/EnemyBossTrap.gd" id="12"]
+[ext_resource type="Script" path="res://game/scripts/enemies/EnemyBossShield.gd" id="13"]
+[ext_resource type="Resource" path="res://game/config/effects/default_lightning.tres" id="14"]
+[ext_resource type="Material" path="res://game/shaders/regolith_lightning_material.tres" id="15"]
+[ext_resource type="Script" path="res://game/scripts/enemies/EnemyThrower.gd" id="16"]
+
+[node name="EnemyBossCompass" type="RegolithSprite" node_paths=PackedStringArray("controller", "thrower", "trap", "shield") groups=["enemy", "regolith", "thrower"]]
+material = ExtResource("6")
+rope_material = ExtResource("7")
+texture = ExtResource("2")
+mask_texture = ExtResource("3")
+angular_damping = 1.0
+script = ExtResource("1")
+rock_props = ExtResource("5")
+weapon_props = ExtResource("4")
+controller = NodePath("Controller")
+thrower = NodePath("Thrower")
+trap = NodePath("EnemyBossTrap")
+shield = NodePath("EnemyBossShield")
+
+[node name="Controller" type="Node" parent="."]
+script = ExtResource("11")
+
+[node name="Thrower" type="Node" parent="."]
+script = ExtResource("16")
+origin = Vector2(-0.842, -0.79)
+radius_min = 1.85
+radius_max = 2.45
+hold_arc_min = -5.46077
+hold_arc_max = 0.144154
+local_arc = true
+swing_left = false
+max_holding = 8
+
+[node name="EnemyBossTrap" type="Node" parent="."]
+script = ExtResource("12")
+lightning_props = ExtResource("14")
+lightning_material = ExtResource("15")
+trap_position = Vector2(0, -0.95)
+push_point = Vector2(0, -0.55)
+
+[node name="EnemyBossShield" type="Node" parent="."]
+script = ExtResource("13")
+points = PackedVector2Array(0.78, 1.31, 1, 0.58, 1.05, -0.22, 0.64, -0.57, 0.21, -1.04, -0.24, -0.95, -1, -1.25, -1.27, -0.78, -0.67, 0.07, 0.17, 0.89)

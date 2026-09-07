@@ -1,0 +1,44 @@
+[gd_scene load_steps=13 format=3]
+
+[ext_resource type="Script" path="res://game/scripts/enemies/EnemyBossStingray.gd" id="1"]
+[ext_resource type="Texture2D" path="res://game/images/sprites/boss1phase3.png" id="2"]
+[ext_resource type="Texture2D" path="res://game/images/sprites/boss1phase3_mask.png" id="3"]
+[ext_resource type="Resource" path="res://game/config/enemies/boss_arc.tres" id="4"]
+[ext_resource type="Resource" path="res://game/config/enemies/boss_burst.tres" id="14"]
+[ext_resource type="Resource" path="res://game/config/rocks/default_rock.tres" id="5"]
+[ext_resource type="Material" path="res://game/shaders/regolith_sprite_material.tres" id="6"]
+[ext_resource type="Material" path="res://game/shaders/regolith_rope_material.tres" id="7"]
+[ext_resource type="Script" path="res://game/scripts/enemies/EnemyBossTrap.gd" id="10"]
+[ext_resource type="Script" path="res://game/scripts/enemies/EnemyBossShield.gd" id="11"]
+[ext_resource type="Resource" path="res://game/config/effects/default_lightning.tres" id="12"]
+[ext_resource type="Material" path="res://game/shaders/regolith_lightning_material.tres" id="13"]
+
+[node name="EnemyBossStingray" type="RegolithSprite" node_paths=PackedStringArray("trap", "shield") groups=["enemy", "regolith"]]
+material = ExtResource("6")
+rope_material = ExtResource("7")
+texture = ExtResource("2")
+mask_texture = ExtResource("3")
+linear_damping = 0.05
+angular_damping = 1.0
+script = ExtResource("1")
+rock_props = ExtResource("5")
+arc_props = ExtResource("4")
+burst_props = ExtResource("14")
+trap = NodePath("EnemyBossTrap")
+shield = NodePath("EnemyBossShield")
+
+[node name="EnemyBossTrap" type="Node" parent="."]
+script = ExtResource("10")
+active = false
+lightning_props = ExtResource("12")
+lightning_material = ExtResource("13")
+
+[node name="EnemyBossShield" type="Node" parent="."]
+script = ExtResource("11")
+active = false
+points = PackedVector2Array(0.75, 0, 0.53, 0.53, 0, 0.75, -0.53, 0.53, -0.75, 0, -0.53, -0.53, 0, -0.75, 0.53, -0.53)
+min_rock_cells = 20
+max_rock_cells = 250
+max_holding = 20
+stiffness = 0.5
+held_angular_damping = 1.0

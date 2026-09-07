@@ -20,11 +20,24 @@ void RopeRender::free() {
 
     m_multimesh = RID();
     m_capacity = 0;
+    m_written = 0;
     m_buffer.resize(0);
 }
 
 RID RopeRender::multimesh() const {
     return m_multimesh;
+}
+
+int RopeRender::instance_count() const {
+    return m_written;
+}
+
+void RopeRender::hide() {
+    if (m_multimesh.is_valid()) {
+        RenderingServer::get_singleton()->multimesh_set_visible_instances(m_multimesh, 0);
+    }
+
+    m_written = 0;
 }
 
 bool RopeRender::update(RID item, RID mesh, const Transform& pose, const Grid& grid, const std::vector<SpriteRope>& ropes, float fraction, float pixels_per_unit) {
@@ -40,10 +53,7 @@ bool RopeRender::update(RID item, RID mesh, const Transform& pose, const Grid& g
     }
 
     if (segments == 0) {
-        if (m_multimesh.is_valid()) {
-            rs->multimesh_set_visible_instances(m_multimesh, 0);
-        }
-
+        hide();
         return false;
     }
 
@@ -72,10 +82,6 @@ bool RopeRender::update(RID item, RID mesh, const Transform& pose, const Grid& g
 
     float* out = m_buffer.ptrw();
     int written = 0;
-
-    // the shader places vertices itself so the server's rect for the item
-    // would only cover the grid origin and cull the ropes off screen. track
-    // the real bounds in world pixels and hand them over
 
     vec2 bounds_min = vec2(INFINITY);
     vec2 bounds_max = vec2(-INFINITY);
@@ -145,6 +151,7 @@ bool RopeRender::update(RID item, RID mesh, const Transform& pose, const Grid& g
 
     rs->multimesh_set_buffer(m_multimesh, m_buffer);
     rs->multimesh_set_visible_instances(m_multimesh, written);
+    m_written = written;
     rs->canvas_item_set_custom_rect(item, true, Rect2(bounds_min.x, bounds_min.y, bounds_max.x - bounds_min.x, bounds_max.y - bounds_min.y));
 
     return grown;
