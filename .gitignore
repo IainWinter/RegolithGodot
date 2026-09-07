@@ -3,8 +3,10 @@
 *.import.tmp
 
 # extension build outputs
-gdextension/build/
-gdextension/build-web/
-bin/windows/
-bin/web/
+engine/build/
+engine/build-web/
+extensions/windows/
+extensions/macos/
+extensions/linux/
+extensions/web/
 export/

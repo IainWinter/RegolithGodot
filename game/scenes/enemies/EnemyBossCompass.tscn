@@ -1,25 +1,25 @@
-[gd_scene load_steps=14 format=3]
+[gd_scene format=3 uid="uid://c0c8o2syq3o55"]
 
-[ext_resource type="Script" path="res://game/scripts/enemies/EnemyBossCompass.gd" id="1"]
-[ext_resource type="Texture2D" path="res://game/images/sprites/boss1.png" id="2"]
-[ext_resource type="Texture2D" path="res://game/images/sprites/boss1_mask.png" id="3"]
+[ext_resource type="Script" uid="uid://bh7graqg2edvt" path="res://game/scripts/enemies/EnemyBossCompass.gd" id="1"]
+[ext_resource type="Texture2D" uid="uid://2aw5odt5pfnc" path="res://game/images/sprites/boss1.png" id="2"]
+[ext_resource type="Texture2D" uid="uid://dx8vhs334hja8" path="res://game/images/sprites/boss1_mask.png" id="3"]
 [ext_resource type="Resource" path="res://game/config/enemies/boss_bolt.tres" id="4"]
 [ext_resource type="Resource" path="res://game/config/rocks/default_rock.tres" id="5"]
-[ext_resource type="Material" path="res://game/shaders/regolith_sprite_material.tres" id="6"]
-[ext_resource type="Material" path="res://game/shaders/regolith_rope_material.tres" id="7"]
-[ext_resource type="Script" path="res://game/scripts/enemies/EnemyBossCompassController.gd" id="11"]
-[ext_resource type="Script" path="res://game/scripts/enemies/EnemyBossTrap.gd" id="12"]
-[ext_resource type="Script" path="res://game/scripts/enemies/EnemyBossShield.gd" id="13"]
+[ext_resource type="Material" uid="uid://b2w7nuyl6835o" path="res://game/shaders/regolith_sprite_material.tres" id="6"]
+[ext_resource type="Material" uid="uid://b7bdqliowpujk" path="res://game/shaders/regolith_rope_material.tres" id="7"]
+[ext_resource type="Script" uid="uid://bcxi3kgt1sifd" path="res://game/scripts/enemies/EnemyBossCompassController.gd" id="11"]
+[ext_resource type="Script" uid="uid://dsuoknmgjkgsx" path="res://game/scripts/enemies/EnemyBossTrap.gd" id="12"]
+[ext_resource type="Script" uid="uid://bupwoirvh11yu" path="res://game/scripts/enemies/EnemyBossShield.gd" id="13"]
 [ext_resource type="Resource" path="res://game/config/effects/default_lightning.tres" id="14"]
 [ext_resource type="Material" path="res://game/shaders/regolith_lightning_material.tres" id="15"]
-[ext_resource type="Script" path="res://game/scripts/enemies/EnemyThrower.gd" id="16"]
+[ext_resource type="Script" uid="uid://d1yu43p2ctr82" path="res://game/scripts/enemies/EnemyThrower.gd" id="16"]
 
-[node name="EnemyBossCompass" type="RegolithSprite" node_paths=PackedStringArray("controller", "thrower", "trap", "shield") groups=["enemy", "regolith", "thrower"]]
-material = ExtResource("6")
-rope_material = ExtResource("7")
+[node name="EnemyBossCompass" type="RegolithSprite" unique_id=413282196 node_paths=PackedStringArray("controller", "thrower", "trap", "shield") groups=["enemy", "regolith", "thrower"]]
 texture = ExtResource("2")
 mask_texture = ExtResource("3")
+rope_material = ExtResource("7")
 angular_damping = 1.0
+material = ExtResource("6")
 script = ExtResource("1")
 rock_props = ExtResource("5")
 weapon_props = ExtResource("4")
@@ -28,10 +28,10 @@ thrower = NodePath("Thrower")
 trap = NodePath("EnemyBossTrap")
 shield = NodePath("EnemyBossShield")
 
-[node name="Controller" type="Node" parent="."]
+[node name="Controller" type="Node" parent="." unique_id=426137033]
 script = ExtResource("11")
 
-[node name="Thrower" type="Node" parent="."]
+[node name="Thrower" type="Node" parent="." unique_id=149625209]
 script = ExtResource("16")
 origin = Vector2(-0.842, -0.79)
 radius_min = 1.85
@@ -42,13 +42,11 @@ local_arc = true
 swing_left = false
 max_holding = 8
 
-[node name="EnemyBossTrap" type="Node" parent="."]
+[node name="EnemyBossTrap" type="Node" parent="." unique_id=1121439630]
 script = ExtResource("12")
 lightning_props = ExtResource("14")
 lightning_material = ExtResource("15")
-trap_position = Vector2(0, -0.95)
-push_point = Vector2(0, -0.55)
 
-[node name="EnemyBossShield" type="Node" parent="."]
+[node name="EnemyBossShield" type="Node" parent="." unique_id=1752052851]
 script = ExtResource("13")
 points = PackedVector2Array(0.78, 1.31, 1, 0.58, 1.05, -0.22, 0.64, -0.57, 0.21, -1.04, -0.24, -0.95, -1, -1.25, -1.27, -0.78, -0.67, 0.07, 0.17, 0.89)

@@ -1,0 +1,18 @@
+[configuration]
+
+entry_symbol = "regolith_library_init"
+compatibility_minimum = "4.7"
+reloadable = true
+
+[libraries]
+
+windows.debug.x86_64 = "res://extensions/windows/libregolith.windows.template_debug.x86_64.dll"
+windows.release.x86_64 = "res://extensions/windows/libregolith.windows.template_release.x86_64.dll"
+macos.debug.arm64 = "res://extensions/macos/libregolith.macos.template_debug.arm64.dylib"
+macos.release.arm64 = "res://extensions/macos/libregolith.macos.template_release.arm64.dylib"
+macos.debug.x86_64 = "res://extensions/macos/libregolith.macos.template_debug.x86_64.dylib"
+macos.release.x86_64 = "res://extensions/macos/libregolith.macos.template_release.x86_64.dylib"
+linux.debug.x86_64 = "res://extensions/linux/libregolith.linux.template_debug.x86_64.so"
+linux.release.x86_64 = "res://extensions/linux/libregolith.linux.template_release.x86_64.so"
+web.debug.wasm32.nothreads = "res://extensions/web/libregolith.web.template_debug.wasm32.nothreads.wasm"
+web.release.wasm32.nothreads = "res://extensions/web/libregolith.web.template_release.wasm32.nothreads.wasm"
