@@ -24,7 +24,6 @@
 [ext_resource type="Script" uid="uid://iug5h7ruunbr" path="res://game/scripts/multisprite/MultiSprite.gd" id="22_multisprite"]
 [ext_resource type="Script" uid="uid://cbueqdckalmu0" path="res://game/scripts/spawn/StableSpawner.gd" id="23_stable_spawner"]
 [ext_resource type="PackedScene" path="res://game/scenes/enemies/EnemyBossStingray.tscn" id="24_final_phase"]
-[ext_resource type="Script" path="res://game/scripts/debug/AiGizmos.gd" id="25_ai_gizmos"]
 
 [node name="Main" type="Node2D" unique_id=876947141]
 script = ExtResource("1")
@@ -65,11 +64,6 @@ props = ExtResource("15_rock_props")
 
 [node name="EnemySpawner" type="Node2D" parent="RegolithWorld" unique_id=1502654375]
 script = ExtResource("16_enemy_spawner")
-
-[node name="DebugDraw" type="RegolithDebugDraw" parent="." unique_id=167902712]
-
-[node name="AiGizmos" type="Node" parent="DebugDraw"]
-script = ExtResource("25_ai_gizmos")
 
 [node name="Slab" type="RegolithSprite" parent="." unique_id=430775866 groups=["regolith"]]
 texture = ExtResource("3")

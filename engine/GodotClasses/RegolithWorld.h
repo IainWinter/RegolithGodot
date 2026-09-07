@@ -41,6 +41,10 @@ public:
 
     static RegolithWorld* active();
 
+    // the active world's scale, or the default scale when no world is in the tree
+    static float active_pixels_per_unit();
+    static float active_pixels_per_cell();
+
     float pixels_per_unit() const;
     vec2 to_units(godot::Vector2 pixels) const;
     godot::Vector2 to_pixels(vec2 units) const;
@@ -115,8 +119,6 @@ protected:
     static void _bind_methods();
 
 private:
-    static float active_pixels_per_unit();
-    static float active_pixels_per_cell();
 
     void start();
     void find_cell_particles();

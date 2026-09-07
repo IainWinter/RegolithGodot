@@ -83,15 +83,30 @@ func slot_point(host: Enemy, point: Vector2) -> Vector2:
 	return Steering.closest_point_on_polygon(world_points(host), point)
 
 func build_local_points(host: Enemy) -> void:
-	var half := Vector2(host.get_cell_count()) * 0.5 * Steering.cell_pixels()
-	local_centroid = Vector2.ZERO
+	local_points = hull_local(self, host)
+	local_centroid = centroid_of(local_points)
 
-	for p in points:
-		var local := Vector2(p.x, -p.y) * half
-		local_points.append(local)
-		local_centroid += local
+# geometry from the exports alone, for the editor gizmo. shield is untyped
+# on purpose, in the editor it is a placeholder that only answers property gets
+static func hull_local(shield: Node, on: RegolithSprite) -> PackedVector2Array:
+	var half := Steering.cell_count(on) * 0.5 * Steering.cell_pixels()
+	var out := PackedVector2Array()
 
-	local_centroid /= points.size()
+	for p in shield.points:
+		out.append(Vector2(p.x, -p.y) * half)
+
+	return out
+
+static func hull_world(shield: Node, on: RegolithSprite) -> PackedVector2Array:
+	return on.global_transform.scaled(Vector2.ONE / Steering.ppu()) * hull_local(shield, on)
+
+static func centroid_of(hull: PackedVector2Array) -> Vector2:
+	var sum := Vector2.ZERO
+
+	for p in hull:
+		sum += p
+
+	return sum / hull.size() if hull.size() > 0 else Vector2.ZERO
 
 func capture(host: Enemy, centroid: Vector2) -> void:
 	var world := RegolithWorld.active()

@@ -61,10 +61,22 @@ func set_box(box_center: Vector2, half_size: Vector2, box_angle: float) -> void:
 	push = box_center
 
 func set_hull_box(host: Enemy) -> void:
-	center = host.local_point_units(trap_position)
-	half = trap_scale * Steering.half_extent_units(host)
-	angle = host.global_rotation - trap_angle
-	push = host.local_point_units(push_point)
+	var box := hull_box(self, host)
+	center = box[0]
+	half = box[1]
+	angle = box[2]
+	push = box[3]
+
+# [center, half, angle, push] from the exports alone, for the editor gizmo.
+# trap is untyped on purpose, in the editor it is a placeholder that only
+# answers property gets
+static func hull_box(trap: Node, on: RegolithSprite) -> Array:
+	return [
+		Steering.hull_point_units(on, trap.trap_position),
+		trap.trap_scale * Steering.half_extent_units(on),
+		on.global_rotation - trap.trap_angle,
+		Steering.hull_point_units(on, trap.push_point),
+	]
 
 func update(host: Enemy, delta: float) -> void:
 	if not active:
@@ -152,10 +164,13 @@ func to_trap_world(local: Vector2) -> Vector2:
 
 # the box corners in world units, grown by grow units on each side
 func box_corners(grow := 0.0) -> PackedVector2Array:
+	return corners_of(center, half, angle, grow)
+
+static func corners_of(box_center: Vector2, half_size: Vector2, box_angle: float, grow := 0.0) -> PackedVector2Array:
 	var corners := PackedVector2Array()
 
 	for corner in [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)]:
-		corners.append(center + (corner * (half + Vector2.ONE * grow)).rotated(angle))
+		corners.append(box_center + (corner * (half_size + Vector2.ONE * grow)).rotated(box_angle))
 
 	return corners
 

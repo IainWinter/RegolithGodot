@@ -31,8 +31,23 @@ static func prune_dead(list: Array) -> void:
 		if not is_instance_valid(node) or node.is_queued_for_deletion():
 			list.remove_at(i)
 
+# cell size of a sprite, the texture stands in before it is loaded so the
+# editor gizmos see the same hull the game will
+static func cell_count(sprite: RegolithSprite) -> Vector2:
+	if sprite.is_loaded():
+		return Vector2(sprite.get_cell_count())
+
+	return sprite.texture.get_size() if sprite.texture else Vector2.ZERO
+
 static func half_extent_units(sprite: RegolithSprite) -> Vector2:
-	return Vector2(sprite.get_cell_count()) * 0.5 / RegolithWorld.CELLS_PER_CHUNK
+	return cell_count(sprite) * 0.5 / RegolithWorld.CELLS_PER_CHUNK
+
+# a point on the sprite's hull, -1..1 with y up, in world pixels or units
+static func hull_point_pixels(sprite: RegolithSprite, p: Vector2) -> Vector2:
+	return sprite.to_global(Vector2(p.x, -p.y) * cell_count(sprite) * 0.5 * cell_pixels())
+
+static func hull_point_units(sprite: RegolithSprite, p: Vector2) -> Vector2:
+	return hull_point_pixels(sprite, p) / ppu()
 
 static func sprite_radius_units(sprite: RegolithSprite) -> float:
 	return half_extent_units(sprite).length()

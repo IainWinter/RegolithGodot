@@ -51,7 +51,13 @@ func is_holding(node: Node) -> bool:
 	return holding.has(node.get_instance_id())
 
 func center_units() -> Vector2:
-	return host.local_point_units(origin)
+	return center_of(self, host)
+
+# geometry from the exports alone, so the editor gizmo can read a thrower
+# whose script is not running. thrower is untyped on purpose, in the editor
+# it is a placeholder that only answers property gets
+static func center_of(thrower: Node, on: RegolithSprite) -> Vector2:
+	return Steering.hull_point_units(on, thrower.origin)
 
 func arc_base_angle(player_pos: Vector2) -> float:
 	if local_arc:

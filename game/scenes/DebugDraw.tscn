@@ -1,0 +1,11 @@
+[gd_scene format=3 uid="uid://dlij7ft8byoe0"]
+
+[ext_resource type="Script" path="res://game/scripts/debug/AiGizmos.gd" id="1_ai_gizmos"]
+
+[node name="DebugDraw" type="RegolithDebugDraw"]
+process_mode = 3
+visible = false
+z_index = 4096
+
+[node name="AiGizmos" type="Node" parent="."]
+script = ExtResource("1_ai_gizmos")

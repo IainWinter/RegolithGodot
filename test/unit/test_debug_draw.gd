@@ -1,9 +1,8 @@
 extends GutTest
 
-# debug lines: a RegolithDebugDraw in the scene draws what the solver and
-# the world emit when their names are enabled, scripts can add lines of
-# their own for one frame, hiding it draws nothing, and the monitors report
-# the world
+# debug lines: the DebugDraw autoload draws what the solver and the world
+# emit when their names are enabled, scripts can add lines of their own for
+# one frame, hiding it draws nothing, and the monitors report the world
 
 var world: RegolithWorld
 var draw: RegolithDebugDraw
@@ -13,13 +12,13 @@ func before_each() -> void:
 	world.pixels_per_cell = 3
 	add_child_autofree(world)
 
-	draw = RegolithDebugDraw.new()
-	draw.name = "DebugDraw"
-	world.add_child(draw)
+	draw = get_node("/root/DebugDraw")
+	draw.visible = true
 
 func after_each() -> void:
 	draw.set_all_names_enabled(false)
 	draw.set_name_enabled(RegolithDebugDraw.DEFAULT, true)
+	draw.visible = false
 	get_tree().paused = false
 
 func spawn_block(at: Vector2) -> RegolithSprite:
@@ -41,6 +40,7 @@ func peak_lines(frames := 3) -> int:
 
 func test_drawer_joins_its_group_and_knows_every_name() -> void:
 	assert_true(draw.is_in_group("regolith_debug_draw"))
+	assert_true(draw.get_node_or_null("AiGizmos") != null, "the autoload carries the ai gizmos")
 	assert_eq(draw.get_name_label(RegolithDebugDraw.PHYSICS_CONTACT_POINT), "PHYSICS_CONTACT_POINT")
 	assert_gt(draw.get_name_count(), RegolithDebugDraw.EXPLOSION_FORCE)
 
@@ -106,7 +106,7 @@ func test_panel_shows_the_scene_drawer_and_steps() -> void:
 	var panel = load("res://game/scripts/debug/DebugPanel.gd").new(world)
 	add_child_autofree(panel)
 	await wait_process_frames(2)
-	assert_same(panel.draw, draw, "the scene's drawer, not a new one")
+	assert_same(panel.draw, draw, "the autoload, not a new one")
 	assert_true(draw.visible, "opening the panel shows it")
 	assert_eq(panel.name_checks.size(), draw.get_name_count())
 
@@ -118,15 +118,13 @@ func test_panel_shows_the_scene_drawer_and_steps() -> void:
 	panel.free()
 	assert_false(draw.visible, "closing the panel hides it again")
 
-func test_panel_makes_a_drawer_when_the_scene_has_none() -> void:
-	world.remove_child(draw)
-	draw.free()
-	var panel = load("res://game/scripts/debug/DebugPanel.gd").new(world)
-	add_child_autofree(panel)
-	await wait_process_frames(2)
-	draw = panel.draw
-	assert_true(draw is RegolithDebugDraw)
-	assert_same(world.get_node_or_null("DebugDraw"), draw)
+func test_script_lines_need_no_world() -> void:
+	world.free()
+	world = null
+	await wait_process_frames(1)
+	draw.add_line(Vector2(0, 0), Vector2(64, 0))
+	assert_eq(draw.collect(), 1, "falls back to the default scale")
+	assert_eq(draw.get_points()[1], Vector2(64, 0), "pixels in, pixels out")
 
 func test_settings_round_trip_through_a_dictionary() -> void:
 	draw.apply_settings({
@@ -154,3 +152,10 @@ func test_settings_round_trip_through_a_dictionary() -> void:
 	assert_true(draw.debugger_message("settings", [{"layers": {"B": true}}]))
 	assert_true(draw.is_layer_enabled(RegolithDebugDraw.LAYER_B))
 	assert_false(draw.debugger_message("nonsense", []))
+
+func test_drawer_keeps_drawing_while_paused() -> void:
+	assert_eq(draw.process_mode, Node.PROCESS_MODE_ALWAYS)
+	get_tree().paused = true
+	draw.add_line(Vector2(0, 0), Vector2(10, 10))
+	assert_eq(await peak_lines(), 1, "script lines still collected under pause")
+	get_tree().paused = false

@@ -17,7 +17,9 @@ class RegolithWorld;
 // the node owns its copy of the color map and pushes it to the engine's
 // global map on every change and when it enters the tree. when the game runs
 // from the editor it registers the "regolith" debugger capture, says "ready",
-// and applies whatever settings the editor's Debug Draw dock sends back
+// and applies whatever settings the editor's Debug Draw dock sends back.
+// the game has one as the DebugDraw autoload, the editor plugin keeps one of
+// its own and calls collect() to draw the lines over the edited scene
 class RegolithDebugDraw : public godot::Node2D {
     GDCLASS(RegolithDebugDraw, godot::Node2D)
 
@@ -29,6 +31,13 @@ public:
     void _draw() override;
 
     void _exit_tree() override;
+
+    // emits the world's lines, gathers every list into pixels and clears
+    // the per frame lists. _process does this when visible, the editor
+    // plugin calls it itself. returns the line count
+    int collect();
+    godot::PackedVector2Array get_points() const;
+    godot::PackedColorArray get_colors() const;
 
     // {"visible": bool, "names": {LABEL: bool}, "colors": {LABEL: Color},
     //  "layers": {LABEL: bool}, "tints": {LABEL: Color}}, every key optional
@@ -80,7 +89,7 @@ protected:
 
 private:
     void emit_world_lines(const RegolithWorld& world);
-    void gather(const RegolithWorld& world, DebugRendererLineList& list);
+    void gather(float pixels_per_unit, DebugRendererLineList& list);
 
     // copies m_map into the engine's global map
     void apply();

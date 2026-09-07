@@ -14,17 +14,17 @@ func before_each() -> void:
 	world = RegolithWorld.new()
 	world.pixels_per_cell = 2
 	arena.add_child(world)
-	draw = RegolithDebugDraw.new()
+	draw = get_node("/root/DebugDraw")
+	draw.visible = true
 	draw.set_all_names_enabled(false)
 	draw.set_name_enabled(RegolithDebugDraw.AI_THROWER, true)
 	draw.set_name_enabled(RegolithDebugDraw.AI_SHIELD, true)
 	draw.set_name_enabled(RegolithDebugDraw.AI_TRAP, true)
-	world.add_child(draw)
-	draw.add_child(load("res://game/scripts/debug/AiGizmos.gd").new())
 
 func after_each() -> void:
 	draw.set_all_names_enabled(false)
 	draw.set_name_enabled(RegolithDebugDraw.DEFAULT, true)
+	draw.visible = false
 	get_tree().current_scene = null
 	arena.free()
 
@@ -67,3 +67,15 @@ func test_hidden_drawer_draws_nothing() -> void:
 	draw.visible = false
 	await wait_physics_frames(2)
 	assert_eq(await peak_lines(), 0)
+
+func test_scene_walk_draws_from_exports_alone() -> void:
+	# the editor path: no running scripts needed, just the nodes and their exports
+	var boss := spawn("res://game/scenes/enemies/EnemyBossCompass.tscn")
+	await wait_physics_frames(2)
+	draw.visible = false
+	await wait_process_frames(2)
+	var gizmos: Node = draw.get_node("AiGizmos")
+	gizmos.emit_scene(arena)
+	var count := draw.collect()
+	assert_gt(count, 0)
+	assert_true(boss.is_loaded())

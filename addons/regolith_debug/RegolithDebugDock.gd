@@ -30,7 +30,7 @@ func _ready() -> void:
 func defaults() -> Dictionary:
 	var draw := RegolithDebugDraw.new()
 	var out: Dictionary = draw.get_settings()
-	out["visible"] = true
+	out["visible"] = false
 
 	labels.clear()
 	for i in draw.get_name_count():
@@ -179,7 +179,7 @@ func set_all(on: bool) -> void:
 
 func reset_defaults() -> void:
 	settings = defaults()
-	visible_check.set_pressed_no_signal(true)
+	visible_check.set_pressed_no_signal(false)
 
 	for label in labels:
 		name_checks[label].set_pressed_no_signal(settings["names"][label])
