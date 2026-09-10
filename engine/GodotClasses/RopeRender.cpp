@@ -1,3 +1,4 @@
+#include <algorithm>
 #include "RopeRender.h"
 
 #include <godot_cpp/classes/rendering_server.hpp>
@@ -40,7 +41,7 @@ void RopeRender::hide() {
     m_written = 0;
 }
 
-bool RopeRender::update(RID item, RID mesh, const Transform& pose, const Grid& grid, const std::vector<SpriteRope>& ropes, float fraction, float pixels_per_unit) {
+bool RopeRender::update(RID item, RID mesh, const Transform& pose, const Grid& grid, const godot::LocalVector<SpriteRope>& ropes, float fraction, float pixels_per_unit) {
     RenderingServer* rs = RenderingServer::get_singleton();
 
     int segments = 0;
@@ -73,9 +74,9 @@ bool RopeRender::update(RID item, RID mesh, const Transform& pose, const Grid& g
         grown = true;
     }
 
-    vec2 origin = pose.to_world_point(grid.to_local_point(vec2(0.f))) * pixels_per_unit;
-    vec2 axis_x = pose.to_world_point(grid.to_local_point(vec2(1.f, 0.f))) * pixels_per_unit - origin;
-    vec2 axis_y = pose.to_world_point(grid.to_local_point(vec2(0.f, 1.f))) * pixels_per_unit - origin;
+    godot::Vector2 origin = pose.to_world_point(grid.to_local_point(godot::Vector2(0.f, 0.f))) * pixels_per_unit;
+    godot::Vector2 axis_x = pose.to_world_point(grid.to_local_point(godot::Vector2(1.f, 0.f))) * pixels_per_unit - origin;
+    godot::Vector2 axis_y = pose.to_world_point(grid.to_local_point(godot::Vector2(0.f, 1.f))) * pixels_per_unit - origin;
 
     float neg_sin = sinf(-pose.angle);
     float neg_cos = cosf(-pose.angle);
@@ -83,23 +84,23 @@ bool RopeRender::update(RID item, RID mesh, const Transform& pose, const Grid& g
     float* out = m_buffer.ptrw();
     int written = 0;
 
-    vec2 bounds_min = vec2(INFINITY);
-    vec2 bounds_max = vec2(-INFINITY);
+    godot::Vector2 bounds_min = godot::Vector2(INFINITY, INFINITY);
+    godot::Vector2 bounds_max = godot::Vector2(-INFINITY, -INFINITY);
 
-    std::vector<vec2> grid_points;
+    godot::LocalVector<godot::Vector2> grid_points;
 
     for (const SpriteRope& rope : ropes) {
         grid_points.clear();
 
         if (rope.nodes.size() >= 2) {
             for (const SpriteRopeNode& node : rope.nodes) {
-                vec2 world = mix(node.last_position, node.position, fraction);
+                godot::Vector2 world = ((node.last_position) * (1.f - (fraction)) + (node.position) * (fraction));
                 grid_points.push_back(grid.to_grid_point(pose.to_local_point(world, neg_sin, neg_cos)));
             }
         }
 
         else if (rope.rest_local.size() >= 2) {
-            for (const vec2& rest : rope.rest_local) {
+            for (const godot::Vector2& rest : rope.rest_local) {
                 grid_points.push_back(grid.to_grid_point(rest));
             }
         }
@@ -113,10 +114,10 @@ bool RopeRender::update(RID item, RID mesh, const Transform& pose, const Grid& g
         float b = rope.color.b / 255.f;
         float a = rope.color.a / 255.f;
 
-        for (const vec2& point : grid_points) {
-            vec2 world = origin + axis_x * point.x + axis_y * point.y;
-            bounds_min = min(bounds_min, world);
-            bounds_max = max(bounds_max, world);
+        for (const godot::Vector2& point : grid_points) {
+            godot::Vector2 world = origin + axis_x * point.x + axis_y * point.y;
+            bounds_min = bounds_min.min(world);
+            bounds_max = bounds_max.max(world);
         }
 
         for (size_t i = 0; i + 1 < grid_points.size() && written < m_capacity; i++) {
@@ -145,9 +146,9 @@ bool RopeRender::update(RID item, RID mesh, const Transform& pose, const Grid& g
         }
     }
 
-    float pad = 2.f * (length(axis_x) + length(axis_y));
-    bounds_min -= vec2(pad);
-    bounds_max += vec2(pad);
+    float pad = 2.f * ((axis_x).length() + (axis_y).length());
+    bounds_min -= godot::Vector2(pad, pad);
+    bounds_max += godot::Vector2(pad, pad);
 
     rs->multimesh_set_buffer(m_multimesh, m_buffer);
     rs->multimesh_set_visible_instances(m_multimesh, written);

@@ -1,3 +1,4 @@
+#include <godot_cpp/templates/pair.hpp>
 #include "CutLine.h"
 
 #include "DestructibleSprite/Sprite.h"
@@ -6,13 +7,13 @@
 #include "Coordinate/Transform.h"
 #include "Math/MathUtil.h"
 
-int cut_sprite_line_grid(Sprite& sprite, vec2 grid_begin, vec2 grid_end) {
+int cut_sprite_line_grid(Sprite& sprite, godot::Vector2 grid_begin, godot::Vector2 grid_end) {
     auto [dir, len] = safe_normalize_distance(grid_end - grid_begin);
 
     int removed = 0;
 
     for (GridLineIterator itr(grid_begin, dir, len); itr.has_more(); itr.next()) {
-        ivec2 grid_point = itr.current();
+        godot::Vector2i grid_point = itr.current();
 
         if (!sprite.grid().is_grid_index_position_valid(grid_point)) {
             continue;
@@ -29,14 +30,14 @@ int cut_sprite_line_grid(Sprite& sprite, vec2 grid_begin, vec2 grid_end) {
     return removed;
 }
 
-int cut_sprite_line(Sprite& sprite, const Transform& transform, vec2 world_begin, vec2 world_end) {
-    vec2 grid_begin = sprite.grid().to_grid_point(transform.to_local_point(world_begin));
-    vec2 grid_end = sprite.grid().to_grid_point(transform.to_local_point(world_end));
+int cut_sprite_line(Sprite& sprite, const Transform& transform, godot::Vector2 world_begin, godot::Vector2 world_end) {
+    godot::Vector2 grid_begin = sprite.grid().to_grid_point(transform.to_local_point(world_begin));
+    godot::Vector2 grid_end = sprite.grid().to_grid_point(transform.to_local_point(world_end));
 
     return cut_sprite_line_grid(sprite, grid_begin, grid_end);
 }
 
-int cut_sprite_lines(Sprite& sprite, const Transform& transform, const std::vector<std::pair<vec2, vec2>>& world_lines) {
+int cut_sprite_lines(Sprite& sprite, const Transform& transform, const godot::LocalVector<godot::Pair<godot::Vector2, godot::Vector2>>& world_lines) {
     int removed = 0;
 
     for (const auto& [world_begin, world_end] : world_lines) {

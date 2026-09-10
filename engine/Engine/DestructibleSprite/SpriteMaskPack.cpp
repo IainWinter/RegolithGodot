@@ -1,3 +1,4 @@
+#include "Containers/VectorUtil.h"
 #include "SpriteMaskPack.h"
 
 static SpriteCellMaskType pixel_to_mask_type(const uint8_t* pixels, int index) {
@@ -75,8 +76,8 @@ bool packed_mask_emissive(uint8_t packed) {
     return (packed >> 7) & 0b1;
 }
 
-std::vector<uint8_t> pack_sprite_mask_image(const uint8_t* mask_pixels, int width, int height) {
-    std::vector<uint8_t> cells(static_cast<size_t>(width) * height, 0);
+godot::LocalVector<uint8_t> pack_sprite_mask_image(const uint8_t* mask_pixels, int width, int height) {
+    godot::LocalVector<uint8_t> cells; vector_fill(cells, static_cast<size_t>(width) * height, 0);
 
     for (int i = 0; i < width * height; i++) {
         int index = i * 4;
@@ -96,8 +97,8 @@ std::vector<uint8_t> pack_sprite_mask_image(const uint8_t* mask_pixels, int widt
     return cells;
 }
 
-std::vector<uint8_t> unpack_sprite_mask_image(const uint8_t* packed_cells, int width, int height) {
-    std::vector<uint8_t> pixels(static_cast<size_t>(width) * height * 4, 0);
+godot::LocalVector<uint8_t> unpack_sprite_mask_image(const uint8_t* packed_cells, int width, int height) {
+    godot::LocalVector<uint8_t> pixels; vector_fill(pixels, static_cast<size_t>(width) * height * 4, 0);
 
     for (int i = 0; i < width * height; i++) {
         SpriteCellMaskType type = packed_mask_type(packed_cells[i]);

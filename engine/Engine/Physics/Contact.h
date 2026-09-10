@@ -2,10 +2,10 @@
 
 #include "Coordinate/Transform.h"
 
-struct [[Struct]] ContactPoint {
-    vec2 local_point_0;
-    vec2 local_point_1;
-    vec2 world_point;
-    vec2 normal;
+struct  ContactPoint {
+    godot::Vector2 local_point_0;
+    godot::Vector2 local_point_1;
+    godot::Vector2 world_point;
+    godot::Vector2 normal;
     float depth;
 };

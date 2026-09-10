@@ -1,6 +1,7 @@
 # godot
 .godot/
 *.import.tmp
+**/__pycache__/
 
 # extension build outputs
 engine/build/

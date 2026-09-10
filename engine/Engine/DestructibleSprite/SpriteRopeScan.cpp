@@ -1,8 +1,11 @@
+#include "Containers/VectorUtil.h"
 #include "SpriteRopeScan.h"
 
 #include <algorithm>
 #include <climits>
-#include <set>
+#include <godot_cpp/templates/rb_set.hpp>
+#include <godot_cpp/templates/pair.hpp>
+#include <godot_cpp/templates/local_vector.hpp>
 
 static const int k_n8x[8] = {-1, 0, 1, -1, 1, -1, 0, 1};
 static const int k_n8y[8] = {-1, -1, -1, 0, 0, 1, 1, 1};
@@ -19,20 +22,20 @@ static bool is_joint_cell(SpriteCellMaskType t) {
 }
 
 struct ScanIsland {
-    std::vector<int> cells;
+    godot::LocalVector<int> cells;
     Color4 color;
 };
 
 struct ScanCluster {
     int island;
     int rep;
-    std::vector<int> cells;
-    std::vector<std::pair<int, int>> incident;
+    godot::LocalVector<int> cells;
+    godot::LocalVector<godot::Pair<int, int>> incident;
 };
 
 struct ScanSegment {
     int island;
-    std::vector<ivec2> path;
+    godot::LocalVector<godot::Vector2i> path;
     int cluster_a = -1;
     int cluster_b = -1;
     int type_a = SpriteRopeAnchorType_Free;
@@ -43,7 +46,7 @@ struct ScanSegment {
     int cell_type_b = SpriteCellMaskType_Empty;
 };
 
-static void thin_island(const std::vector<int>& cells, std::vector<uint8_t>& skel, int w, int h) {
+static void thin_island(const godot::LocalVector<int>& cells, godot::LocalVector<uint8_t>& skel, int w, int h) {
     auto at = [&](int x, int y) {
         if (x < 0 || y < 0 || x >= w || y >= h) {
             return 0;
@@ -52,7 +55,7 @@ static void thin_island(const std::vector<int>& cells, std::vector<uint8_t>& ske
         return (int)skel[x + y * w];
     };
 
-    std::vector<int> kill;
+    godot::LocalVector<int> kill;
     bool changed = true;
 
     while (changed) {
@@ -107,22 +110,22 @@ static void thin_island(const std::vector<int>& cells, std::vector<uint8_t>& ske
                 skel[index] = 0;
             }
 
-            if (!kill.empty()) {
+            if (!kill.is_empty()) {
                 changed = true;
             }
         }
     }
 }
 
-std::vector<ScannedRope> scan_sprite_ropes(const std::vector<SpriteCellMaskType>& mask, const std::vector<Color4>& pixels, int w, int h) {
-    std::vector<ScannedRope> result;
+godot::LocalVector<ScannedRope> scan_sprite_ropes(const godot::LocalVector<SpriteCellMaskType>& mask, const godot::LocalVector<Color4>& pixels, int w, int h) {
+    godot::LocalVector<ScannedRope> result;
 
     if (w <= 0 || h <= 0) {
         return result;
     }
 
-    std::vector<int> group_id(w * h, -1);
-    std::vector<ScanIsland> islands;
+    godot::LocalVector<int> group_id; vector_fill(group_id, w * h, -1);
+    godot::LocalVector<ScanIsland> islands;
 
     for (int seed = 0; seed < w * h; seed++) {
         if (mask[seed] != SpriteCellMaskType_Rope || group_id[seed] != -1) {
@@ -136,13 +139,13 @@ std::vector<ScannedRope> scan_sprite_ropes(const std::vector<SpriteCellMaskType>
         long long sum_g = 0;
         long long sum_b = 0;
 
-        std::vector<int> stack;
+        godot::LocalVector<int> stack;
         stack.push_back(seed);
         group_id[seed] = gid;
 
-        while (!stack.empty()) {
-            int index = stack.back();
-            stack.pop_back();
+        while (!stack.is_empty()) {
+            int index = stack[stack.size() - 1];
+            stack.remove_at(stack.size() - 1);
 
             int x = index % w;
             int y = index / w;
@@ -176,18 +179,18 @@ std::vector<ScannedRope> scan_sprite_ropes(const std::vector<SpriteCellMaskType>
         islands.push_back(std::move(island));
     }
 
-    std::vector<uint8_t> skel(w * h, 0);
-    std::vector<uint8_t> visited(w * h, 0);
-    std::vector<int> degree(w * h, 0);
-    std::vector<int> cluster_of(w * h, -1);
-    std::vector<int> terminal_of(w * h, -1);
+    godot::LocalVector<uint8_t> skel; vector_fill(skel, w * h, 0);
+    godot::LocalVector<uint8_t> visited; vector_fill(visited, w * h, 0);
+    godot::LocalVector<int> degree; vector_fill(degree, w * h, 0);
+    godot::LocalVector<int> cluster_of; vector_fill(cluster_of, w * h, -1);
+    godot::LocalVector<int> terminal_of; vector_fill(terminal_of, w * h, -1);
 
-    std::vector<ScanCluster> clusters;
-    std::vector<ScanSegment> segments;
-    std::vector<std::vector<int>> island_segments(islands.size());
+    godot::LocalVector<ScanCluster> clusters;
+    godot::LocalVector<ScanSegment> segments;
+    godot::LocalVector<godot::LocalVector<int>> island_segments; island_segments.resize(islands.size());
 
     auto pos_of = [&](int index) {
-        return ivec2(index % w, index / w);
+        return godot::Vector2i(index % w, index / w);
     };
 
     for (int gid = 0; gid < (int)islands.size(); gid++) {
@@ -247,7 +250,7 @@ std::vector<ScannedRope> scan_sprite_ropes(const std::vector<SpriteCellMaskType>
             return a;
         };
 
-        std::vector<int> skel_cells;
+        godot::LocalVector<int> skel_cells;
 
         for (int index : island.cells) {
             if (!skel[index]) {
@@ -270,13 +273,13 @@ std::vector<ScannedRope> scan_sprite_ropes(const std::vector<SpriteCellMaskType>
             int cid = (int)clusters.size();
             ScanCluster cluster {gid, index, {}, {}};
 
-            std::vector<int> stack;
+            godot::LocalVector<int> stack;
             stack.push_back(index);
             cluster_of[index] = cid;
 
-            while (!stack.empty()) {
-                int cur = stack.back();
-                stack.pop_back();
+            while (!stack.is_empty()) {
+                int cur = stack[stack.size() - 1];
+                stack.remove_at(stack.size() - 1);
 
                 cluster.cells.push_back(cur);
 
@@ -291,7 +294,7 @@ std::vector<ScannedRope> scan_sprite_ropes(const std::vector<SpriteCellMaskType>
                 }
             }
 
-            ivec2 sum(0);
+            godot::Vector2i sum(0, 0);
 
             for (int cell : cluster.cells) {
                 sum += pos_of(cell);
@@ -300,7 +303,7 @@ std::vector<ScannedRope> scan_sprite_ropes(const std::vector<SpriteCellMaskType>
             int best = INT_MAX;
 
             for (int cell : cluster.cells) {
-                ivec2 d = pos_of(cell) * (int)cluster.cells.size() - sum;
+                godot::Vector2i d = pos_of(cell) * (int)cluster.cells.size() - sum;
                 int dd = d.x * d.x + d.y * d.y;
 
                 if (dd < best) {
@@ -317,7 +320,7 @@ std::vector<ScannedRope> scan_sprite_ropes(const std::vector<SpriteCellMaskType>
             int cluster;
         };
 
-        std::vector<ScanTerminal> terminals;
+        godot::LocalVector<ScanTerminal> terminals;
 
         for (int index : skel_cells) {
             if (cluster_of[index] == -1 && degree[index] <= 1) {
@@ -389,9 +392,9 @@ std::vector<ScannedRope> scan_sprite_ropes(const std::vector<SpriteCellMaskType>
             return diag_step;
         };
 
-        std::set<std::pair<int, int>> direct_edges;
+        godot::RBSet<godot::Pair<int, int>> direct_edges;
 
-        auto emit = [&](std::vector<ivec2>&& path, int cluster_front, int cluster_back) {
+        auto emit = [&](godot::LocalVector<godot::Vector2i>&& path, int cluster_front, int cluster_back) {
             int seg = (int)segments.size();
 
             ScanSegment segment {};
@@ -415,7 +418,7 @@ std::vector<ScannedRope> scan_sprite_ropes(const std::vector<SpriteCellMaskType>
         for (int ti = 0; ti < (int)terminals.size(); ti++) {
             const ScanTerminal& terminal = terminals[ti];
 
-            std::vector<int> ports;
+            godot::LocalVector<int> ports;
 
             if (terminal.cluster == -1) {
                 ports.push_back(terminal.cell);
@@ -437,9 +440,9 @@ std::vector<ScannedRope> scan_sprite_ropes(const std::vector<SpriteCellMaskType>
 
                     if (terminal_of[next] != -1) {
                         int tj = terminal_of[next];
-                        auto edge = std::make_pair(std::min(ti, tj), std::max(ti, tj));
+                        auto edge = godot::Pair<int, int>{std::min(ti, tj), std::max(ti, tj)};
 
-                        if (direct_edges.contains(edge)) {
+                        if (direct_edges.has(edge)) {
                             continue;
                         }
 
@@ -453,7 +456,7 @@ std::vector<ScannedRope> scan_sprite_ropes(const std::vector<SpriteCellMaskType>
                         continue;
                     }
 
-                    std::vector<ivec2> path;
+                    godot::LocalVector<godot::Vector2i> path;
                     path.push_back(pos_of(terminal.cell));
 
                     int prev = port;
@@ -491,7 +494,7 @@ std::vector<ScannedRope> scan_sprite_ropes(const std::vector<SpriteCellMaskType>
                 continue;
             }
 
-            std::vector<ivec2> path;
+            godot::LocalVector<godot::Vector2i> path;
             path.push_back(pos_of(index));
             visited[index] = 1;
 
@@ -517,13 +520,13 @@ std::vector<ScannedRope> scan_sprite_ropes(const std::vector<SpriteCellMaskType>
             emit(std::move(path), -1, -1);
         }
 
-        if (island_segments[gid].empty() && !skel_cells.empty()) {
-            emit({pos_of(skel_cells.front()), pos_of(skel_cells.front())}, -1, -1);
+        if (island_segments[gid].is_empty() && !skel_cells.is_empty()) {
+            emit({pos_of(skel_cells[0]), pos_of(skel_cells[0])}, -1, -1);
         }
 
         for (int seg : island_segments[gid]) {
             if (segments[seg].path.size() < 2) {
-                segments[seg].path.push_back(segments[seg].path.front());
+                segments[seg].path.push_back(segments[seg].path[0]);
             }
         }
 
@@ -536,7 +539,7 @@ std::vector<ScannedRope> scan_sprite_ropes(const std::vector<SpriteCellMaskType>
         }
     }
 
-    auto check_around = [&](ivec2 c, int self_gid, bool& found_struct, int& joint_type, int& found_rope) {
+    auto check_around = [&](godot::Vector2i c, int self_gid, bool& found_struct, int& joint_type, int& found_rope) {
         for (int k = 0; k < 8; k++) {
             int nx = c.x + k_n8x[k];
             int ny = c.y + k_n8y[k];
@@ -561,7 +564,7 @@ std::vector<ScannedRope> scan_sprite_ropes(const std::vector<SpriteCellMaskType>
         }
     };
 
-    auto classify = [&](ivec2 c, int self_gid, int& out_type, int& out_touch, int& out_cell_type) {
+    auto classify = [&](godot::Vector2i c, int self_gid, int& out_type, int& out_touch, int& out_cell_type) {
         out_type = SpriteRopeAnchorType_Free;
         out_touch = -1;
         out_cell_type = SpriteCellMaskType_Empty;
@@ -584,7 +587,7 @@ std::vector<ScannedRope> scan_sprite_ropes(const std::vector<SpriteCellMaskType>
                 int ni = nx + ny * w;
 
                 if (mask[ni] == SpriteCellMaskType_Rope && group_id[ni] == self_gid) {
-                    check_around(ivec2(nx, ny), self_gid, found_struct, joint_type, found_rope);
+                    check_around(godot::Vector2i(nx, ny), self_gid, found_struct, joint_type, found_rope);
                 }
             }
         }
@@ -601,23 +604,23 @@ std::vector<ScannedRope> scan_sprite_ropes(const std::vector<SpriteCellMaskType>
     };
 
     for (ScanSegment& segment : segments) {
-        classify(segment.path.front(), segment.island, segment.type_a, segment.touch_a, segment.cell_type_a);
-        classify(segment.path.back(), segment.island, segment.type_b, segment.touch_b, segment.cell_type_b);
+        classify(segment.path[0], segment.island, segment.type_a, segment.touch_a, segment.cell_type_a);
+        classify(segment.path[segment.path.size() - 1], segment.island, segment.type_b, segment.touch_b, segment.cell_type_b);
     }
 
     for (ScanCluster& cluster : clusters) {
-        if (cluster.incident.empty()) {
+        if (cluster.incident.is_empty()) {
             continue;
         }
 
-        auto far_is_cell = [&](std::pair<int, int> inc) {
+        auto far_is_cell = [&](godot::Pair<int, int> inc) {
             const ScanSegment& segment = segments[inc.first];
             return (inc.second == 0 ? segment.type_b : segment.type_a) == SpriteRopeAnchorType_Cell;
         };
 
-        std::pair<int, int> owner = cluster.incident.front();
+        godot::Pair<int, int> owner = cluster.incident[0];
 
-        for (const std::pair<int, int>& inc : cluster.incident) {
+        for (const godot::Pair<int, int>& inc : cluster.incident) {
             if (far_is_cell(inc) && !far_is_cell(owner)) {
                 owner = inc;
             }
@@ -627,10 +630,10 @@ std::vector<ScannedRope> scan_sprite_ropes(const std::vector<SpriteCellMaskType>
         }
 
         const ScanSegment& owner_segment = segments[owner.first];
-        ivec2 rep = pos_of(cluster.rep);
-        int owner_node = owner_segment.path.front() == rep ? 0 : (int)owner_segment.path.size() - 1;
+        godot::Vector2i rep = pos_of(cluster.rep);
+        int owner_node = owner_segment.path[0] == rep ? 0 : (int)owner_segment.path.size() - 1;
 
-        for (const std::pair<int, int>& inc : cluster.incident) {
+        for (const godot::Pair<int, int>& inc : cluster.incident) {
             if (inc == owner) {
                 continue;
             }
@@ -652,17 +655,17 @@ std::vector<ScannedRope> scan_sprite_ropes(const std::vector<SpriteCellMaskType>
         }
     }
 
-    auto nearest_node = [&](int gid, ivec2 c, int& out_rope, int& out_node) {
+    auto nearest_node = [&](int gid, godot::Vector2i c, int& out_rope, int& out_node) {
         out_rope = -1;
         out_node = -1;
 
         int bestd = INT_MAX;
 
         for (int seg : island_segments[gid]) {
-            const std::vector<ivec2>& p = segments[seg].path;
+            const godot::LocalVector<godot::Vector2i>& p = segments[seg].path;
 
             for (int i = 0; i < (int)p.size(); i++) {
-                ivec2 d = p[i] - c;
+                godot::Vector2i d = p[i] - c;
                 int dd = d.x * d.x + d.y * d.y;
 
                 if (dd < bestd) {
@@ -678,7 +681,7 @@ std::vector<ScannedRope> scan_sprite_ropes(const std::vector<SpriteCellMaskType>
         int type = end == 0 ? segment.type_a : segment.type_b;
         int touch = end == 0 ? segment.touch_a : segment.touch_b;
         int cell_type = end == 0 ? segment.cell_type_a : segment.cell_type_b;
-        ivec2 cell = end == 0 ? segment.path.front() : segment.path.back();
+        godot::Vector2i cell = end == 0 ? segment.path[0] : segment.path[segment.path.size() - 1];
 
         out.type = type;
         out.cell = cell;

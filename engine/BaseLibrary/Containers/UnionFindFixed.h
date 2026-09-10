@@ -1,6 +1,6 @@
 #pragma once
 
-#include <vector>
+#include <godot_cpp/templates/local_vector.hpp>
 
 class UnionFindFixed {
 public:
@@ -32,5 +32,5 @@ public:
     }
 
 private:
-    std::vector<int> parent;
+    godot::LocalVector<int> parent;
 };

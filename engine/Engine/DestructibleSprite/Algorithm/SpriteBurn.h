@@ -19,8 +19,8 @@ uint16_t sprite_heat_decay_levels(int tick);
 
 void sprite_burn_cell(Sprite& sprite, int chunk_index, int cell_index, int strength, int damage);
 
-void sprite_burn_point(Sprite& sprite, ivec2 grid_point, int strength, int damage);
+void sprite_burn_point(Sprite& sprite, godot::Vector2i grid_point, int strength, int damage);
 
-void sprite_burn_fracture(Sprite& sprite, ivec2 grid_point, const SpriteBurnProps& props);
+void sprite_burn_fracture(Sprite& sprite, godot::Vector2i grid_point, const SpriteBurnProps& props);
 
-void sprite_burn_radius(Sprite& sprite, ivec2 grid_point, int radius, const SpriteBurnProps& props);
+void sprite_burn_radius(Sprite& sprite, godot::Vector2i grid_point, int radius, const SpriteBurnProps& props);

@@ -16,7 +16,7 @@
 #include <godot_cpp/variant/packed_vector2_array.hpp>
 #include <godot_cpp/variant/typed_array.hpp>
 
-#include <vector>
+#include <godot_cpp/templates/local_vector.hpp>
 
 class RegolithSprite;
 
@@ -42,8 +42,8 @@ public:
     static RegolithWorld* active();
 
     float pixels_per_unit() const;
-    vec2 to_units(godot::Vector2 pixels) const;
-    godot::Vector2 to_pixels(vec2 units) const;
+    godot::Vector2 to_units(godot::Vector2 pixels) const;
+    godot::Vector2 to_pixels(godot::Vector2 units) const;
 
     void _enter_tree() override;
     void _exit_tree() override;
@@ -79,8 +79,8 @@ public:
 
     godot::GPUParticles2D* get_cell_particles();
     void spawn_cell_particle(godot::Vector2 position, godot::Vector2 velocity, godot::Color color, float angle);
-    void spawn_cell_pixel(vec2 position, vec2 velocity, float angle, Color4 color);
-    void spawn_rope_pixels(RegolithSprite* source, const std::vector<SpriteRope>& ropes);
+    void spawn_cell_pixel(godot::Vector2 position, godot::Vector2 velocity, float angle, Color4 color);
+    void spawn_rope_pixels(RegolithSprite* source, const godot::LocalVector<SpriteRope>& ropes);
 
     void set_pixels_per_cell(int pixels);
     int get_pixels_per_cell() const;
@@ -107,7 +107,7 @@ public:
 
     void resplit_rope_piece(RegolithSprite* node);
 
-    const std::vector<RegolithSprite*>& sprites() const;
+    const godot::LocalVector<RegolithSprite*>& sprites() const;
     const RegolithJoints& joints() const;
     const SpriteTree& tree() const;
 
@@ -127,13 +127,13 @@ private:
     void free_sprite(RegolithSprite* node);
 
     RegolithSprite* spawn_piece(RegolithSprite* source, Sprite&& sprite, const Transform& transform, const PhysicsBody& body);
-    RegolithSprite* spawn_rope_piece(RegolithSprite* source, std::vector<SpriteRope>&& group);
-    void spawn_rope_group(RegolithSprite* source, std::vector<SpriteRope>&& group);
+    RegolithSprite* spawn_rope_piece(RegolithSprite* source, godot::LocalVector<SpriteRope>&& group);
+    void spawn_rope_group(RegolithSprite* source, godot::LocalVector<SpriteRope>&& group);
 
 private:
     SpriteChunkPool m_pool;
     PhysicsWorld m_physics;
-    std::vector<RegolithSprite*> m_sprites;
+    godot::LocalVector<RegolithSprite*> m_sprites;
     SpriteTree m_tree;
     RegolithJoints m_joints;
     godot::GPUParticles2D* m_cell_particles = nullptr;

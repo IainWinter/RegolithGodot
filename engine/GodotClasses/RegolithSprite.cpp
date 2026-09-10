@@ -1,3 +1,4 @@
+#include <godot_cpp/templates/pair.hpp>
 #include "RegolithSprite.h"
 #include "RegolithRopeRender.h"
 #include "RegolithWorld.h"
@@ -121,7 +122,7 @@ void RegolithSprite::load_asset(RegolithWorld* world, SpriteAsset& asset) {
     m_sprite = Sprite(world->pool(), asset, m_repairable);
     m_ropes = sprite_rope_set_from_asset(m_sprite.grid(), asset);
 
-    m_transform.scale = k_chunk_local_size * vec2(m_sprite.grid().chunks);
+    m_transform.scale = k_chunk_local_size * godot::Vector2(m_sprite.grid().chunks);
     m_body = PhysicsBody();
     m_body.angle_fixed = m_angle_fixed;
     m_body.linear_damping = m_linear_damping;
@@ -221,7 +222,7 @@ bool RegolithSprite::is_loaded() const {
 }
 
 bool RegolithSprite::has_ropes() const {
-    return !m_ropes.ropes.empty();
+    return !m_ropes.ropes.is_empty();
 }
 
 Sprite& RegolithSprite::sprite() {
@@ -248,7 +249,7 @@ Transform RegolithSprite::render_pose(float fraction) const {
     Transform pose = m_transform;
 
     if (m_dynamic) {
-        pose.position = mix(m_body.last_position, m_body.position, fraction);
+        pose.position = ((m_body.last_position) * (1.f - (fraction)) + (m_body.position) * (fraction));
         pose.angle = lerp_angle(m_body.last_angle, m_body.angle, fraction);
     }
 
@@ -269,7 +270,7 @@ void RegolithSprite::sync_node_from_body() {
 }
 
 void RegolithSprite::sync_body_from_node() {
-    vec2 position = m_world->to_units(get_global_position());
+    godot::Vector2 position = m_world->to_units(get_global_position());
     float angle = static_cast<float>(get_global_rotation());
 
     m_body.position = position;
@@ -291,7 +292,7 @@ void RegolithSprite::apply_mass() {
     if (!m_dynamic) {
         m_body.inv_mass = 0.f;
         m_body.inv_inertia = 0.f;
-        m_body.linear_velocity = vec2(0.f);
+        m_body.linear_velocity = godot::Vector2(0.f, 0.f);
         m_body.angular_velocity = 0.f;
     }
 }
@@ -311,7 +312,7 @@ void RegolithSprite::_draw() {
     const Grid& grid = m_sprite.grid();
     int chunk_size = grid.chunkSize;
     float page_size = static_cast<float>(m_world->pool().atlas_page_size());
-    vec2 scale = m_transform.scale * m_world->pixels_per_unit();
+    godot::Vector2 scale = m_transform.scale * m_world->pixels_per_unit();
 
     PackedVector2Array points;
     PackedVector2Array uvs;
@@ -323,8 +324,8 @@ void RegolithSprite::_draw() {
     colors.fill(Color(1, 1, 1, 1));
 
     for (SpriteChunk* chunk : m_sprite.chunks().items()) {
-        vec2 l0 = grid.to_local_point(chunk->gridPixelOffset) * scale;
-        vec2 l1 = grid.to_local_point(chunk->gridPixelOffset + ivec2(chunk_size)) * scale;
+        godot::Vector2 l0 = grid.to_local_point(chunk->gridPixelOffset) * scale;
+        godot::Vector2 l1 = grid.to_local_point(chunk->gridPixelOffset + godot::Vector2i(chunk_size, chunk_size)) * scale;
 
         float layer = static_cast<float>(chunk->atlasPixelOffset.z) * 2.f;
         float u0 = layer + chunk->atlasPixelOffset.x / page_size;
@@ -483,7 +484,7 @@ Ref<Image> RegolithSprite::get_mask_image() const {
 }
 
 void RegolithSprite::paint(Vector2i cell, Color color, SpriteCellMask mask) {
-    m_sprite.paint_cell(ivec2(cell.x, cell.y), to_color4(color), mask);
+    m_sprite.paint_cell(godot::Vector2i(cell.x, cell.y), to_color4(color), mask);
 }
 
 static bool make_mask(RegolithSprite::CellType type, int cell_class, SpriteCellMask& out) {
@@ -553,9 +554,9 @@ Vector2i RegolithSprite::world_to_cell(Vector2 world_position) const {
         return Vector2i(-1, -1);
     }
 
-    vec2 local = m_transform.to_local_point(m_world->to_units(world_position));
-    vec2 grid_point = m_sprite.grid().to_grid_point(local);
-    ivec2 cell = ivec2(floorf(grid_point.x), floorf(grid_point.y));
+    godot::Vector2 local = m_transform.to_local_point(m_world->to_units(world_position));
+    godot::Vector2 grid_point = m_sprite.grid().to_grid_point(local);
+    godot::Vector2i cell = godot::Vector2i(floorf(grid_point.x), floorf(grid_point.y));
 
     if (!m_sprite.grid().is_grid_index_position_valid(cell)) {
         return Vector2i(-1, -1);
@@ -569,16 +570,16 @@ Vector2 RegolithSprite::cell_to_world(Vector2i cell) const {
         return get_global_position();
     }
 
-    vec2 local = m_sprite.grid().to_local_point_centered(ivec2(cell.x, cell.y));
+    godot::Vector2 local = m_sprite.grid().to_local_point_centered(godot::Vector2i(cell.x, cell.y));
     return m_world->to_pixels(m_transform.to_world_point(local));
 }
 
 bool RegolithSprite::has_cell(Vector2i cell) const {
-    if (!is_loaded() || !m_sprite.grid().is_grid_index_position_valid(ivec2(cell.x, cell.y))) {
+    if (!is_loaded() || !m_sprite.grid().is_grid_index_position_valid(godot::Vector2i(cell.x, cell.y))) {
         return false;
     }
 
-    auto [chunk_index, cell_index] = m_sprite.grid().to_chunk_cell_index(ivec2(cell.x, cell.y));
+    auto [chunk_index, cell_index] = m_sprite.grid().to_chunk_cell_index(godot::Vector2i(cell.x, cell.y));
 
     return m_sprite.is_chunk_active(chunk_index) && m_sprite.is_cell_active(chunk_index, cell_index);
 }
@@ -588,7 +589,7 @@ RegolithSprite::CellType RegolithSprite::get_cell_type(Vector2i cell) const {
         return CELL_EMPTY;
     }
 
-    auto [chunk_index, cell_index] = m_sprite.grid().to_chunk_cell_index(ivec2(cell.x, cell.y));
+    auto [chunk_index, cell_index] = m_sprite.grid().to_chunk_cell_index(godot::Vector2i(cell.x, cell.y));
     return static_cast<CellType>(m_sprite.get_cell(chunk_index, cell_index).type.get_type());
 }
 
@@ -597,7 +598,7 @@ int RegolithSprite::get_cell_class(Vector2i cell) const {
         return 0;
     }
 
-    auto [chunk_index, cell_index] = m_sprite.grid().to_chunk_cell_index(ivec2(cell.x, cell.y));
+    auto [chunk_index, cell_index] = m_sprite.grid().to_chunk_cell_index(godot::Vector2i(cell.x, cell.y));
     return m_sprite.get_cell(chunk_index, cell_index).type.get_class();
 }
 
@@ -606,12 +607,12 @@ Color RegolithSprite::get_cell_color(Vector2i cell) const {
         return Color(0, 0, 0, 0);
     }
 
-    auto [chunk_index, cell_index] = m_sprite.grid().to_chunk_cell_index(ivec2(cell.x, cell.y));
+    auto [chunk_index, cell_index] = m_sprite.grid().to_chunk_cell_index(godot::Vector2i(cell.x, cell.y));
     return to_color(m_sprite.get_cell(chunk_index, cell_index).color);
 }
 
 Vector2i RegolithSprite::get_cell_count() const {
-    ivec2 cells = m_sprite.grid().cells;
+    godot::Vector2i cells = m_sprite.grid().cells;
     return is_loaded() ? Vector2i(cells.x, cells.y) : Vector2i();
 }
 
@@ -640,7 +641,7 @@ void RegolithSprite::remove_cell(Vector2i cell) {
         return;
     }
 
-    auto [chunk_index, cell_index] = m_sprite.grid().to_chunk_cell_index(ivec2(cell.x, cell.y));
+    auto [chunk_index, cell_index] = m_sprite.grid().to_chunk_cell_index(godot::Vector2i(cell.x, cell.y));
     m_sprite.remove_cell(chunk_index, cell_index);
 }
 
@@ -649,7 +650,7 @@ void RegolithSprite::burn_cell(Vector2i cell, int strength, int damage) {
         return;
     }
 
-    auto [chunk_index, cell_index] = m_sprite.grid().to_chunk_cell_index(ivec2(cell.x, cell.y));
+    auto [chunk_index, cell_index] = m_sprite.grid().to_chunk_cell_index(godot::Vector2i(cell.x, cell.y));
     sprite_burn_cell(m_sprite, chunk_index, cell_index, strength, damage);
 }
 
@@ -664,7 +665,7 @@ void RegolithSprite::burn_fracture(Vector2i cell, int strength, int scorch_stren
     props.damage_ratio = damage_ratio;
     props.damage = damage;
 
-    sprite_burn_fracture(m_sprite, ivec2(cell.x, cell.y), props);
+    sprite_burn_fracture(m_sprite, godot::Vector2i(cell.x, cell.y), props);
 }
 
 TypedArray<Vector2i> RegolithSprite::trace_cells(Vector2 from, Vector2 to, int max_cells) const {
@@ -676,13 +677,13 @@ TypedArray<Vector2i> RegolithSprite::trace_cells(Vector2 from, Vector2 to, int m
 
     const Grid& grid = m_sprite.grid();
 
-    vec2 start = grid.to_grid_point(m_transform.to_local_point(m_world->to_units(from)));
-    vec2 end = grid.to_grid_point(m_transform.to_local_point(m_world->to_units(to)));
+    godot::Vector2 start = grid.to_grid_point(m_transform.to_local_point(m_world->to_units(from)));
+    godot::Vector2 end = grid.to_grid_point(m_transform.to_local_point(m_world->to_units(to)));
 
     auto [direction, distance] = safe_normalize_distance(end - start);
 
     for (GridLineIterator itr(start, direction, distance); itr.has_more(); itr.next()) {
-        ivec2 cell = itr.current();
+        godot::Vector2i cell = itr.current();
 
         if (!grid.is_grid_index_position_valid(cell)) {
             continue;
@@ -711,8 +712,8 @@ Vector2 RegolithSprite::get_velocity_at(Vector2 world_position) const {
         return Vector2();
     }
 
-    vec2 local = m_transform.to_local_point(m_world->to_units(world_position));
-    vec2 velocity = m_body.velocity_at_local_point(local);
+    godot::Vector2 local = m_transform.to_local_point(m_world->to_units(world_position));
+    godot::Vector2 velocity = m_body.velocity_at_local_point(local);
     return Vector2(velocity.x, velocity.y);
 }
 
@@ -721,7 +722,7 @@ Vector2 RegolithSprite::get_linear_velocity() const {
 }
 
 void RegolithSprite::set_linear_velocity(Vector2 velocity) {
-    m_body.linear_velocity = vec2(velocity.x, velocity.y);
+    m_body.linear_velocity = godot::Vector2(velocity.x, velocity.y);
 }
 
 float RegolithSprite::get_angular_velocity() const {
@@ -737,9 +738,9 @@ void RegolithSprite::apply_impulse(Vector2 impulse, Vector2 world_position) {
         return;
     }
 
-    vec2 center = m_transform.to_world_point(m_body.center_of_mass);
-    vec2 r = m_world->to_units(world_position) - center;
-    m_body.apply_impulse_r(vec2(impulse.x, impulse.y), r);
+    godot::Vector2 center = m_transform.to_world_point(m_body.center_of_mass);
+    godot::Vector2 r = m_world->to_units(world_position) - center;
+    m_body.apply_impulse_r(godot::Vector2(impulse.x, impulse.y), r);
 }
 
 int RegolithSprite::get_rope_count() const {
@@ -802,11 +803,12 @@ Dictionary RegolithSprite::hit_rope(Vector2 from, Vector2 to) {
         }
     }
 
-    vec2 grid_pos = grid.to_grid_point(m_transform.to_local_point(hit.position));
-    vec2 pixel_world = m_transform.to_world_point(grid.to_local_point_centered(ivec2(floor(grid_pos))));
+    godot::Vector2 grid_pos = grid.to_grid_point(m_transform.to_local_point(hit.position));
+    godot::Vector2 f = grid_pos.floor();
+    godot::Vector2 pixel_world = m_transform.to_world_point(grid.to_local_point_centered(godot::Vector2i((int)f.x, (int)f.y)));
 
-    vec2 a = rope.nodes[hit.segment_index].position;
-    vec2 b = rope.nodes[hit.segment_index + 1].position;
+    godot::Vector2 a = rope.nodes[hit.segment_index].position;
+    godot::Vector2 b = rope.nodes[hit.segment_index + 1].position;
     float t = closest_t_on_segment(a, b, pixel_world);
 
     SpriteRopeCutResult cut = cut_sprite_rope_at(m_ropes, hit.rope_index, hit.segment_index, t, 2.f * radius);
@@ -839,20 +841,20 @@ bool RegolithSprite::cut_rope(int rope_index, int node_index) {
     return true;
 }
 
-void RegolithSprite::spawn_loose_pixels(const std::vector<std::pair<vec2, Color4>>& pixels) {
-    if (!m_world || pixels.empty()) {
+void RegolithSprite::spawn_loose_pixels(const godot::LocalVector<godot::Pair<godot::Vector2, Color4>>& pixels) {
+    if (!m_world || pixels.is_empty()) {
         return;
     }
 
     for (const auto& [world, color] : pixels) {
-        vec2 local = m_transform.to_local_point(world);
+        godot::Vector2 local = m_transform.to_local_point(world);
         m_world->spawn_cell_pixel(world, m_body.velocity_at_local_point(local), m_transform.angle, color);
     }
 
     m_world->emit_signal("cells_removed", this, static_cast<int>(pixels.size()));
 }
 
-void RegolithSprite::after_rope_cut(const std::vector<ivec2>& anchor_cells) {
+void RegolithSprite::after_rope_cut(const godot::LocalVector<godot::Vector2i>& anchor_cells) {
     if (!is_loaded()) {
         if (m_world) {
             m_world->resplit_rope_piece(this);
@@ -862,7 +864,8 @@ void RegolithSprite::after_rope_cut(const std::vector<ivec2>& anchor_cells) {
     }
 
     const Grid& grid = m_sprite.grid();
-    std::vector<ivec2> cells = anchor_cells;
+    godot::LocalVector<godot::Vector2i> cells;
+    for (const godot::Vector2i& c : anchor_cells) cells.push_back(c);
 
     for (const SpriteRope& other : m_ropes.ropes) {
         for (const SpriteRopeAnchor* anchor : {&other.a, &other.b}) {
@@ -872,7 +875,7 @@ void RegolithSprite::after_rope_cut(const std::vector<ivec2>& anchor_cells) {
         }
     }
 
-    for (ivec2 cell : cells) {
+    for (godot::Vector2i cell : cells) {
         if (grid.is_grid_index_position_valid(cell)) {
             auto [chunk_index, cell_index] = grid.to_chunk_cell_index(cell);
             m_sprite.mark_chunk_dirty(chunk_index);

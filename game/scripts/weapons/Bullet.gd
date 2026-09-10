@@ -93,6 +93,7 @@ func _physics_process(delta: float) -> void:
 	var direction := world_velocity.normalized()
 	var remaining := world_velocity.length() * pixels_per_unit * delta
 	var hit_any := false
+	var ejected := false
 	var last_sprite: RegolithSprite = null
 	var last_cell := Vector2i(-1, -1)
 
@@ -108,6 +109,8 @@ func _physics_process(delta: float) -> void:
 		if hit.is_empty():
 			position = end
 			remaining = 0.0
+			if embedded_sprite != null:
+				ejected = true
 			break
 
 		var sprite: RegolithSprite = hit["sprite"]
@@ -115,6 +118,9 @@ func _physics_process(delta: float) -> void:
 
 		var cell_position := Explosion.hit_cell(world, props, sprite, hit_cell_index, direction * randf_range(1.0, 4.0) * pixels_per_unit)
 		hit_cell.emit(sprite, hit_cell_index, cell_position)
+
+		if not hit_any:
+			sprite.apply_impulse(velocity * props.mass, cell_position)
 
 		cell_life -= 1
 		hit_any = true
@@ -134,17 +140,18 @@ func _physics_process(delta: float) -> void:
 
 		var bend := props.rotation_factor * rotation_bias * delta * float(cell_life) / float(initial_cell_life)
 		direction = direction.rotated(bend)
-		own_speed *= 1.0 - props.speed_loss_per_cell
+		own_speed *= 1.0 - props.speed_loss_per_cell * randf_range(0.5, 1.5)
 
 		position += direction * cell_px * 0.51
 
 	if hit_any:
 		carry_velocity = Vector2.ZERO
-	elif was_embedded:
-		carry_velocity = embedded_sprite.get_velocity_at(position)
-		embedded_sprite = null
 
 	velocity = direction * own_speed
+
+	if ejected:
+		velocity += embedded_sprite.get_velocity_at(position)
+		embedded_sprite = null
 
 	global_position = position
 	lifetime -= delta

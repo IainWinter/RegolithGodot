@@ -1,11 +1,11 @@
 #pragma once
 
 #include "Coordinate/AxisAlignedAreaTree.h"
+#include "Result.h"
 
 #include <godot_cpp/core/object_id.hpp>
 
-#include <optional>
-#include <vector>
+#include <godot_cpp/templates/local_vector.hpp>
 
 class RegolithSprite;
 
@@ -15,16 +15,16 @@ class SpriteTree {
 public:
     struct Hit {
         RegolithSprite* sprite;
-        ivec2 cell;
-        vec2 position;
+        godot::Vector2i cell;
+        godot::Vector2 position;
         float distance;
     };
 
-    void build(const std::vector<RegolithSprite*>& sprites);
+    void build(const godot::LocalVector<RegolithSprite*>& sprites);
 
-    void query(const AxisAlignedBox& box, std::vector<RegolithSprite*>& out) const;
+    void query(const AxisAlignedBox& box, godot::LocalVector<RegolithSprite*>& out) const;
 
-    std::optional<Hit> ray_cast(vec2 origin, vec2 end, const RegolithSprite* exclude) const;
+    Optional<Hit> ray_cast(godot::Vector2 origin, godot::Vector2 end, const RegolithSprite* exclude) const;
 
     const AxisAlignedAreaTreeIndex& index() const;
 

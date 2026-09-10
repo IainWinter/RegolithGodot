@@ -173,13 +173,13 @@ Dictionary RegolithDebugDraw::get_settings() const {
     Dictionary names, colors, layers, tints;
 
     for (int i = 0; i < DebugName_Count; i++) {
-        names[k_names[i].label] = m_map.colors()[i].second;
-        colors[k_names[i].label] = to_color(m_map.colors()[i].first);
+        names[k_names[i].label] = m_map.colors()[i].enabled;
+        colors[k_names[i].label] = to_color(m_map.colors()[i].color);
     }
 
     for (int i = 0; i < DebugLayer_Count; i++) {
-        layers[k_layer_labels[i]] = m_map.tints()[i].second;
-        tints[k_layer_labels[i]] = to_color(m_map.tints()[i].first);
+        layers[k_layer_labels[i]] = m_map.tints()[i].enabled;
+        tints[k_layer_labels[i]] = to_color(m_map.tints()[i].color);
     }
 
     Dictionary out;
@@ -240,14 +240,14 @@ void RegolithDebugDraw::emit_world_lines(const RegolithWorld& world) {
                 const Grid& grid = node->sprite().grid();
 
                 for (const SpriteChunk* chunk : node->sprite().chunks().items()) {
-                    vec2 l0 = grid.to_local_point(chunk->gridPixelOffset);
-                    vec2 l1 = grid.to_local_point(chunk->gridPixelOffset + ivec2(grid.chunkSize));
+                    godot::Vector2 l0 = grid.to_local_point(chunk->gridPixelOffset);
+                    godot::Vector2 l1 = grid.to_local_point(chunk->gridPixelOffset + godot::Vector2i(grid.chunkSize, grid.chunkSize));
 
-                    vec2 corners[4] = {
+                    godot::Vector2 corners[4] = {
                         transform.to_world_point(l0),
-                        transform.to_world_point(vec2(l1.x, l0.y)),
+                        transform.to_world_point(godot::Vector2(l1.x, l0.y)),
                         transform.to_world_point(l1),
-                        transform.to_world_point(vec2(l0.x, l1.y)),
+                        transform.to_world_point(godot::Vector2(l0.x, l1.y)),
                     };
 
                     lines.polygon(corners, 4, DebugName_Sprite_Chunk);
@@ -305,7 +305,7 @@ void RegolithDebugDraw::set_name_enabled(int name, bool enabled) {
 }
 
 bool RegolithDebugDraw::is_name_enabled(int name) const {
-    return name_valid(name) && m_map.colors()[name].second;
+    return name_valid(name) && m_map.colors()[name].enabled;
 }
 
 void RegolithDebugDraw::set_all_names_enabled(bool enabled) {
@@ -326,7 +326,7 @@ void RegolithDebugDraw::set_name_color(int name, Color color) {
 }
 
 Color RegolithDebugDraw::get_name_color(int name) const {
-    return name_valid(name) ? to_color(m_map.colors()[name].first) : Color();
+    return name_valid(name) ? to_color(m_map.colors()[name].color) : Color();
 }
 
 int RegolithDebugDraw::get_layer_count() const {
@@ -343,7 +343,7 @@ void RegolithDebugDraw::set_layer_enabled(int layer, bool enabled) {
 }
 
 bool RegolithDebugDraw::is_layer_enabled(int layer) const {
-    return layer_valid(layer) && m_map.tints()[layer].second;
+    return layer_valid(layer) && m_map.tints()[layer].enabled;
 }
 
 void RegolithDebugDraw::set_layer_tint(int layer, Color tint) {
@@ -356,7 +356,7 @@ void RegolithDebugDraw::set_layer_tint(int layer, Color tint) {
 }
 
 Color RegolithDebugDraw::get_layer_tint(int layer) const {
-    return layer_valid(layer) ? to_color(m_map.tints()[layer].first) : Color();
+    return layer_valid(layer) ? to_color(m_map.tints()[layer].color) : Color();
 }
 
 static RegolithWorld* emit_world(int name, int layer) {

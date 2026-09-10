@@ -2,14 +2,14 @@
 
 #include "Parallel.h"
 
-std::vector<SpriteCommitResult> sprite_commit_all(const std::vector<SpriteCommitProxy>& proxies, const SpriteCommitConfig& config) {
-    std::vector<SpriteCommitResult> results(proxies.size());
+godot::LocalVector<SpriteCommitResult> sprite_commit_all(const godot::LocalVector<SpriteCommitProxy>& proxies, const SpriteCommitConfig& config) {
+    godot::LocalVector<SpriteCommitResult> results; results.resize(proxies.size());
 
     // find splits, remove islands, cut sprites. each proxy only touches its own
     // sprite, pool allocation is locked
     parallel_for(0, proxies.size(), [&](size_t i) {
-        const SpriteCommitProxy& proxy = proxies.at(i);
-        results.at(i) = proxy.sprite->commit_dirty_chunks(*proxy.transform, config);
+        const SpriteCommitProxy& proxy = proxies[i];
+        results[i] = proxy.sprite->commit_dirty_chunks(*proxy.transform, config);
     });
 
     // recompute the edge cells (the surface) of every chunk the commits
@@ -24,17 +24,17 @@ std::vector<SpriteCommitResult> sprite_commit_all(const std::vector<SpriteCommit
         surface_count += result.dirty_chunks.size();
     }
 
-    std::vector<SurfaceChunk> surface;
+    godot::LocalVector<SurfaceChunk> surface;
     surface.reserve(surface_count);
 
     for (size_t i = 0; i < results.size(); i++) {
-        for (SpriteChunk* chunk : results.at(i).dirty_chunks) {
-            surface.push_back({proxies.at(i).sprite, chunk});
+        for (SpriteChunk* chunk : results[i].dirty_chunks) {
+            surface.push_back({proxies[i].sprite, chunk});
         }
     }
 
     parallel_for(0, surface.size(), [&](size_t i) {
-        surface.at(i).sprite->recalc_chunk_surface(surface.at(i).chunk);
+        surface[i].sprite->recalc_chunk_surface(surface[i].chunk);
     });
 
     return results;

@@ -2,16 +2,15 @@
 
 #include "SpriteCell.h"
 
-#include "ArrayView.h"
-#include "FixedArray.h"
+#include "Containers/ArrayView.h"
+#include "Containers/FixedArray.h"
 
 #include "Constants.h"
 
-#include "glm/vec2.hpp"
-using namespace glm;
+#include "Math/Vector.h"
 
-#include <vector>
-#include <array>
+#include <godot_cpp/templates/local_vector.hpp>
+
 #include <climits>
 
 // For max performance this uses the constant size for chunks
@@ -20,9 +19,9 @@ using FloodFillAdjacencyArray = FixedArray<int, k_cells_per_chunk>;
 
 struct FloodFillResult {
     int seedIndex;
-    std::vector<int> index;
-    ivec2 min = ivec2( INT_MAX);
-    ivec2 max = ivec2(-INT_MAX);
+    godot::LocalVector<int> index;
+    godot::Vector2i min = godot::Vector2i( INT_MAX,  INT_MAX);
+    godot::Vector2i max = godot::Vector2i(-INT_MAX, -INT_MAX);
 
     FloodFillAdjacencyArray indexContinueUp;
     FloodFillAdjacencyArray indexContinueDown;
@@ -36,20 +35,24 @@ struct FloodFillResult {
     int chunkIndex;
 
     // For tracking who should be the core
-    std::array<int, SpriteCellMaskType_Count> typeCounts;
+    int typeCounts[SpriteCellMaskType_Count];
 
     bool operator==(const FloodFillResult& other) const {
-        return seedIndex == other.seedIndex
-            && index == other.index
-            && min == other.min
-            && max == other.max
-            && indexContinueUp == other.indexContinueUp
-            && indexContinueDown == other.indexContinueDown
-            && indexContinueLeft == other.indexContinueLeft
-            && indexContinueRight == other.indexContinueRight
-            && adjacencyCount == other.adjacencyCount
-            && chunkIndex == other.chunkIndex
-            && typeCounts == other.typeCounts;
+        if (seedIndex != other.seedIndex
+            || min != other.min
+            || max != other.max
+            || indexContinueUp != other.indexContinueUp
+            || indexContinueDown != other.indexContinueDown
+            || indexContinueLeft != other.indexContinueLeft
+            || indexContinueRight != other.indexContinueRight
+            || adjacencyCount != other.adjacencyCount
+            || chunkIndex != other.chunkIndex) {
+            return false;
+        }
+        if (index.size() != other.index.size()) return false;
+        for (uint32_t i = 0; i < index.size(); i++) if (index[i] != other.index[i]) return false;
+        for (int i = 0; i < SpriteCellMaskType_Count; i++) if (typeCounts[i] != other.typeCounts[i]) return false;
+        return true;
     }
 };
 

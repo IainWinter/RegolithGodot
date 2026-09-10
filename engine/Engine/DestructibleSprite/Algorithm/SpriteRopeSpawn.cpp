@@ -1,14 +1,15 @@
+#include "Containers/VectorUtil.h"
 #include "SpriteRopeSpawn.h"
 
 #include "DestructibleSprite/Algorithm/SpriteRopeCut.h"
 #include "Math/Random.h"
-#include "UnionFind.h"
+#include "Containers/UnionFind.h"
 
-#include <unordered_map>
+#include <godot_cpp/templates/hash_map.hpp>
 #include <cmath>
 #include <cstdint>
 
-#include "glm/geometric.hpp"
+
 
 constexpr int k_rope_node_stride = 8;
 
@@ -17,11 +18,11 @@ SpriteRopeSet sprite_rope_set_from_asset(const Grid& grid, const SpriteAsset& as
 
     int rope_count = static_cast<int>(asset.ropes.size());
 
-    std::vector<std::vector<bool>> keep(rope_count);
+    godot::LocalVector<godot::LocalVector<bool>> keep; keep.resize(rope_count);
 
     for (int r = 0; r < rope_count; r++) {
         int n = static_cast<int>(asset.ropes[r].path.size());
-        keep[r].assign(n, false);
+        vector_fill(keep[r], n, false);
 
         for (int i = 0; i < n; i += k_rope_node_stride) {
             keep[r][i] = true;
@@ -49,10 +50,10 @@ SpriteRopeSet sprite_rope_set_from_asset(const Grid& grid, const SpriteAsset& as
         keep_anchor_node(rope_asset.anchor_b);
     }
 
-    std::vector<std::vector<int>> remap(rope_count);
+    godot::LocalVector<godot::LocalVector<int>> remap; remap.resize(rope_count);
 
     for (int r = 0; r < rope_count; r++) {
-        remap[r].assign(keep[r].size(), 0);
+        vector_fill(remap[r], keep[r].size(), 0);
         int kept = 0;
 
         for (int i = 0; i < static_cast<int>(keep[r].size()); i++) {
@@ -99,7 +100,7 @@ SpriteRopeSet sprite_rope_set_from_asset(const Grid& grid, const SpriteAsset& as
     return set;
 }
 
-void sprite_rope_init_runtime(const Transform& transform, std::vector<SpriteRope>& ropes) {
+void sprite_rope_init_runtime(const Transform& transform, godot::LocalVector<SpriteRope>& ropes) {
     for (SpriteRope& rope : ropes) {
         int n = static_cast<int>(rope.rest_local.size());
 
@@ -113,30 +114,30 @@ void sprite_rope_init_runtime(const Transform& transform, std::vector<SpriteRope
 
         if (static_cast<int>(rope.nodes.size()) != n) {
             rope.nodes.resize(n);
-            rope.rest_len.assign(n - 1, 0.f);
+            vector_fill(rope.rest_len, n - 1,  0.f);
 
             if (static_cast<int>(rope.node_health.size()) != n) {
-                rope.node_health.assign(n, rope.cell_class + 1);
+                vector_fill(rope.node_health, n,  rope.cell_class + 1);
             }
 
             for (int i = 0; i < n; i++) {
-                vec2 p = transform.to_world_point(rope.rest_local[i]);
+                godot::Vector2 p = transform.to_world_point(rope.rest_local[i]);
                 rope.nodes[i].position = p;
                 rope.nodes[i].last_position = p;
             }
 
             for (int i = 0; i + 1 < n; i++) {
-                rope.rest_len[i] = distance(rope.nodes[i].position, rope.nodes[i + 1].position);
+                rope.rest_len[i] = (rope.nodes[i].position).distance_to(rope.nodes[i + 1].position);
             }
         }
 
         if (static_cast<int>(rope.node_velocities.size()) != n) {
-            rope.node_velocities.assign(n, vec2(0.f));
+            vector_fill(rope.node_velocities, n,  godot::Vector2(0.f, 0.f));
         }
     }
 }
 
-static bool cell_filled(const Sprite& sprite, ivec2 cell) {
+static bool cell_filled(const Sprite& sprite, godot::Vector2i cell) {
     const Grid& grid = sprite.grid();
 
     if (!grid.is_grid_index_position_valid(cell)) {
@@ -148,10 +149,10 @@ static bool cell_filled(const Sprite& sprite, ivec2 cell) {
     return sprite.is_chunk_active(chunk_index) && sprite.is_cell_active(chunk_index, cell_index);
 }
 
-bool sprite_rope_anchor_cell_alive(const Sprite& sprite, ivec2 cell) {
+bool sprite_rope_anchor_cell_alive(const Sprite& sprite, godot::Vector2i cell) {
     for (int oy = -1; oy <= 1; oy++) {
         for (int ox = -1; ox <= 1; ox++) {
-            if (cell_filled(sprite, cell + ivec2(ox, oy))) {
+            if (cell_filled(sprite, cell + godot::Vector2i(ox, oy))) {
                 return true;
             }
         }
@@ -160,7 +161,7 @@ bool sprite_rope_anchor_cell_alive(const Sprite& sprite, ivec2 cell) {
     return false;
 }
 
-void sprite_rope_release_destroyed_anchors(const Sprite& sprite, std::vector<SpriteRope>& ropes) {
+void sprite_rope_release_destroyed_anchors(const Sprite& sprite, godot::LocalVector<SpriteRope>& ropes) {
     for (SpriteRope& rope : ropes) {
         SpriteRopeAnchor* anchors[2] = {&rope.a, &rope.b};
 
@@ -172,20 +173,20 @@ void sprite_rope_release_destroyed_anchors(const Sprite& sprite, std::vector<Spr
     }
 }
 
-std::vector<std::vector<SpriteRope>> sprite_rope_resolve_after_commit(godot::ObjectID owner, const Transform& transform, const Sprite& sprite,
-                                                                       SpriteRopeSet& set, std::vector<SpriteRopeSplitTarget>& splits) {
-    std::vector<SpriteRope>& ropes = set.ropes;
+godot::LocalVector<godot::LocalVector<SpriteRope>> sprite_rope_resolve_after_commit(godot::ObjectID owner, const Transform& transform, const Sprite& sprite,
+                                                                       SpriteRopeSet& set, godot::LocalVector<SpriteRopeSplitTarget>& splits) {
+    godot::LocalVector<SpriteRope>& ropes = set.ropes;
     int n = static_cast<int>(ropes.size());
 
     if (n == 0) {
         return {};
     }
 
-    auto anchor_in_self = [&](ivec2 cell) {
+    auto anchor_in_self = [&](godot::Vector2i cell) {
         return sprite_rope_anchor_cell_alive(sprite, cell);
     };
 
-    auto anchor_in_split = [&](ivec2 cell, size_t j) {
+    auto anchor_in_split = [&](godot::Vector2i cell, size_t j) {
         return sprite_rope_anchor_cell_alive(*splits[j].sprite, cell - splits[j].grid_min);
     };
 
@@ -196,12 +197,12 @@ std::vector<std::vector<SpriteRope>> sprite_rope_resolve_after_commit(godot::Obj
 
     UnionFind groups = group_ropes_by_rope_anchors(ropes);
 
-    std::unordered_map<int, size_t> target;
+    godot::HashMap<int, size_t> target;
 
     for (int i = 0; i < n; i++) {
         int root = groups.find(i);
 
-        if (target.contains(root)) {
+        if (target.has(root)) {
             continue;
         }
 
@@ -214,7 +215,7 @@ std::vector<std::vector<SpriteRope>> sprite_rope_resolve_after_commit(godot::Obj
 
             for (size_t j = 0; j < splits.size(); j++) {
                 if (anchor_in_split(anchor->cell, j)) {
-                    target.try_emplace(root, j);
+                    target.insert(root, j);
                     break;
                 }
             }
@@ -224,7 +225,7 @@ std::vector<std::vector<SpriteRope>> sprite_rope_resolve_after_commit(godot::Obj
     for (const auto& [root, j] : target) {
         SpriteRopeSplitTarget& split = splits[j];
 
-        std::vector<int> members;
+        godot::LocalVector<int> members;
 
         for (int i = 0; i < n; i++) {
             if (groups.find(i) == root) {
@@ -232,7 +233,7 @@ std::vector<std::vector<SpriteRope>> sprite_rope_resolve_after_commit(godot::Obj
             }
         }
 
-        std::vector<int> remap(n, -1);
+        godot::LocalVector<int> remap; vector_fill(remap, n, -1);
         int base = static_cast<int>(split.ropes->ropes.size());
 
         for (size_t k = 0; k < members.size(); k++) {
@@ -242,7 +243,7 @@ std::vector<std::vector<SpriteRope>> sprite_rope_resolve_after_commit(godot::Obj
         for (int i : members) {
             SpriteRope rope = std::move(ropes[i]);
 
-            for (vec2& rest : rope.rest_local) {
+            for (godot::Vector2& rest : rope.rest_local) {
                 rest = split.transform->to_local_point(transform.to_world_point(rest));
             }
 
@@ -292,7 +293,7 @@ std::vector<std::vector<SpriteRope>> sprite_rope_resolve_after_commit(godot::Obj
     return extract_detached_rope_groups(set);
 }
 
-void sprite_rope_group_to_pixels(const std::vector<SpriteRope>& ropes, const Grid& grid, const Transform& transform, const PhysicsBody* body, std::vector<SpriteRopePixel>& out) {
+void sprite_rope_group_to_pixels(const godot::LocalVector<SpriteRope>& ropes, const Grid& grid, const Transform& transform, const PhysicsBody* body, godot::LocalVector<SpriteRopePixel>& out) {
     float neg_sin = sinf(-transform.angle);
     float neg_cos = cosf(-transform.angle);
 
@@ -315,13 +316,14 @@ void sprite_rope_group_to_pixels(const std::vector<SpriteRope>& ropes, const Gri
                 return rope.node_velocities[i];
             }
 
-            return body ? body->velocity_at_local_point(transform.to_local_point(node_world(i))) : vec2(0.f);
+            return body ? body->velocity_at_local_point(transform.to_local_point(node_world(i))) : godot::Vector2(0.f, 0.f);
         };
 
-        ivec2 last_cell(INT32_MIN);
+        godot::Vector2i last_cell(INT32_MIN, INT32_MIN);
 
-        auto emit = [&](vec2 grid_point, vec2 velocity) {
-            ivec2 cell = ivec2(floor(grid_point));
+        auto emit = [&](godot::Vector2 grid_point, godot::Vector2 velocity) {
+            godot::Vector2 f = grid_point.floor();
+            godot::Vector2i cell = godot::Vector2i((int)f.x, (int)f.y);
 
             if (cell == last_cell) {
                 return;
@@ -329,7 +331,7 @@ void sprite_rope_group_to_pixels(const std::vector<SpriteRope>& ropes, const Gri
 
             last_cell = cell;
 
-            vec2 world = transform.to_world_point(grid.to_local_point_centered(cell));
+            godot::Vector2 world = transform.to_world_point(grid.to_local_point_centered(cell));
             out.push_back({world, velocity, transform.angle, rope.color});
         };
 
@@ -339,17 +341,17 @@ void sprite_rope_group_to_pixels(const std::vector<SpriteRope>& ropes, const Gri
         }
 
         for (int i = 0; i + 1 < n; i++) {
-            vec2 a = grid.to_grid_point(transform.to_local_point(node_world(i), neg_sin, neg_cos));
-            vec2 b = grid.to_grid_point(transform.to_local_point(node_world(i + 1), neg_sin, neg_cos));
-            vec2 va = node_velocity(i);
-            vec2 vb = node_velocity(i + 1);
+            godot::Vector2 a = grid.to_grid_point(transform.to_local_point(node_world(i), neg_sin, neg_cos));
+            godot::Vector2 b = grid.to_grid_point(transform.to_local_point(node_world(i + 1), neg_sin, neg_cos));
+            godot::Vector2 va = node_velocity(i);
+            godot::Vector2 vb = node_velocity(i + 1);
 
-            vec2 d = b - a;
+            godot::Vector2 d = b - a;
             int steps = std::max(1, static_cast<int>(ceilf(std::max(fabsf(d.x), fabsf(d.y)) * 2.f)));
 
             for (int s = 0; s <= steps; s++) {
                 float t = s / static_cast<float>(steps);
-                emit(mix(a, b, t), mix(va, vb, t));
+                emit(((a) * (1.f - (t)) + (b) * (t)), ((va) * (1.f - (t)) + (vb) * (t)));
             }
         }
     }

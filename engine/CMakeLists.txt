@@ -33,7 +33,6 @@ endif()
 add_subdirectory(${GODOTCPP_DIR} godot-cpp)
 add_subdirectory(Thirdparty/glm)
 add_subdirectory(BaseLibrary)
-add_subdirectory(Common)
 add_subdirectory(Engine)
 add_subdirectory(GodotClasses)
 

@@ -4,19 +4,19 @@
 
 class GridLineIterator {
 public:
-    GridLineIterator(vec2 startGridPoint, vec2 dir, float length);
+    GridLineIterator(godot::Vector2 startGridPoint, godot::Vector2 dir, float length);
 
-    ivec2 current() const;
-    vec2 current_position() const;
-    vec2 current_direction() const;
+    godot::Vector2i current() const;
+    godot::Vector2 current_position() const;
+    godot::Vector2 current_direction() const;
     float current_distance() const;
     float length() const;
     bool has_more() const;
     void next();
-    void set_direction(vec2 dir);
+    void set_direction(godot::Vector2 dir);
 
 private:
-    void init(vec2 dir);
+    void init(godot::Vector2 dir);
 
 private:
     // Things which are stored not as vectors have no relation between their x and y
@@ -27,10 +27,10 @@ private:
     float m_ray_length_x;
     float m_ray_length_y;
 
-    ivec2 m_cell;
+    godot::Vector2i m_cell;
 
-    vec2 m_start;
-    vec2 m_ray_direction;
+    godot::Vector2 m_start;
+    godot::Vector2 m_ray_direction;
 
     int m_cell_step_x;
     int m_cell_step_y;

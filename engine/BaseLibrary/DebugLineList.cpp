@@ -1,20 +1,24 @@
 #include "DebugLineList.h"
 
 #include "Math/MathUtil.h"
-#include "glm/gtc/constants.hpp"
+
+#include <godot_cpp/core/math.hpp>
 
 #define DRAW_METHOD_FILTER if (!debug_color_map().is_enabled(layer, name)) { return; }
 // #define DRAW_METHOD_FILTER
 
+static constexpr float k_pi_f = godot::Math::PI;
+static constexpr float k_half_pi_f = godot::Math::PI * 0.5f;
+
 DebugRendererColorMap::DebugRendererColorMap() {
-    for (auto& [color, enabled] : m_debug_name_color) {
-        color = {52, 143, 235, 255};
-        enabled = false;
+    for (size_t i = 0; i < static_cast<size_t>(DebugName_Count); i++) {
+        m_debug_name_color[i].color = {52, 143, 235, 255};
+        m_debug_name_color[i].enabled = false;
     }
 
-    for (auto& [color, enabled] : m_debug_layer_tint) {
-        color = {255, 255, 255, 255};
-        enabled = true;
+    for (size_t i = 0; i < static_cast<size_t>(DebugLayer_Count); i++) {
+        m_debug_layer_tint[i].color = {255, 255, 255, 255};
+        m_debug_layer_tint[i].enabled = true;
     }
 
     set_name_enabled(DebugName_Default, true);
@@ -61,36 +65,36 @@ DebugRendererColorMap::DebugRendererColorMap() {
 }
 
 void DebugRendererColorMap::set_name_color(DebugName name, Color4 color) {
-    m_debug_name_color[static_cast<size_t>(name)].first = color;
+    m_debug_name_color[static_cast<size_t>(name)].color = color;
 }
 
 void DebugRendererColorMap::set_name_enabled(DebugName name, bool enabled) {
-    m_debug_name_color[static_cast<size_t>(name)].second = enabled;
+    m_debug_name_color[static_cast<size_t>(name)].enabled = enabled;
 }
 
 void DebugRendererColorMap::set_layer_tint(DebugLayer layer, Color4 tint) {
-    m_debug_layer_tint[static_cast<size_t>(layer)].first = tint;
+    m_debug_layer_tint[static_cast<size_t>(layer)].color = tint;
 }
 
 void DebugRendererColorMap::set_layer_enabled(DebugLayer layer, bool enabled) {
-    m_debug_layer_tint[static_cast<size_t>(layer)].second = enabled;
+    m_debug_layer_tint[static_cast<size_t>(layer)].enabled = enabled;
 }
 
 Color4 DebugRendererColorMap::map_color(DebugLayer layer, DebugName name) const {
-    Color4 l = m_debug_layer_tint.at(static_cast<size_t>(layer)).first;
-    Color4 c = m_debug_name_color.at(static_cast<size_t>(name)).first;
+    Color4 l = m_debug_layer_tint[static_cast<size_t>(layer)].color;
+    Color4 c = m_debug_name_color[static_cast<size_t>(name)].color;
 
     return l.mix(c);
 }
 
 bool DebugRendererColorMap::is_enabled(DebugLayer layer, DebugName name) const {
-    bool l = m_debug_layer_tint.at(static_cast<size_t>(layer)).second;
-    bool c = m_debug_name_color.at(static_cast<size_t>(name)).second;
+    bool l = m_debug_layer_tint[static_cast<size_t>(layer)].enabled;
+    bool c = m_debug_name_color[static_cast<size_t>(name)].enabled;
 
     return l && c;
 }
 
-const std::vector<DebugRendererLine>& DebugRendererLineList::get_lines() {
+const godot::LocalVector<DebugRendererLine>& DebugRendererLineList::get_lines() {
     if (!m_cache_valid) {
         m_cache_valid = true;
         m_cache.clear();
@@ -115,41 +119,41 @@ void DebugRendererLineList::clear_lines() {
     invalidate_cache();
 }
 
-void DebugRendererLineList::line(vec2 a, vec2 b, DebugName name, DebugLayer layer) {
+void DebugRendererLineList::line(godot::Vector2 a, godot::Vector2 b, DebugName name, DebugLayer layer) {
     DRAW_METHOD_FILTER
-    
+
     std::unique_lock lock(m_lines_mutex);
     m_lines.push_back({a, b, layer, name});
     m_cache_valid = false;
 }
 
-void DebugRendererLineList::ray(vec2 origin, vec2 ray, DebugName name, DebugLayer layer) {
+void DebugRendererLineList::ray(godot::Vector2 origin, godot::Vector2 ray, DebugName name, DebugLayer layer) {
     DRAW_METHOD_FILTER
 
     line(origin, origin + ray, name, layer);
 }
 
-void DebugRendererLineList::circle(vec2 origin, float radius, DebugName name, DebugLayer layer) {
+void DebugRendererLineList::circle(godot::Vector2 origin, float radius, DebugName name, DebugLayer layer) {
     DRAW_METHOD_FILTER
 
     int steps = debug_render_circle_steps();
 
     for (int i = 0; i < steps; i++) {
-        float aa = pi<float>() * 2.f / steps * i;
-        float ab = pi<float>() * 2.f / steps * (i + 1);
+        float aa = k_pi_f * 2.f / steps * i;
+        float ab = k_pi_f * 2.f / steps * (i + 1);
 
-        vec2 a = vector(aa) * radius + origin;
-        vec2 b = vector(ab) * radius + origin;
+        godot::Vector2 a = vector(aa) * radius + origin;
+        godot::Vector2 b = vector(ab) * radius + origin;
 
         line(a, b, name, layer);
     }
 }
 
-void DebugRendererLineList::capsule(vec2 a, vec2 b, float radius, DebugName name, DebugLayer layer) {
+void DebugRendererLineList::capsule(godot::Vector2 a, godot::Vector2 b, float radius, DebugName name, DebugLayer layer) {
     DRAW_METHOD_FILTER
 
-    vec2 dir = b - a;
-    float len = length(dir);
+    godot::Vector2 dir = b - a;
+    float len = dir.length();
 
     if (len < 1e-6f) {
         circle(a, radius, name, layer);
@@ -157,18 +161,18 @@ void DebugRendererLineList::capsule(vec2 a, vec2 b, float radius, DebugName name
         return;
     }
 
-    vec2 x = dir / len;
-    vec2 y = vec2(-x.y, x.x);
+    godot::Vector2 x = dir / len;
+    godot::Vector2 y = godot::Vector2(-x.y, x.x);
     float dir_angle = ::angle(x);
 
     line(a + y * radius, b + y * radius, name, layer);
     line(a - y * radius, b - y * radius, name, layer);
 
-    arc(a, radius, dir_angle + half_pi<float>(), dir_angle + 3.f * half_pi<float>(), name, layer);
-    arc(b, radius, dir_angle - half_pi<float>(), dir_angle + half_pi<float>(), name, layer);
+    arc(a, radius, dir_angle + k_half_pi_f, dir_angle + 3.f * k_half_pi_f, name, layer);
+    arc(b, radius, dir_angle - k_half_pi_f, dir_angle + k_half_pi_f, name, layer);
 }
 
-void DebugRendererLineList::arc(vec2 origin, float radius, float min_angle, float max_angle, DebugName name, DebugLayer layer) {
+void DebugRendererLineList::arc(godot::Vector2 origin, float radius, float min_angle, float max_angle, DebugName name, DebugLayer layer) {
     DRAW_METHOD_FILTER
 
     int steps = debug_render_circle_steps();
@@ -178,8 +182,8 @@ void DebugRendererLineList::arc(vec2 origin, float radius, float min_angle, floa
         float aa = min_angle + span / steps * i;
         float ab = min_angle + span / steps * (i + 1);
 
-        vec2 a = vector(aa) * radius + origin;
-        vec2 b = vector(ab) * radius + origin;
+        godot::Vector2 a = vector(aa) * radius + origin;
+        godot::Vector2 b = vector(ab) * radius + origin;
 
         line(a, b, name, layer);
     }
@@ -188,10 +192,10 @@ void DebugRendererLineList::arc(vec2 origin, float radius, float min_angle, floa
 void DebugRendererLineList::axis_aligned_box(const AxisAlignedBox& box, DebugName name, DebugLayer layer) {
     DRAW_METHOD_FILTER
 
-    vec2 a = box.min;
-    vec2 b = vec2(box.min.x, box.max.y);
-    vec2 c = box.max;
-    vec2 d = vec2(box.max.x, box.min.y);
+    godot::Vector2 a = box.min;
+    godot::Vector2 b = godot::Vector2(box.min.x, box.max.y);
+    godot::Vector2 c = box.max;
+    godot::Vector2 d = godot::Vector2(box.max.x, box.min.y);
 
     line(a, b, name, layer);
     line(b, c, name, layer);
@@ -207,7 +211,7 @@ void DebugRendererLineList::axis_aligned_area_tree(const AxisAlignedAreaTreeInde
     }
 }
 
-void DebugRendererLineList::polygon(const vec2* points, int count, DebugName name, DebugLayer layer) {
+void DebugRendererLineList::polygon(const godot::Vector2* points, int count, DebugName name, DebugLayer layer) {
     DRAW_METHOD_FILTER
 
     if (count < 3) {
@@ -224,7 +228,7 @@ void DebugRendererLineList::polygon(const vec2* points, int count, DebugName nam
 void DebugRendererLineList::transform(const Transform& transform, DebugName name, DebugLayer layer) {
     DRAW_METHOD_FILTER
 
-    vec2 corners[4];
+    godot::Vector2 corners[4];
     transform.corners(corners);
 
     polygon(corners, 4, name, layer);

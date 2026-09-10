@@ -4,21 +4,21 @@
 #include "DestructibleSprite/Algorithm/SpriteDistanceField.h"
 
 #include "Math/Hash.h"
-#include "PopErase.h"
+#include "Containers/PopErase.h"
 
 
 #include <algorithm>
 #include <bitset>
-#include <utility>
+#include <godot_cpp/templates/pair.hpp>
 
-Sprite::Sprite(SpriteChunkPool& chunk_pool, Grid grid, const std::vector<SpriteChunk*>& chunks, bool repairable)
+Sprite::Sprite(SpriteChunkPool& chunk_pool, Grid grid, const godot::LocalVector<SpriteChunk*>& chunks, bool repairable)
     : m_chunk_pool(&chunk_pool)
     , m_grid(grid)
     , m_chunks(grid.total_chunks_in_grid())
     , m_active_cell_count(0)
-    , m_cells_dim(0)
+    , m_cells_dim(0, 0)
     , m_is_m_repairable(repairable) {
-    m_groups = {};
+    for (int i = 0; i < SpriteCellMaskType_Count; i++) m_groups[i] = {};
 
     for (SpriteChunk* chunk : chunks) {
         m_chunks.emplace(chunk->index, chunk);
@@ -30,13 +30,13 @@ Sprite::Sprite(SpriteChunkPool& chunk_pool, Grid grid, const std::vector<SpriteC
         // todo: chunks could store these lists as well and this could just be a sum
         // like the action pixel count
         for (int i = 0; i < m_grid.total_cells_in_chunk(); i++) {
-            ivec2 grid_pos = grid.to_grid_index_position(chunk->index, i);
+            godot::Vector2i grid_pos = grid.to_grid_index_position(chunk->index, i);
             SpriteCellMaskType type = chunk->mask[i].get_type();
-            m_groups.at(type).activeCount += 1;
-            m_groups.at(type).root_grid_index_position += grid_pos;
+            m_groups[type].activeCount += 1;
+            m_groups[type].root_grid_index_position += grid_pos;
 
             if (chunk->mask[i].is_filled()) {
-                m_cells_dim = max(m_cells_dim, grid_pos + 1);
+                m_cells_dim = m_cells_dim.max(godot::Vector2i(grid_pos.x + 1, grid_pos.y + 1));
             }
 
             if (!chunk_hot && chunk->mask[i].get_heat() > 0) {
@@ -67,11 +67,11 @@ Sprite::Sprite(SpriteChunkPool& chunk_pool, const SpriteAsset& asset, bool repai
     , m_active_cell_count(asset.activePixelCount)
     , m_cells_dim(asset.cellCount)
     , m_is_m_repairable(repairable) {
-    m_groups = {};
+    for (int i = 0; i < SpriteCellMaskType_Count; i++) m_groups[i] = {};
 
-    for (size_t i = 0; i < asset.groups.size(); i++) {
-        SpriteCellGroup& group = m_groups.at(i);
-        const SpriteAssetCellGroup& groupAsset = asset.groups.at(i);
+    for (int i = 0; i < SpriteCellMaskType_Count; i++) {
+        SpriteCellGroup& group = m_groups[i];
+        const SpriteAssetCellGroup& groupAsset = asset.groups[i];
         group.activeCount = groupAsset.activeCount;
         group.root_grid_index_position = groupAsset.root_grid_index_position;
     }
@@ -105,18 +105,20 @@ Sprite::Sprite(Sprite&& move)
     , m_chunks(std::move(move.m_chunks))
     , m_dirty(std::move(move.m_dirty))
     , m_hot_chunks(std::move(move.m_hot_chunks))
-    , m_groups(std::move(move.m_groups))
     , m_active_cell_count(std::move(move.m_active_cell_count))
     , m_cells_dim(std::move(move.m_cells_dim))
     , m_is_m_repairable(std::move(move.m_is_m_repairable))
     , m_damageable_classes(std::move(move.m_damageable_classes)) {
+    for (int i = 0; i < SpriteCellMaskType_Count; i++) {
+        m_groups[i] = std::move(move.m_groups[i]);
+        move.m_groups[i] = {};
+    }
     move.m_chunk_pool = {};
     move.m_grid = {};
     move.m_mass = {};
     move.m_chunks = {};
     move.m_dirty = {};
     move.m_hot_chunks = {};
-    move.m_groups = {};
     move.m_active_cell_count = {};
     move.m_cells_dim = {};
     move.m_is_m_repairable = {};
@@ -134,7 +136,10 @@ Sprite& Sprite::operator=(Sprite&& move) {
     m_chunks = std::move(move.m_chunks);
     m_dirty = std::move(move.m_dirty);
     m_hot_chunks = std::move(move.m_hot_chunks);
-    m_groups = std::move(move.m_groups);
+    for (int i = 0; i < SpriteCellMaskType_Count; i++) {
+        m_groups[i] = std::move(move.m_groups[i]);
+        move.m_groups[i] = {};
+    }
     m_active_cell_count = std::move(move.m_active_cell_count);
     m_cells_dim = std::move(move.m_cells_dim);
     m_is_m_repairable = std::move(move.m_is_m_repairable);
@@ -146,7 +151,6 @@ Sprite& Sprite::operator=(Sprite&& move) {
     move.m_chunks = {};
     move.m_dirty = {};
     move.m_hot_chunks = {};
-    move.m_groups = {};
     move.m_active_cell_count = {};
     move.m_cells_dim = {};
     move.m_is_m_repairable = {};
@@ -163,12 +167,12 @@ const FlatMap<SpriteChunk*>& Sprite::chunks() const {
     return m_chunks;
 }
 
-const std::unordered_set<SpriteChunk*>& Sprite::dirty_chunks() const {
+const godot::HashSet<SpriteChunk*>& Sprite::dirty_chunks() const {
     return m_dirty;
 }
 
 const SpriteCellGroup& Sprite::group(const SpriteCellMaskType& type) const {
-    return m_groups.at(type);
+    return m_groups[type];
 }
 
 const SpriteMassInfo Sprite::mass_info() const {
@@ -179,7 +183,7 @@ int Sprite::active_cell_count() const {
     return m_active_cell_count;
 }
 
-ivec2 Sprite::cell_dim() const {
+godot::Vector2i Sprite::cell_dim() const {
     return m_cells_dim;
 }
 
@@ -200,7 +204,7 @@ void Sprite::set_damageable_classes(uint16_t mask) {
 }
 
 bool Sprite::is_chunk_active(int chunkIndex) const {
-    return m_chunks.contains(chunkIndex);
+    return m_chunks.has(chunkIndex);
 }
 
 bool Sprite::is_cell_active(int chunkIndex, int cellIndex) const {
@@ -212,31 +216,31 @@ bool Sprite::is_cell_active(int chunkIndex, int cellIndex) const {
         return false;
     }
 
-    if (!m_chunks.contains(chunkIndex)) {
+    if (!m_chunks.has(chunkIndex)) {
         return false;
     }
 
-    SpriteChunk* chunk = m_chunks.at(chunkIndex);
+    SpriteChunk* chunk = m_chunks[chunkIndex];
 
     return chunk->mask[cellIndex].is_filled();
 }
 
 SpriteCell Sprite::get_cell(int chunkIndex, int cellIndex) const {
-    if (!m_chunks.contains(chunkIndex)) {
+    if (!m_chunks.has(chunkIndex)) {
         return {};
     }
 
-    SpriteChunk* chunk = m_chunks.at(chunkIndex);
+    SpriteChunk* chunk = m_chunks[chunkIndex];
 
     return {chunk->color[cellIndex], chunk->mask[cellIndex]};
 }
 
 void Sprite::write_display_cell(int chunkIndex, int cellIndex, Color4 color, SpriteCellMask mask) {
-    if (!m_chunks.contains(chunkIndex)) {
+    if (!m_chunks.has(chunkIndex)) {
         return;
     }
 
-    SpriteChunk* chunk = m_chunks.at(chunkIndex);
+    SpriteChunk* chunk = m_chunks[chunkIndex];
 
     chunk->color[cellIndex] = color;
     chunk->mask[cellIndex] = mask;
@@ -249,22 +253,20 @@ void Sprite::write_display_cell(int chunkIndex, int cellIndex, Color4 color, Spr
 }
 
 bool Sprite::has_hot_chunks() const {
-    return !m_hot_chunks.empty();
+    return !m_hot_chunks.is_empty();
 }
 
 void Sprite::decay_heat(uint16_t levels) {
-    if (m_hot_chunks.empty()) {
+    if (m_hot_chunks.is_empty()) {
         return;
     }
 
-    auto itr = m_hot_chunks.begin();
-
-    while (itr != m_hot_chunks.end()) {
-        int chunk_index = *itr;
+    godot::LocalVector<int> to_remove;
+    for (int chunk_index : m_hot_chunks) {
         SpriteChunk* chunk = nullptr;
 
         if (!m_chunks.try_get(chunk_index, &chunk)) {
-            itr = m_hot_chunks.erase(itr);
+            to_remove.push_back(chunk_index);
             continue;
         }
 
@@ -296,36 +298,35 @@ void Sprite::decay_heat(uint16_t levels) {
             m_chunk_pool->mark_dirty_chunk(chunk);
         }
 
-        if (still_hot) {
-            ++itr;
+        if (!still_hot) {
+            to_remove.push_back(chunk_index);
         }
-
-        else {
-            itr = m_hot_chunks.erase(itr);
-        }
+    }
+    for (int idx : to_remove) {
+        m_hot_chunks.erase(idx);
     }
 }
 
 void Sprite::remove_cell(int chunkIndex, int cellIndex) {
     // printf("%d %d\n", chunkIndex, cellIndex);
 
-    if (!m_chunks.contains(chunkIndex)) {
+    if (!m_chunks.has(chunkIndex)) {
         return;
     }
 
-    SpriteChunk* chunk = m_chunks.at(chunkIndex);
+    SpriteChunk* chunk = m_chunks[chunkIndex];
 
     if (chunk->mask[cellIndex].get_removed()) {
         return;
     }
 
-    ivec2 chunkIndexPosition = m_grid.to_chunk_index_position(chunkIndex);
-    ivec2 cellIndexPosition = m_grid.to_cell_index_position(cellIndex);
-    ivec2 gridIndexPosition = m_grid.to_grid_index_position(chunkIndexPosition, cellIndexPosition);
+    godot::Vector2i chunkIndexPosition = m_grid.to_chunk_index_position(chunkIndex);
+    godot::Vector2i cellIndexPosition = m_grid.to_cell_index_position(cellIndex);
+    godot::Vector2i gridIndexPosition = m_grid.to_grid_index_position(chunkIndexPosition, cellIndexPosition);
 
     remove_chunk_cell(chunk, cellIndex, gridIndexPosition);
 
-    m_dirty.emplace(chunk);
+    m_dirty.insert(chunk);
 
     GridCellNeighbors neighbors = m_grid.get_cell_neighbors_in_bordering_chunks(chunkIndexPosition, cellIndexPosition);
 
@@ -334,22 +335,22 @@ void Sprite::remove_cell(int chunkIndex, int cellIndex) {
             int neighbor_chunk_index = m_grid.to_chunk_index(neighbor.chunkIndexPosition);
             int neighbor_cell_index = m_grid.to_cell_index(neighbor.cellIndexPosition);
 
-            if (!m_chunks.contains(neighbor_chunk_index)) {
+            if (!m_chunks.has(neighbor_chunk_index)) {
                 continue;
             }
 
-            SpriteChunk* neighbor_chunk = m_chunks.at(neighbor_chunk_index);
+            SpriteChunk* neighbor_chunk = m_chunks[neighbor_chunk_index];
 
             if (neighbor_chunk->mask[neighbor_cell_index].is_empty()) {
                 continue;
             }
 
-            m_dirty.emplace(neighbor_chunk);
+            m_dirty.insert(neighbor_chunk);
         }
     }
 }
 
-void Sprite::paint_cell(ivec2 gridIndexPosition, Color4 color, SpriteCellMask mask) {
+void Sprite::paint_cell(godot::Vector2i gridIndexPosition, Color4 color, SpriteCellMask mask) {
     if (!m_grid.is_grid_index_position_valid(gridIndexPosition)) {
         return;
     }
@@ -385,7 +386,7 @@ void Sprite::paint_cell(ivec2 gridIndexPosition, Color4 color, SpriteCellMask ma
         m_groups[mask.get_type()].activeCount += 1;
         m_active_cell_count += 1;
         chunk->activePixelCount += 1;
-        m_cells_dim = max(m_cells_dim, gridIndexPosition + 1);
+        m_cells_dim = m_cells_dim.max(godot::Vector2i(gridIndexPosition.x + 1, gridIndexPosition.y + 1));
         sprite_mass_add_cell(m_mass, gridIndexPosition);
     }
 
@@ -394,16 +395,16 @@ void Sprite::paint_cell(ivec2 gridIndexPosition, Color4 color, SpriteCellMask ma
         chunk->mask[cellIndex] = SpriteCellMask(SpriteCellMaskType_Empty);
     }
 
-    m_dirty.emplace(chunk);
+    m_dirty.insert(chunk);
     m_chunk_pool->mark_dirty_chunk(chunk);
 }
 
 void Sprite::damage_cell(int chunkIndex, int cellIndex) {
-    if (!m_chunks.contains(chunkIndex)) {
+    if (!m_chunks.has(chunkIndex)) {
         return;
     }
 
-    SpriteChunk* chunk = m_chunks.at(chunkIndex);
+    SpriteChunk* chunk = m_chunks[chunkIndex];
 
     if (chunk->mask[cellIndex].get_removed()) {
         return;
@@ -436,7 +437,7 @@ void Sprite::mark_chunk_dirty(int chunkIndex) {
 }
 
 void Sprite::repair_cell(SpriteCellMaskType type) {
-    SpriteCellGroup& group = m_groups.at(type);
+    SpriteCellGroup& group = m_groups[type];
 
     // The entire group is empty, heal the entire thing at once?
     // there is going to be no candidate
@@ -444,26 +445,26 @@ void Sprite::repair_cell(SpriteCellMaskType type) {
         return;
     }
 
-    const ivec2& root = group.root_grid_index_position;
-    std::vector<ivec2>& candidates = group.removed;
+    const godot::Vector2i& root = group.root_grid_index_position;
+    godot::LocalVector<godot::Vector2i>& candidates = group.removed;
 
     if (candidates.size() == 0) {
         return;
     }
 
-    constexpr ivec2 offsets[8] = {ivec2(-1, -1), ivec2(0, -1), ivec2(1, -1), ivec2(-1, 0), ivec2(1, 0), ivec2(-1, 1), ivec2(0, 1), ivec2(1, 1)};
+    constexpr godot::Vector2i offsets[8] = {godot::Vector2i(-1, -1), godot::Vector2i(0, -1), godot::Vector2i(1, -1), godot::Vector2i(-1, 0), godot::Vector2i(1, 0), godot::Vector2i(-1, 1), godot::Vector2i(0, 1), godot::Vector2i(1, 1)};
 
     float best_score = 0.f;
     size_t best_candidate_index = -1;
 
     for (size_t i = 0; i < candidates.size(); i++) {
-        const ivec2& candidate = candidates.at(i);
+        const godot::Vector2i& candidate = candidates[i];
 
         int dist_to_root = std::abs(candidate.x - root.x) + std::abs(candidate.y - root.y); // Manhattan distance
         int neighbor_count = 0;
 
-        for (const ivec2& offset : offsets) {
-            ivec2 candidate_offset = candidate + offset;
+        for (const godot::Vector2i& offset : offsets) {
+            godot::Vector2i candidate_offset = candidate + offset;
 
             auto [chunk_index, cell_index] = m_grid.to_chunk_cell_index(candidate_offset);
             if (is_cell_active(chunk_index, cell_index)) {
@@ -485,17 +486,19 @@ void Sprite::repair_cell(SpriteCellMaskType type) {
 
     assert(best_candidate_index != -1ull && "fix me");
 
-    ivec2 candidate = candidates.at(best_candidate_index);
+    godot::Vector2i candidate = candidates[best_candidate_index];
     auto [chunk_index, cell_index] = m_grid.to_chunk_cell_index(candidate);
 
-    repair_chunk_cell(m_chunks.at(chunk_index), cell_index, candidate);
+    repair_chunk_cell(m_chunks[chunk_index], cell_index, candidate);
     pop_erase(&best_candidate_index, group.removed);
 
-    m_dirty.emplace(m_chunks.at(chunk_index));
+    m_dirty.insert(m_chunks[chunk_index]);
 }
 
-void Sprite::take_loose_pixels(std::vector<std::pair<ivec2, Color4>>& out) {
-    out.insert(out.end(), m_loose_pixels.begin(), m_loose_pixels.end());
+void Sprite::take_loose_pixels(godot::LocalVector<godot::Pair<godot::Vector2i, Color4>>& out) {
+    for (const godot::Pair<godot::Vector2i, Color4>& p : m_loose_pixels) {
+        out.push_back(p);
+    }
     m_loose_pixels.clear();
 }
 
@@ -513,12 +516,12 @@ void Sprite::remove_all_cells() {
 
 void Sprite::repair_all_cells() {
     for (SpriteCellGroup& group : m_groups) {
-        for (ivec2 grid_index_position : group.removed) {
+        for (godot::Vector2i grid_index_position : group.removed) {
             auto [chunk_index, cell_index] = m_grid.to_chunk_cell_index(grid_index_position);
-            SpriteChunk* chunk = m_chunks.at(chunk_index);
+            SpriteChunk* chunk = m_chunks[chunk_index];
             repair_chunk_cell(chunk, cell_index, grid_index_position);
 
-            m_dirty.emplace(chunk);
+            m_dirty.insert(chunk);
         }
 
         group.removed.clear();
@@ -531,7 +534,7 @@ SpriteCutter Sprite::start_cutter() const {
 
 SpriteCommitResult Sprite::commit_dirty_chunks(const Transform& transform, const SpriteCommitConfig& config) {
 
-    std::vector<SpriteCut> cuts;
+    godot::LocalVector<SpriteCut> cuts;
 
     // 1. If the sprite is too small, it should be removed
 
@@ -549,17 +552,15 @@ SpriteCommitResult Sprite::commit_dirty_chunks(const Transform& transform, const
 
     // 2. Remove all empty chunks
 
-    auto itr = m_dirty.begin();
-    while (itr != m_dirty.end()) {
-        SpriteChunk* chunk = *itr;
+    godot::LocalVector<SpriteChunk*> to_delete;
+    for (SpriteChunk* chunk : m_dirty) {
         if (chunk->activePixelCount == 0) {
-            delete_chunk(chunk);
-            itr = m_dirty.erase(itr);
+            to_delete.push_back(chunk);
         }
-
-        else {
-            ++itr;
-        }
+    }
+    for (SpriteChunk* chunk : to_delete) {
+        delete_chunk(chunk);
+        m_dirty.erase(chunk);
     }
 
     // 3. Find all splits
@@ -570,28 +571,28 @@ SpriteCommitResult Sprite::commit_dirty_chunks(const Transform& transform, const
         cutter.enable_debug();
     }
 
-    std::vector<SpriteSplit> splits = cutter.execute_search();
+    godot::LocalVector<SpriteSplit> splits = cutter.execute_search();
 
     // 4. Split
 
-    std::vector<std::pair<ivec2, Color4>> removedPixelColors;
+    godot::LocalVector<godot::Pair<godot::Vector2i, Color4>> removedPixelColors;
 
     // Donn't split small islands, just remove them. Do this first so the split_index_with_majority_of_type isn't filled
     // with splits which are too small
     for (size_t i = 0; i < splits.size(); i++) {
-        const SpriteSplit& split = splits.at(i);
+        const SpriteSplit& split = splits[i];
 
         if (split.totalCount > config.smallestIslandsToSplit) {
             continue;
         }
 
         for (const FloodFillResult& island : split.islands) {
-            SpriteChunk* chunk = m_chunks.at(island.chunkIndex);
+            SpriteChunk* chunk = m_chunks[island.chunkIndex];
             for (const int& cellIndex : island.index) {
                 Color4 color = chunk->color[cellIndex];
-                ivec2 gridIndexPosition = m_grid.to_grid_index_position(chunk->index, cellIndex);
+                godot::Vector2i gridIndexPosition = m_grid.to_grid_index_position(chunk->index, cellIndex);
 
-                removedPixelColors.emplace_back(gridIndexPosition, color);
+                removedPixelColors.push_back({gridIndexPosition, color});
                 remove_chunk_cell(chunk, cellIndex, gridIndexPosition);
             }
 
@@ -609,7 +610,7 @@ SpriteCommitResult Sprite::commit_dirty_chunks(const Transform& transform, const
     }
 
     // Check if one of the splits has the most core cells if more then the self
-    std::unordered_map<SpriteCellMaskType, size_t> split_index_with_majority_of_type;
+    godot::HashMap<SpriteCellMaskType, size_t> split_index_with_majority_of_type;
 
     if (splits.size() > 0) {
         for (int cell_type = SpriteCellMaskType_Core; cell_type < SpriteCellMaskType_Count; cell_type++) {
@@ -626,7 +627,7 @@ SpriteCommitResult Sprite::commit_dirty_chunks(const Transform& transform, const
             int max_split_cell_count = 0;
             size_t split_index_to_move_self = -1;
             for (size_t i = 0; i < splits.size(); i++) {
-                const SpriteSplit& split = splits.at(i);
+                const SpriteSplit& split = splits[i];
                 int split_cell_count = split.typeCounts[cell_type];
                 if (self_count_after_split <= split_cell_count) {
                     if (max_split_cell_count < split_cell_count) {
@@ -637,36 +638,40 @@ SpriteCommitResult Sprite::commit_dirty_chunks(const Transform& transform, const
             }
 
             if (split_index_to_move_self != -1) {
-                split_index_with_majority_of_type.emplace(static_cast<SpriteCellMaskType>(cell_type), split_index_to_move_self);
+                split_index_with_majority_of_type.insert(static_cast<SpriteCellMaskType>(cell_type), split_index_to_move_self);
             }
         }
     }
 
     for (const SpriteSplit& split : splits) {
-        auto [cutSprite, cutGridOffset, cutGridMin] = cut_island(split.islands, removedPixelColors);
-        vec2 cutScale = transform.scale / vec2(m_grid.chunks);
-        vec2 cutLocalPos = m_grid.to_local_point(cutGridOffset);
-        vec2 cutWorldPos = transform.to_world_point(cutLocalPos);
+        Sprite cutSprite;
+        godot::Vector2 cutGridOffset;
+        godot::Vector2 cutGridMin;
+        cut_island(split.islands, removedPixelColors, cutSprite, cutGridOffset, cutGridMin);
+        godot::Vector2 cutScale = transform.scale / godot::Vector2(m_grid.chunks.x, m_grid.chunks.y);
+        godot::Vector2 cutLocalPos = m_grid.to_local_point(cutGridOffset);
+        godot::Vector2 cutWorldPos = transform.to_world_point(cutLocalPos);
 
         Transform cutTransform;
         cutTransform.position = cutWorldPos;
-        cutTransform.scale = cutScale * vec2(cutSprite.m_grid.chunks);
+        cutTransform.scale = cutScale * godot::Vector2(cutSprite.m_grid.chunks.x, cutSprite.m_grid.chunks.y);
         cutTransform.angle = transform.angle;
 
-        cuts.emplace_back(std::move(cutTransform), std::move(cutSprite), cutGridMin);
+        cuts.push_back({std::move(cutTransform), std::move(cutSprite), cutGridMin});
     }
 
     // 5. Hand the dirty chunks to the commit system. Their surfaces and
     // distance fields get recomputed in parallel passes over every sprite at once
 
-    std::vector<SpriteChunk*> dirty_chunks(m_dirty.begin(), m_dirty.end());
+    godot::LocalVector<SpriteChunk*> dirty_chunks;
+    for (SpriteChunk* c : m_dirty) dirty_chunks.push_back(c);
     m_dirty.clear();
 
     SpriteCommitResult result;
     result.splits = std::move(cuts);
     result.removedPixelColors = std::move(removedPixelColors);
     result.selfIsEmpty = m_active_cell_count < config.smallestIslandsToSplit;
-    result.offset = vec2(0.f);
+    result.offset = godot::Vector2(0.f, 0.f);
     result.split_index_with_majority_of_type = split_index_with_majority_of_type;
     result.dirty_chunks = std::move(dirty_chunks);
 
@@ -680,17 +685,17 @@ SpriteCommitResult Sprite::commit_dirty_chunks(const Transform& transform, const
 #include "Coordinate/Iterator/GridLineIterator.h"
 #include "DebugLineList.h"
 
-std::optional<ivec2> Sprite::ray_cast(vec2 local_origin, vec2 local_end) const {
-    vec2 grid_origin = m_grid.to_grid_point(local_origin);
-    vec2 grid_end = m_grid.to_grid_point(local_end);
+Optional<godot::Vector2i> Sprite::ray_cast(godot::Vector2 local_origin, godot::Vector2 local_end) const {
+    godot::Vector2 grid_origin = m_grid.to_grid_point(local_origin);
+    godot::Vector2 grid_end = m_grid.to_grid_point(local_end);
     auto [grid_direction, grid_length] = safe_normalize_distance(grid_end - grid_origin);
 
-    vec2 chunk_origin = grid_origin / static_cast<float>(m_grid.chunkSize);
-    vec2 chunk_end = grid_end / static_cast<float>(m_grid.chunkSize);
+    godot::Vector2 chunk_origin = grid_origin / static_cast<float>(m_grid.chunkSize);
+    godot::Vector2 chunk_end = grid_end / static_cast<float>(m_grid.chunkSize);
     auto [chunk_direction, chunk_length] = safe_normalize_distance(chunk_end - chunk_origin);
 
     for (GridLineIterator chunk_itr(chunk_origin, chunk_direction, chunk_length); chunk_itr.has_more(); chunk_itr.next()) {
-        ivec2 chunk_cur = chunk_itr.current();
+        godot::Vector2i chunk_cur = chunk_itr.current();
 
         if (!m_grid.is_chunk_index_position_valid(chunk_cur)) {
             continue;
@@ -703,16 +708,16 @@ std::optional<ivec2> Sprite::ray_cast(vec2 local_origin, vec2 local_end) const {
             continue;
         }
 
-        AxisAlignedBox chunk_box(chunk->gridPixelOffset, chunk->gridPixelOffset + ivec2(32));
+        AxisAlignedBox chunk_box(chunk->gridPixelOffset, chunk->gridPixelOffset + godot::Vector2i(32, 32));
 
         auto [chunk_clip_ray_min, chunk_clip_ray_max] = chunk_box.clip_ray(grid_origin, grid_direction, grid_length);
 
-        vec2 cell_origin = grid_origin + grid_direction * chunk_clip_ray_min;
-        vec2 cell_end = grid_origin + grid_direction * chunk_clip_ray_max;
+        godot::Vector2 cell_origin = grid_origin + grid_direction * chunk_clip_ray_min;
+        godot::Vector2 cell_end = grid_origin + grid_direction * chunk_clip_ray_max;
         auto [cell_direction, cell_length] = safe_normalize_distance(cell_end - cell_origin);
 
         for (GridLineIterator cell_itr(cell_origin, cell_direction, cell_length); cell_itr.has_more(); cell_itr.next()) {
-            ivec2 cell_cur = cell_itr.current() - chunk->gridPixelOffset;
+            godot::Vector2i cell_cur = cell_itr.current() - chunk->gridPixelOffset;
 
             if (!m_grid.is_cell_index_position_valid(cell_cur)) {
                 continue;
@@ -728,16 +733,16 @@ std::optional<ivec2> Sprite::ray_cast(vec2 local_origin, vec2 local_end) const {
         }
     }
 
-    return std::nullopt;
+    return Nothing{};
 }
 
-vec2 Sprite::optimize_grid(Transform& transform) {
+godot::Vector2 Sprite::optimize_grid(Transform& transform) {
 
     // Find min and max all islands
-    ivec2 min = ivec2(INT_MAX, INT_MAX);
-    ivec2 max = ivec2(-INT_MAX, -INT_MAX);
+    godot::Vector2i min = godot::Vector2i(INT_MAX, INT_MAX);
+    godot::Vector2i max = godot::Vector2i(-INT_MAX, -INT_MAX);
     for (const SpriteChunk* chunk : m_chunks.items()) {
-        ivec2 chunkPosition = ivec2(chunk->gridPixelOffset / m_grid.chunkSize); // could store chunkIndexPosition in chunk
+        godot::Vector2i chunkPosition = godot::Vector2i(chunk->gridPixelOffset / m_grid.chunkSize); // could store chunkIndexPosition in chunk
 
         if (min.x > chunkPosition.x)
             min.x = chunkPosition.x;
@@ -749,22 +754,22 @@ vec2 Sprite::optimize_grid(Transform& transform) {
             max.y = chunkPosition.y;
     }
 
-    vec2 currentCenter = vec2(m_grid.chunks) / 2.f; // this assumes that min is 0
-    vec2 newCenter = vec2(max + min + 1) / 2.f;     // take the average of min and max
+    godot::Vector2 currentCenter = godot::Vector2((float)m_grid.chunks.x, (float)m_grid.chunks.y) / 2.f;
+    godot::Vector2 newCenter = godot::Vector2((float)(max.x + min.x + 1), (float)(max.y + min.y + 1)) / 2.f;
 
-    vec2 gridOffset = (newCenter - currentCenter) * vec2(float(m_grid.chunkSize));
-    vec2 localOffset = gridOffset / vec2(m_grid.cells) * 2.f; // scale to local coords
+    godot::Vector2 gridOffset = (newCenter - currentCenter) * godot::Vector2(float(m_grid.chunkSize), float(m_grid.chunkSize));
+    godot::Vector2 localOffset = gridOffset / godot::Vector2((float)m_grid.cells.x, (float)m_grid.cells.y) * 2.f;
 
-    vec2 chunkScale = transform.scale / vec2(m_grid.chunks);
+    godot::Vector2 chunkScale = transform.scale / godot::Vector2((float)m_grid.chunks.x, (float)m_grid.chunks.y);
 
-    m_grid = Grid(m_grid.chunkSize, max - min + 1);
+    m_grid = Grid(m_grid.chunkSize, godot::Vector2i(max.x - min.x + 1, max.y - min.y + 1));
 
     FlatMap<SpriteChunk*> chunksReindexed(m_grid.total_chunks_in_grid());
 
-    for (SpriteChunk* chunk : m_chunks.items()) { // move chunk placement
-        chunk->gridPixelOffset -= min * m_grid.chunkSize;
+    for (SpriteChunk* chunk : m_chunks.items()) {
+        chunk->gridPixelOffset -= godot::Vector2i(min.x * m_grid.chunkSize, min.y * m_grid.chunkSize);
 
-        ivec2 chunkPosition = ivec2(chunk->gridPixelOffset / m_grid.chunkSize);
+        godot::Vector2i chunkPosition = godot::Vector2i(chunk->gridPixelOffset.x / m_grid.chunkSize, chunk->gridPixelOffset.y / m_grid.chunkSize);
         int chunkIndex = chunkPosition.x + chunkPosition.y * m_grid.chunks.x;
 
         chunk->index = chunkIndex;
@@ -774,7 +779,7 @@ vec2 Sprite::optimize_grid(Transform& transform) {
 
     m_chunks = std::move(chunksReindexed); // move in new map
 
-    transform.scale = vec2(m_grid.chunks) * chunkScale;
+    transform.scale = godot::Vector2((float)m_grid.chunks.x, (float)m_grid.chunks.y) * chunkScale;
 
     return localOffset;
 }
@@ -793,16 +798,18 @@ void Sprite::remove_cells_of_class(uint8_t cell_class) {
     }
 }
 
-std::tuple<Sprite, vec2, vec2> Sprite::cut_island(const std::vector<FloodFillResult>& islands, std::vector<std::pair<ivec2, Color4>>& colors) {
+void Sprite::cut_island(const godot::LocalVector<FloodFillResult>& islands,
+                        godot::LocalVector<godot::Pair<godot::Vector2i, Color4>>& colors,
+                        Sprite& out_sprite, godot::Vector2& out_offset, godot::Vector2& out_world_offset) {
 
     // 1. Find the bounds of the region to cut
 
-    ivec2 min = ivec2(INT_MAX, INT_MAX);
-    ivec2 max = ivec2(-INT_MAX, -INT_MAX);
+    godot::Vector2i min = godot::Vector2i(INT_MAX, INT_MAX);
+    godot::Vector2i max = godot::Vector2i(-INT_MAX, -INT_MAX);
     for (const FloodFillResult& island : islands) {
-        ivec2 pixelOffset = m_chunks.at(island.chunkIndex)->gridPixelOffset;
-        ivec2 islandMin = island.min + pixelOffset;
-        ivec2 islandMax = island.max + pixelOffset;
+        godot::Vector2i pixelOffset = m_chunks[island.chunkIndex]->gridPixelOffset;
+        godot::Vector2i islandMin = island.min + pixelOffset;
+        godot::Vector2i islandMax = island.max + pixelOffset;
 
         if (min.x > islandMin.x)
             min.x = islandMin.x;
@@ -819,11 +826,11 @@ std::tuple<Sprite, vec2, vec2> Sprite::cut_island(const std::vector<FloodFillRes
 
     // 2. allocate new chunks
 
-    ivec2 cutGridDimensions = max - min + 1;
+    godot::Vector2i cutGridDimensions = godot::Vector2i(max.x - min.x + 1, max.y - min.y + 1);
 
     Grid cutGrid = Grid::from_cells(m_grid.chunkSize, cutGridDimensions);
 
-    std::vector<SpriteChunk*> cutChunks;
+    godot::LocalVector<SpriteChunk*> cutChunks;
     cutChunks.reserve(cutGrid.total_chunks_in_grid());
 
     for (int cy = 0; cy < cutGrid.chunks.y; cy++) {
@@ -832,7 +839,7 @@ std::tuple<Sprite, vec2, vec2> Sprite::cut_island(const std::vector<FloodFillRes
 
             SpriteChunk* cutChunk = m_chunk_pool->create_chunk_empty();
             cutChunk->index = index;
-            cutChunk->gridPixelOffset = ivec2(cx, cy) * cutGrid.chunkSize;
+            cutChunk->gridPixelOffset = godot::Vector2i(cx, cy) * cutGrid.chunkSize;
 
             cutChunks.push_back(cutChunk);
         }
@@ -841,17 +848,17 @@ std::tuple<Sprite, vec2, vec2> Sprite::cut_island(const std::vector<FloodFillRes
     // 3. Copy in chunks
 
     for (const FloodFillResult& island : islands) {
-        SpriteChunk* thisChunk = m_chunks.at(island.chunkIndex);
+        SpriteChunk* thisChunk = m_chunks[island.chunkIndex];
 
         for (const int& thisIndex : island.index) {
             const Color4& thisCellColor = thisChunk->color[thisIndex];
             const SpriteCellMask& thisCellMask = thisChunk->mask[thisIndex];
-            ivec2 gridIndexPosition = m_grid.to_grid_index_position(thisChunk->index, thisIndex);
+            godot::Vector2i gridIndexPosition = m_grid.to_grid_index_position(thisChunk->index, thisIndex);
 
             // To keep the core in the owner, don't move those pixels only remove
             // This cannot happen here anymore cus the core needs to be swapped over to the other entity
             // if (thisCellMask.get_type() == SpriteCellMaskType_Core) {
-            //     colors.emplace_back(gridIndexPosition, thisCellColor);
+            //     colors.push_back({gridIndexPosition, thisCellColor});
             //     remove_chunk_cell(thisChunk, thisIndex, gridIndexPosition);
 
             //     continue;
@@ -874,7 +881,7 @@ std::tuple<Sprite, vec2, vec2> Sprite::cut_island(const std::vector<FloodFillRes
                 continue;
             }
 
-            SpriteChunk* cutChunk = cutChunks.at(cutChunkIndex);
+            SpriteChunk* cutChunk = cutChunks[cutChunkIndex];
 
             cutChunk->color[i] = thisCellColor;
             cutChunk->mask[i] = thisCellMask;
@@ -894,12 +901,14 @@ std::tuple<Sprite, vec2, vec2> Sprite::cut_island(const std::vector<FloodFillRes
         }
     }
 
-    vec2 offset = vec2(min) + vec2(cutGrid.chunks * cutGrid.chunkSize) / 2.f;
+    godot::Vector2 offset = godot::Vector2(min.x, min.y) + godot::Vector2(cutGrid.chunks.x * cutGrid.chunkSize, cutGrid.chunks.y * cutGrid.chunkSize) / 2.f;
 
-    return {Sprite(*m_chunk_pool, cutGrid, cutChunks, false), offset, min};
+    out_sprite = Sprite(*m_chunk_pool, cutGrid, cutChunks, false);
+    out_offset = offset;
+    out_world_offset = godot::Vector2(min.x, min.y);
 }
 
-void Sprite::get_all_pixels_colors(std::vector<std::pair<ivec2, Color4>>& colors) const {
+void Sprite::get_all_pixels_colors(godot::LocalVector<godot::Pair<godot::Vector2i, Color4>>& colors) const {
 
     for (const SpriteChunk* chunk : m_chunks.items()) {
         for (int i = 0; i < k_cells_per_chunk_total; i++) {
@@ -907,14 +916,14 @@ void Sprite::get_all_pixels_colors(std::vector<std::pair<ivec2, Color4>>& colors
                 continue;
             }
 
-            colors.emplace_back(m_grid.to_grid_index_position(chunk->index, i), chunk->color[i]);
+            colors.push_back({m_grid.to_grid_index_position(chunk->index, i), chunk->color[i]});
         }
     }
 }
 
-void Sprite::remove_chunk_cell(SpriteChunk* chunk, int cellIndex, ivec2 gridIndexPosition, bool loose) {
+void Sprite::remove_chunk_cell(SpriteChunk* chunk, int cellIndex, godot::Vector2i gridIndexPosition, bool loose) {
     if (loose) {
-        m_loose_pixels.emplace_back(gridIndexPosition, chunk->color[cellIndex]);
+        m_loose_pixels.push_back({gridIndexPosition, chunk->color[cellIndex]});
     }
 
     chunk->remove_cell(cellIndex);
@@ -931,7 +940,7 @@ void Sprite::remove_chunk_cell(SpriteChunk* chunk, int cellIndex, ivec2 gridInde
     sprite_mass_remove_cell(m_mass, gridIndexPosition);
 }
 
-void Sprite::repair_chunk_cell(SpriteChunk* chunk, int cellIndex, ivec2 gridIndexPosition) {
+void Sprite::repair_chunk_cell(SpriteChunk* chunk, int cellIndex, godot::Vector2i gridIndexPosition) {
 
     chunk->repair_cell(cellIndex);
 

@@ -1,3 +1,4 @@
+@tool
 class_name EnemyThrower
 extends Node
 
@@ -42,6 +43,8 @@ var arc_base := 0.0
 var find_timer := 0.0
 
 func _ready() -> void:
+	if Engine.is_editor_hint():
+		return
 	host = get_parent() as Enemy
 
 func can_hold_more() -> bool:
@@ -51,7 +54,9 @@ func is_holding(node: Node) -> bool:
 	return holding.has(node.get_instance_id())
 
 func center_units() -> Vector2:
-	return host.local_point_units(origin)
+	if host == null:
+		host = get_parent() as Enemy
+	return host.local_point_units(origin) if host else Vector2.ZERO
 
 func arc_base_angle(player_pos: Vector2) -> float:
 	if local_arc:
@@ -226,6 +231,34 @@ func throw_thing_at_target(held: Held, delta: float) -> bool:
 func around_direction(held_to_goal: Vector2) -> Vector2:
 	var perp := Vector2(-held_to_goal.y, held_to_goal.x).normalized()
 	return (perp if swing_left else -perp) * radius_max
+
+func draw_gizmos(g: RegolithGizmos) -> void:
+	var host_now := host if host else get_parent() as Enemy
+	if host_now == null:
+		return
+
+	var color := Color(1.0, 0.55, 0.15)
+	var name := RegolithDebugDraw.AI_THROWER
+	var ppu := Steering.ppu()
+	# host-local pixel offset (pre-to_global part of Enemy.local_point)
+	var center_local := Vector2(origin.x, -origin.y) * Vector2(host_now.get_cell_count()) * 0.5 * Steering.cell_pixels()
+	# arc_base is a world angle; subtract host rotation so the walker's
+	# transform (which includes host rotation) leaves it pointing correctly
+	var base := arc_base - host_now.global_rotation
+	var a0 := base + hold_arc_min
+	var a1 := base + hold_arc_max
+
+	g.cross(center_local, 0.25 * ppu, color, name)
+	g.arc(center_local, radius_min * ppu, a0, a1, color, name)
+	g.arc(center_local, radius_max * ppu, a0, a1, color, name)
+	g.line(center_local + Vector2.from_angle(a0) * radius_min * ppu, center_local + Vector2.from_angle(a0) * radius_max * ppu, color, name)
+	g.line(center_local + Vector2.from_angle(a1) * radius_min * ppu, center_local + Vector2.from_angle(a1) * radius_max * ppu, color, name)
+	g.circle(center_local, only_throw_at_radius * ppu, color, name)
+
+	var to_local := host_now.global_transform.affine_inverse()
+	for held in holding.values():
+		if is_instance_valid(held.node):
+			g.line(to_local * held.node.global_position, to_local * (held.goal * ppu), color, name)
 
 func orbit_steer(held_pos: Vector2, target_goal: Vector2) -> Vector2:
 	var to_pos := held_pos - center

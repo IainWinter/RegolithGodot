@@ -16,7 +16,7 @@ SpriteMass sprite_mass_init(const Grid& grid, const FlatMap<SpriteChunk*>& chunk
                 continue;
             }
 
-            ivec2 cell = grid.to_grid_index_position(chunk->index, i);
+            godot::Vector2i cell = grid.to_grid_index_position(chunk->index, i);
 
             mass.sum_ix += cell.x;
             mass.sum_iy += cell.y;
@@ -51,14 +51,14 @@ SpriteMassInfo sprite_mass_get_info(const SpriteMass& mass, const Grid& grid) {
 
     info.inertia = n * s_inertia_per_cell + s_mass_per_cell * offset_term;
     info.mass = n * s_mass_per_cell;
-    info.center_of_mass = grid.to_local_point_centered(vec2(mass.sum_ix, mass.sum_iy) / n);
+    info.center_of_mass = grid.to_local_point_centered(godot::Vector2(mass.sum_ix, mass.sum_iy) / n);
     info.inv_mass = 1.f / info.mass;
     info.inv_inertia = 1.f / info.inertia;
 
     return info;
 }
 
-void sprite_mass_add_cell(SpriteMass& mass, ivec2 grid_index_position) {
+void sprite_mass_add_cell(SpriteMass& mass, godot::Vector2i grid_index_position) {
     mass.sum_ix += grid_index_position.x;
     mass.sum_iy += grid_index_position.y;
     mass.sum_ix2 += grid_index_position.x * grid_index_position.x;
@@ -66,7 +66,7 @@ void sprite_mass_add_cell(SpriteMass& mass, ivec2 grid_index_position) {
     mass.active_cell_count += 1;
 }
 
-void sprite_mass_remove_cell(SpriteMass& mass, ivec2 grid_index_position) {
+void sprite_mass_remove_cell(SpriteMass& mass, godot::Vector2i grid_index_position) {
     mass.sum_ix -= grid_index_position.x;
     mass.sum_iy -= grid_index_position.y;
     mass.sum_ix2 -= grid_index_position.x * grid_index_position.x;

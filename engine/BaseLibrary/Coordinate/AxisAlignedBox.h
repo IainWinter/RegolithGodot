@@ -1,41 +1,40 @@
 #pragma once
 
-#include "glm/vec2.hpp"
-using namespace glm;
+#include "Math/Vector.h"
 
-#include <utility>
+#include <godot_cpp/templates/pair.hpp>
 
 class Transform;
 
-struct [[Struct]] AxisAlignedBox {
-    vec2 min;
-    vec2 max;
+struct  AxisAlignedBox {
+    godot::Vector2 min;
+    godot::Vector2 max;
 
     AxisAlignedBox();
-    
-    AxisAlignedBox(vec2 a, vec2 b);
 
-    AxisAlignedBox(vec2 a, float boxExtent);
+    AxisAlignedBox(godot::Vector2 a, godot::Vector2 b);
 
-    AxisAlignedBox(const vec2* points, int pointCount);
+    AxisAlignedBox(godot::Vector2 a, float boxExtent);
 
-    AxisAlignedBox(const ivec2* points, int pointCount);
+    AxisAlignedBox(const godot::Vector2* points, int pointCount);
+
+    AxisAlignedBox(const godot::Vector2i* points, int pointCount);
 
     AxisAlignedBox(float left, float right, float bottom, float top);
 
     bool intersects_box(const AxisAlignedBox& other) const;
 
-    bool intersects_ray(vec2 origin, vec2 direction, float max_length) const;
+    bool intersects_ray(godot::Vector2 origin, godot::Vector2 direction, float max_length) const;
 
     bool contains_box(const AxisAlignedBox& other) const;
 
-    bool contains_point(vec2 point) const;
+    bool contains_point(godot::Vector2 point) const;
 
     float area() const;
 
     AxisAlignedBox combine_box(const AxisAlignedBox& other) const;
 
-    AxisAlignedBox extend_box(vec2 translation, float rotation) const;
+    AxisAlignedBox extend_box(godot::Vector2 translation, float rotation) const;
 
     AxisAlignedBox bounds_of_intersection_box(const AxisAlignedBox& other) const;
 
@@ -43,11 +42,11 @@ struct [[Struct]] AxisAlignedBox {
 
     AxisAlignedBox to_local(const Transform& transform) const;
 
-    void add_point(vec2 point);
+    void add_point(godot::Vector2 point);
 
-    void corners(vec2* corners) const;
+    void corners(godot::Vector2* corners) const;
 
-    void clamp(vec2 clampMin, vec2 clampMax);
+    void clamp(godot::Vector2 clampMin, godot::Vector2 clampMax);
 
-    std::pair<float, float> clip_ray(vec2 origin, vec2 direction, float max_length) const;
+    godot::Pair<float, float> clip_ray(godot::Vector2 origin, godot::Vector2 direction, float max_length) const;
 };

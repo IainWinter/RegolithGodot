@@ -2,22 +2,23 @@
 
 #include "DestructibleSprite/SpriteChunk.h"
 
-#include "UnionFind.h"
+#include "Containers/UnionFind.h"
 #include "DestructibleSprite/Algorithm/FloodFill.h"
 
 #include "Coordinate/Grid.h"
-#include "FlatMap.h"
+#include "Containers/FlatMap.h"
 
-#include <vector>
-#include <queue>
-#include <unordered_set>
+#include "Containers/PriorityQueue.h"
 
-void print_filled_chunks(const FlatMap<SpriteChunk*>& chunks, ivec2 chunkCount, int chunkPixelSize);
+#include <godot_cpp/templates/local_vector.hpp>
+#include <godot_cpp/templates/hash_set.hpp>
+
+void print_filled_chunks(const FlatMap<SpriteChunk*>& chunks, godot::Vector2i chunkCount, int chunkPixelSize);
 
 struct SpriteSplit {
     int totalCount;
-    std::array<int, SpriteCellMaskType_Count> typeCounts;
-    std::vector<FloodFillResult> islands;
+    int typeCounts[SpriteCellMaskType_Count];
+    godot::LocalVector<FloodFillResult> islands;
 };
 
 class SpriteCutter {
@@ -58,7 +59,7 @@ public:
     /**
      * Construct a cutter from the internals of a Sprite. See Sprite::start_cutter
     */
-    SpriteCutter(const Grid& grid, const FlatMap<SpriteChunk*>& chunks, const std::unordered_set<SpriteChunk*>& dirtyChunks);
+    SpriteCutter(const Grid& grid, const FlatMap<SpriteChunk*>& chunks, const godot::HashSet<SpriteChunk*>& dirtyChunks);
 
     SpriteCutter(const SpriteCutter&) = delete;
     SpriteCutter(SpriteCutter&&) = default;
@@ -67,12 +68,12 @@ public:
 
     void enable_debug();
 
-    std::vector<SpriteSplit> execute_search();
+    godot::LocalVector<SpriteSplit> execute_search();
 
 private:
     bool has_any_pixel_in_index_filled(const SpriteChunk* chunk, const FloodFillAdjacencyArray& indices) const;
 
-    std::vector<AdjacentChunk> collect_adjacent_chunks(ChunkIndex chunk, const FloodFillResult& island) const;
+    godot::LocalVector<AdjacentChunk> collect_adjacent_chunks(ChunkIndex chunk, const FloodFillResult& island) const;
 
     int add_adjacent_chunks_to_search(int cellIndex, ChunkIndex chunkIndex, IslandId islandId, int originIslandCellCount, const ArrayView<SpriteCellMask>& mask, ArrayView<int>& fill);
 
@@ -88,18 +89,18 @@ public:
 
     // only for test
 public:
-    std::vector<SpriteSplit> combine_results();
+    godot::LocalVector<SpriteSplit> combine_results();
 
 private:
     // Reference to Sprite internals
     const Grid& m_grid;
     const FlatMap<SpriteChunk*>& m_chunks;
 
-    std::unordered_map<IslandId, FloodFillResult> m_islands; // each unique island (many in one chunk)
-    std::unordered_map<ChunkIndex, ArrayView<int>> m_fills; // each chunks fill state (one per chunk, size of mask)
+    godot::HashMap<IslandId, FloodFillResult> m_islands; // each unique island (many in one chunk)
+    godot::HashMap<ChunkIndex, ArrayView<int>> m_fills; // each chunks fill state (one per chunk, size of mask)
     
-    std::priority_queue<SingleEdgeToSearch, std::vector<SingleEdgeToSearch>, SmallestIslandComparator> m_searches;
-    std::unordered_map<IslandId, int> m_numberOfSearches;
+    godot::LocalVector<SingleEdgeToSearch> m_searches;
+    godot::HashMap<IslandId, int> m_numberOfSearches;
     
     UnionFind m_connections;
 

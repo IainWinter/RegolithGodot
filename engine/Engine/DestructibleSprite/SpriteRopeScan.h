@@ -5,7 +5,7 @@
 
 #include "Math/Vector.h"
 
-#include <vector>
+#include <godot_cpp/templates/local_vector.hpp>
 
 enum SpriteRopeAnchorType {
     SpriteRopeAnchorType_Free,
@@ -14,9 +14,9 @@ enum SpriteRopeAnchorType {
     SpriteRopeAnchorType_Entity,
 };
 
-struct [[Struct]] SpriteRopeAnchor {
+struct  SpriteRopeAnchor {
     int type;
-    ivec2 cell;
+    godot::Vector2i cell;
     int rope_index;
     int node_index;
     int cell_type = SpriteCellMaskType_Empty;
@@ -26,7 +26,7 @@ struct ScannedRope {
     SpriteRopeAnchor a;
     SpriteRopeAnchor b;
     Color4 color;
-    std::vector<ivec2> path;
+    godot::LocalVector<godot::Vector2i> path;
 };
 
-std::vector<ScannedRope> scan_sprite_ropes(const std::vector<SpriteCellMaskType>& mask, const std::vector<Color4>& pixels, int w, int h);
+godot::LocalVector<ScannedRope> scan_sprite_ropes(const godot::LocalVector<SpriteCellMaskType>& mask, const godot::LocalVector<Color4>& pixels, int w, int h);

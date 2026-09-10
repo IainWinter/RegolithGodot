@@ -2,7 +2,7 @@
 
 #include "Math/MathUtil.h"
 
-#include "glm/geometric.hpp"
+
 
 #include <cmath>
 
@@ -34,7 +34,7 @@ PhysicsRope sprite_physics_create_rope(const SpriteRope& rope, SpriteRopeSet& se
     float damping_fraction = clamp(set.damping, 0.f, 0.99f);
     out.damping = damping_fraction / ((1.f - damping_fraction) * delta_time);
     out.rest_lengths = rope.rest_len;
-    out.segment_rest_length = rope.rest_len.empty() ? 0.f : rope.rest_len[0];
+    out.segment_rest_length = rope.rest_len.is_empty() ? 0.f : rope.rest_len[0];
 
     int n = static_cast<int>(rope.nodes.size());
 
@@ -46,7 +46,7 @@ PhysicsRope sprite_physics_create_rope(const SpriteRope& rope, SpriteRopeSet& se
     bool has_velocities = static_cast<int>(rope.node_velocities.size()) == n;
 
     for (int i = 0; i < n; i++) {
-        vec2 velocity = has_velocities
+        godot::Vector2 velocity = has_velocities
             ? rope.node_velocities[i]
             : (rope.nodes[i].position - rope.nodes[i].last_position) / delta_time;
 
@@ -77,14 +77,14 @@ void sprite_physics_wiggle_rope(PhysicsRope& rope, float period, float amount, f
 
     for (int i = 0; i < n; i++) {
         int segment = std::min(i, n - 2);
-        vec2 dir = rope.positions[segment + 1] - rope.positions[segment];
-        float len = length(dir);
+        godot::Vector2 dir = rope.positions[segment + 1] - rope.positions[segment];
+        float len = (dir).length();
 
         if (len < 1e-6f) {
             continue;
         }
 
-        vec2 perp = vec2(-dir.y, dir.x) / len;
+        godot::Vector2 perp = godot::Vector2(-dir.y, dir.x) / len;
 
         rope.velocities[i] += perp * accel * sinf(omega * time + phase - s_wiggle_node_phase * (float)i) * delta_time;
     }

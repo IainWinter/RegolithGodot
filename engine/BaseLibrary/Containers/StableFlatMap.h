@@ -1,6 +1,7 @@
+#include "VectorUtil.h"
 #pragma once
 
-#include <vector>
+#include <godot_cpp/templates/local_vector.hpp>
 #include <deque>
 #include <assert.h>
 
@@ -12,7 +13,7 @@ public:
     StableFlatMap() = default;
 
     StableFlatMap(int size) {
-        m_map.resize(size, -1);
+        vector_fill(m_map, size,  -1);
         m_items.resize(size);
     }
 
@@ -20,26 +21,26 @@ public:
         assert(!contains(key));
 
         if (key >= static_cast<int>(m_map.size())) {
-            m_map.resize(key + 1, -1);
+            vector_fill(m_map, key + 1,  -1);
         }
 
         m_map[key] = static_cast<int>(m_items.size());
         m_items.push_back(value);
 
-        return m_items.back();
+        return m_items[m_items.size() - 1];
     }
 
     T& emplace(int key, T&& value) {
         assert(!contains(key));
 
         if (key >= static_cast<int>(m_map.size())) {
-            m_map.resize(key + 1, -1);
+            vector_fill(m_map, key + 1,  -1);
         }
 
         m_map[key] = static_cast<int>(m_items.size());
-        m_items.emplace_back(std::forward<T>(value));
+        m_items.push_back({std::forward<T>(value)});
 
-        return m_items.back();
+        return m_items[m_items.size() - 1];
     }
 
     bool contains(int key) const {
@@ -91,6 +92,6 @@ public:
     auto end() const { return m_items.end(); }
 
 private:
-    std::vector<int> m_map;
+    godot::LocalVector<int> m_map;
     std::deque<T> m_items;
 };

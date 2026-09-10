@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <godot_cpp/templates/pair.hpp>
 #include "RegolithWorld.h"
 #include "RegolithSprite.h"
 #include "RopeFeed.h"
@@ -27,6 +29,8 @@
 using namespace godot;
 
 constexpr float k_cell_particle_max_speed = 6.f;
+constexpr int k_cell_particle_amount = 1024;
+constexpr float k_cell_particle_lifetime = 10.f;
 
 RegolithWorld::RegolithWorld() {}
 
@@ -55,11 +59,11 @@ float RegolithWorld::pixels_per_unit() const {
     return static_cast<float>(m_pixels_per_cell * k_cells_per_chunk);
 }
 
-vec2 RegolithWorld::to_units(Vector2 pixels) const {
-    return vec2(pixels.x, pixels.y) / pixels_per_unit();
+godot::Vector2 RegolithWorld::to_units(Vector2 pixels) const {
+    return godot::Vector2(pixels.x, pixels.y) / pixels_per_unit();
 }
 
-Vector2 RegolithWorld::to_pixels(vec2 units) const {
+Vector2 RegolithWorld::to_pixels(godot::Vector2 units) const {
     return Vector2(units.x, units.y) * pixels_per_unit();
 }
 
@@ -107,6 +111,7 @@ void RegolithWorld::find_cell_particles() {
     }
 
     if (!m_cell_particles) {
+        UtilityFunctions::push_error("RegolithWorld failed to find particle emitter");
         return;
     }
 
@@ -120,6 +125,10 @@ void RegolithWorld::find_cell_particles() {
         m_cell_particles->set_texture(ImageTexture::create_from_image(image));
     }
 
+    m_cell_particles->set_amount(k_cell_particle_amount);
+    m_cell_particles->set_lifetime(k_cell_particle_lifetime);
+    m_cell_particles->set_one_shot(false);
+    m_cell_particles->set_explosiveness_ratio(0.f);
     m_cell_particles->set_emitting(false);
     m_cell_particles->set_fixed_fps(0);
     m_cell_particles->set_interpolate(false);
@@ -141,7 +150,7 @@ void RegolithWorld::step_physics(float delta_time) {
 
     debug_render_fixed().clear_lines();
 
-    std::vector<PhysicsProxy>& proxies = m_physics.proxies();
+    godot::LocalVector<PhysicsProxy>& proxies = m_physics.proxies();
     proxies.clear();
 
     for (RegolithSprite* node : m_sprites) {
@@ -158,13 +167,13 @@ void RegolithWorld::step_physics(float delta_time) {
 
     m_physics.shapes().clear();
 
-    std::vector<SpriteRope*> rope_sources;
+    godot::LocalVector<SpriteRope*> rope_sources;
     feed_ropes(m_physics, m_sprites, m_time, delta_time, rope_sources);
     m_joints.feed(m_physics);
 
     m_physics.solve(delta_time);
 
-    std::vector<PhysicsRope>& solved = m_physics.ropes();
+    godot::LocalVector<PhysicsRope>& solved = m_physics.ropes();
 
     for (size_t i = 0; i < solved.size(); i++) {
         sprite_physics_apply_rope(solved[i], *rope_sources[i], delta_time);
@@ -208,42 +217,42 @@ void RegolithWorld::commit_sprites() {
 
     SpriteCommitConfig config {.debug = false, .smallestIslandsToSplit = 20};
 
-    std::vector<RegolithSprite*> dirty;
-    std::vector<SpriteCommitProxy> proxies;
+    godot::LocalVector<RegolithSprite*> dirty;
+    godot::LocalVector<SpriteCommitProxy> proxies;
 
     for (RegolithSprite* node : m_sprites) {
         if (!node->is_loaded()) {
             continue;
         }
 
-        if (!node->sprite().dirty_chunks().empty()) {
+        if (!node->sprite().dirty_chunks().is_empty()) {
             dirty.push_back(node);
             proxies.push_back({&node->sprite(), &node->transform()});
         }
     }
 
-    if (dirty.empty()) {
+    if (dirty.is_empty()) {
         m_pool.commit_chunks();
         return;
     }
 
-    std::vector<SpriteCommitResult> results = sprite_commit_all(proxies, config);
+    godot::LocalVector<SpriteCommitResult> results = sprite_commit_all(proxies, config);
 
     struct DistanceWork {
         Sprite* sprite;
         bool full_build;
-        const std::vector<SpriteChunk*>* chunks;
+        const godot::LocalVector<SpriteChunk*>* chunks;
     };
 
     struct PieceWork {
         RegolithSprite* source;
         RegolithSprite* piece;
-        ivec2 grid_min;
+        godot::Vector2i grid_min;
     };
 
-    std::vector<DistanceWork> distance;
-    std::vector<RegolithSprite*> dead;
-    std::vector<PieceWork> pieces;
+    godot::LocalVector<DistanceWork> distance;
+    godot::LocalVector<RegolithSprite*> dead;
+    godot::LocalVector<PieceWork> pieces;
 
     for (size_t i = 0; i < dirty.size(); i++) {
         RegolithSprite* node = dirty[i];
@@ -251,27 +260,29 @@ void RegolithWorld::commit_sprites() {
 
         node->apply_mass();
 
-        std::vector<std::pair<ivec2, Color4>> loose;
+        godot::LocalVector<godot::Pair<godot::Vector2i, Color4>> loose;
         node->sprite().take_loose_pixels(loose);
 
         if (result.selfIsEmpty) {
-            loose.insert(loose.end(), result.removedPixelColors.begin(), result.removedPixelColors.end());
+            for (const godot::Pair<godot::Vector2i, Color4>& p : result.removedPixelColors) {
+                loose.push_back(p);
+            }
         }
 
-        if (!loose.empty()) {
+        if (!loose.is_empty()) {
             const Grid& grid = node->sprite().grid();
             const Transform& transform = node->transform();
             const PhysicsBody& body = node->body();
 
             for (const auto& [grid_position, color] : loose) {
-                vec2 local = grid.to_local_point_centered(grid_position);
+                godot::Vector2 local = grid.to_local_point_centered(grid_position);
                 spawn_cell_pixel(transform.to_world_point(local), body.velocity_at_local_point(local), transform.angle, color);
             }
 
             emit_signal("cells_removed", node, static_cast<int>(loose.size()));
         }
 
-        std::vector<SpriteRopeSplitTarget> rope_targets;
+        godot::LocalVector<SpriteRopeSplitTarget> rope_targets;
 
         for (SpriteCut& cut : result.splits) {
             auto& [split_transform, split_sprite, grid_min] = cut;
@@ -279,15 +290,15 @@ void RegolithWorld::commit_sprites() {
             PhysicsBody body = sprite_commit_split_body(split_transform, node->body());
             RegolithSprite* piece = spawn_piece(node, std::move(split_sprite), split_transform, body);
 
-            pieces.push_back({node, piece, ivec2(grid_min)});
+            pieces.push_back({node, piece, godot::Vector2i((int)grid_min.x, (int)grid_min.y)});
             distance.push_back({&piece->sprite(), true, nullptr});
-            rope_targets.push_back({&piece->transform(), &piece->sprite(), ivec2(grid_min), &piece->ropes()});
+            rope_targets.push_back({&piece->transform(), &piece->sprite(), godot::Vector2i((int)grid_min.x, (int)grid_min.y), &piece->ropes()});
         }
 
         if (node->has_ropes()) {
             ObjectID owner(node->get_instance_id());
 
-            for (std::vector<SpriteRope>& group : sprite_rope_resolve_after_commit(owner, node->transform(), node->sprite(), node->ropes(), rope_targets)) {
+            for (godot::LocalVector<SpriteRope>& group : sprite_rope_resolve_after_commit(owner, node->transform(), node->sprite(), node->ropes(), rope_targets)) {
                 spawn_rope_group(node, std::move(group));
             }
         }
@@ -315,7 +326,7 @@ void RegolithWorld::commit_sprites() {
 
     for (size_t i = 0; i < pieces.size();) {
         RegolithSprite* source = pieces[i].source;
-        std::vector<RegolithJoints::Piece> own;
+        godot::LocalVector<RegolithJoints::Piece> own;
 
         for (; i < pieces.size() && pieces[i].source == source; i++) {
             own.push_back({pieces[i].piece, pieces[i].grid_min});
@@ -368,7 +379,7 @@ RegolithSprite* RegolithWorld::spawn_piece(RegolithSprite* source, Sprite&& spri
     return piece;
 }
 
-RegolithSprite* RegolithWorld::spawn_rope_piece(RegolithSprite* source, std::vector<SpriteRope>&& group) {
+RegolithSprite* RegolithWorld::spawn_rope_piece(RegolithSprite* source, godot::LocalVector<SpriteRope>&& group) {
     const SpriteRopeSet& source_set = source->ropes();
 
     SpriteRopeSet set;
@@ -386,7 +397,7 @@ RegolithSprite* RegolithWorld::spawn_rope_piece(RegolithSprite* source, std::vec
     return piece;
 }
 
-void RegolithWorld::spawn_rope_group(RegolithSprite* source, std::vector<SpriteRope>&& group) {
+void RegolithWorld::spawn_rope_group(RegolithSprite* source, godot::LocalVector<SpriteRope>&& group) {
     if (sprite_rope_group_pixels(group) >= k_rope_entity_min_pixels) {
         spawn_rope_piece(source, std::move(group));
     }
@@ -396,28 +407,28 @@ void RegolithWorld::spawn_rope_group(RegolithSprite* source, std::vector<SpriteR
     }
 }
 
-void RegolithWorld::spawn_rope_pixels(RegolithSprite* source, const std::vector<SpriteRope>& ropes) {
-    std::vector<SpriteRopePixel> pixels;
+void RegolithWorld::spawn_rope_pixels(RegolithSprite* source, const godot::LocalVector<SpriteRope>& ropes) {
+    godot::LocalVector<SpriteRopePixel> pixels;
     sprite_rope_group_to_pixels(ropes, source->rope_grid(), source->transform(), &source->body(), pixels);
 
     for (const SpriteRopePixel& pixel : pixels) {
         spawn_cell_pixel(pixel.position, pixel.velocity, pixel.angle, pixel.color);
     }
 
-    if (!pixels.empty()) {
+    if (!pixels.is_empty()) {
         emit_signal("cells_removed", source, static_cast<int>(pixels.size()));
     }
 }
 
 void RegolithWorld::resplit_rope_piece(RegolithSprite* node) {
     if (node->has_ropes()) {
-        for (std::vector<SpriteRope>& group : extract_detached_rope_groups(node->ropes())) {
+        for (godot::LocalVector<SpriteRope>& group : extract_detached_rope_groups(node->ropes())) {
             spawn_rope_group(node, std::move(group));
         }
 
-        std::vector<SpriteRope>& ropes = node->ropes().ropes;
+        godot::LocalVector<SpriteRope>& ropes = node->ropes().ropes;
 
-        if (!ropes.empty() && sprite_rope_group_pixels(ropes) < k_rope_entity_min_pixels) {
+        if (!ropes.is_empty() && sprite_rope_group_pixels(ropes) < k_rope_entity_min_pixels) {
             spawn_rope_pixels(node, ropes);
             ropes.clear();
         }
@@ -446,7 +457,7 @@ int RegolithWorld::add_distance_joint(RegolithSprite* a, RegolithSprite* b, Vect
 PackedVector2Array RegolithWorld::get_joint_anchors(int joint_id) const {
     PackedVector2Array out;
 
-    if (std::optional<std::pair<vec2, vec2>> anchors = m_joints.anchors(joint_id)) {
+    if (Optional<godot::Pair<godot::Vector2, godot::Vector2>> anchors = m_joints.anchors(joint_id)) {
         out.push_back(to_pixels(anchors->first));
         out.push_back(to_pixels(anchors->second));
     }
@@ -457,7 +468,7 @@ PackedVector2Array RegolithWorld::get_joint_anchors(int joint_id) const {
 TypedArray<RegolithSprite> RegolithWorld::get_joint_sprites(int joint_id) const {
     TypedArray<RegolithSprite> out;
 
-    if (std::optional<std::pair<RegolithSprite*, RegolithSprite*>> sprites = m_joints.sprites(joint_id)) {
+    if (Optional<godot::Pair<RegolithSprite*, RegolithSprite*>> sprites = m_joints.sprites(joint_id)) {
         out.push_back(sprites->first);
         out.push_back(sprites->second);
     }
@@ -466,7 +477,7 @@ TypedArray<RegolithSprite> RegolithWorld::get_joint_sprites(int joint_id) const 
 }
 
 int RegolithWorld::get_joint_type(int joint_id) const {
-    std::optional<RegolithJoints::Type> type = m_joints.type(joint_id);
+    Optional<RegolithJoints::Type> type = m_joints.type(joint_id);
     return type ? static_cast<int>(*type) : -1;
 }
 
@@ -482,7 +493,7 @@ int RegolithWorld::get_joint_count() const {
     return m_joints.count();
 }
 
-static TypedArray<RegolithSprite> to_array(const std::vector<RegolithSprite*>& sprites) {
+static TypedArray<RegolithSprite> to_array(const godot::LocalVector<RegolithSprite*>& sprites) {
     TypedArray<RegolithSprite> out;
 
     for (RegolithSprite* sprite : sprites) {
@@ -493,14 +504,14 @@ static TypedArray<RegolithSprite> to_array(const std::vector<RegolithSprite*>& s
 }
 
 TypedArray<RegolithSprite> RegolithWorld::query_rect(Rect2 rect) const {
-    std::vector<RegolithSprite*> hits;
+    godot::LocalVector<RegolithSprite*> hits;
     m_tree.query(AxisAlignedBox(to_units(rect.position), to_units(rect.get_end())), hits);
 
     return to_array(hits);
 }
 
 TypedArray<RegolithSprite> RegolithWorld::query_segment(Vector2 from, Vector2 to) const {
-    std::vector<RegolithSprite*> hits;
+    godot::LocalVector<RegolithSprite*> hits;
     m_tree.query(AxisAlignedBox(to_units(from), to_units(to)), hits);
 
     return to_array(hits);
@@ -509,7 +520,7 @@ TypedArray<RegolithSprite> RegolithWorld::query_segment(Vector2 from, Vector2 to
 Dictionary RegolithWorld::ray_cast(Vector2 from, Vector2 to, RegolithSprite* exclude) const {
     Dictionary result;
 
-    if (std::optional<SpriteTree::Hit> hit = m_tree.ray_cast(to_units(from), to_units(to), exclude)) {
+    if (Optional<SpriteTree::Hit> hit = m_tree.ray_cast(to_units(from), to_units(to), exclude)) {
         result["sprite"] = hit->sprite;
         result["cell"] = Vector2i(hit->cell.x, hit->cell.y);
         result["position"] = to_pixels(hit->position);
@@ -519,7 +530,7 @@ Dictionary RegolithWorld::ray_cast(Vector2 from, Vector2 to, RegolithSprite* exc
     return result;
 }
 
-static AxisAlignedBox rope_bounds(const std::vector<SpriteRope>& ropes, float padding) {
+static AxisAlignedBox rope_bounds(const godot::LocalVector<SpriteRope>& ropes, float padding) {
     AxisAlignedBox bounds;
     bool any = false;
 
@@ -531,14 +542,14 @@ static AxisAlignedBox rope_bounds(const std::vector<SpriteRope>& ropes, float pa
             }
 
             else {
-                bounds.min = min(bounds.min, node.position);
-                bounds.max = max(bounds.max, node.position);
+                bounds.min = bounds.min.min(node.position);
+                bounds.max = bounds.max.max(node.position);
             }
         }
     }
 
-    bounds.min -= vec2(padding);
-    bounds.max += vec2(padding);
+    bounds.min -= godot::Vector2(padding, padding);
+    bounds.max += godot::Vector2(padding, padding);
 
     return bounds;
 }
@@ -547,7 +558,8 @@ int RegolithWorld::hit_ropes(Vector2 from, Vector2 to, RegolithSprite* exclude) 
     AxisAlignedBox sweep(to_units(from), to_units(to));
     int hits = 0;
 
-    std::vector<RegolithSprite*> nodes = m_sprites;
+    godot::LocalVector<RegolithSprite*> nodes;
+    for (RegolithSprite* n : m_sprites) nodes.push_back(n);
 
     for (RegolithSprite* node : nodes) {
         if (node == exclude || !node->has_ropes()) {
@@ -601,8 +613,8 @@ void RegolithWorld::spawn_cell_particle(Vector2 position, Vector2 velocity, Colo
     m_cell_particles->emit_particle(xform, velocity, color, custom, flags);
 }
 
-void RegolithWorld::spawn_cell_pixel(vec2 position, vec2 velocity, float angle, Color4 color) {
-    velocity += random_float2_centered() * length(velocity) * 0.2f;
+void RegolithWorld::spawn_cell_pixel(godot::Vector2 position, godot::Vector2 velocity, float angle, Color4 color) {
+    velocity += random_float2_centered() * (velocity).length() * 0.2f;
 
     Color tint(color.r / 255.f, color.g / 255.f, color.b / 255.f, color.a / 255.f);
     spawn_cell_particle(to_pixels(position), to_pixels(velocity), tint, angle);
@@ -691,11 +703,11 @@ int RegolithWorld::get_pixels_per_cell() const {
 }
 
 void RegolithWorld::set_gravity(Vector2 gravity) {
-    m_physics.settings().gravity = vec2(gravity.x, gravity.y);
+    m_physics.settings().gravity = godot::Vector2(gravity.x, gravity.y);
 }
 
 Vector2 RegolithWorld::get_gravity() const {
-    vec2 gravity = const_cast<PhysicsWorld&>(m_physics).settings().gravity;
+    godot::Vector2 gravity = const_cast<PhysicsWorld&>(m_physics).settings().gravity;
     return Vector2(gravity.x, gravity.y);
 }
 
@@ -724,17 +736,17 @@ PhysicsWorld& RegolithWorld::physics() {
 }
 
 void RegolithWorld::register_sprite(RegolithSprite* sprite) {
-    if (std::find(m_sprites.begin(), m_sprites.end(), sprite) == m_sprites.end()) {
+    if (m_sprites.find(sprite) == -1) {
         m_sprites.push_back(sprite);
     }
 }
 
 void RegolithWorld::unregister_sprite(RegolithSprite* sprite) {
-    std::erase(m_sprites, sprite);
+    m_sprites.erase(sprite);
     m_tree.build(m_sprites);
 }
 
-const std::vector<RegolithSprite*>& RegolithWorld::sprites() const {
+const godot::LocalVector<RegolithSprite*>& RegolithWorld::sprites() const {
     return m_sprites;
 }
 

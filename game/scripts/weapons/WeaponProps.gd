@@ -15,6 +15,7 @@ class_name WeaponProps
 @export_group("Projectile")
 @export var speed := 16.0
 @export var speed_random := 0.0
+@export var mass := 0.02
 @export var lifetime := 5.0
 @export var cell_life := 8
 @export var trail_length := 0.8

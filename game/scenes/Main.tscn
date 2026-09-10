@@ -8,23 +8,16 @@
 [ext_resource type="Script" uid="uid://benjmsq308nc3" path="res://game/scripts/core/Background.gd" id="6"]
 [ext_resource type="Texture2D" uid="uid://dpuvkcu8ow15" path="res://game/images/background/star.png" id="7"]
 [ext_resource type="Texture2D" uid="uid://bc6cmy4fc8fk0" path="res://game/images/background/smoke1.png" id="8"]
-[ext_resource type="Texture2D" uid="uid://dnotou8h361a1" path="res://game/images/sprites/boss1phase3.png" id="9_lhr70"]
-[ext_resource type="Texture2D" uid="uid://cykt1ixm4wi6q" path="res://game/images/sprites/boss1phase3_mask.png" id="10_wp0k4"]
-[ext_resource type="Material" path="res://game/shaders/regolith_sprite_material.tres" id="11_sprite_mat"]
-[ext_resource type="Material" path="res://game/shaders/regolith_rope_material.tres" id="12_rope_mat"]
-[ext_resource type="Material" path="res://game/shaders/regolith_cell_particles_material.tres" id="13_cell_mat"]
-[ext_resource type="Script" uid="uid://cyk3w2y64ikhd" path="res://game/scripts/rocks/RockSpawner.gd" id="14_rock_spawner"]
-[ext_resource type="Resource" path="res://game/config/rocks/default_rock.tres" id="15_rock_props"]
-[ext_resource type="Script" uid="uid://dvy4q6k1pnwav" path="res://game/scripts/enemies/EnemySpawner.gd" id="16_enemy_spawner"]
+[ext_resource type="Material" uid="uid://b2w7nuyl6835o" path="res://game/shaders/regolith_sprite_material.tres" id="11_sprite_mat"]
+[ext_resource type="Material" uid="uid://b7bdqliowpujk" path="res://game/shaders/regolith_rope_material.tres" id="12_rope_mat"]
+[ext_resource type="Material" uid="uid://d2fog8sw6x2yx" path="res://game/shaders/regolith_cell_particles_material.tres" id="13_cell_mat"]
 [ext_resource type="PackedScene" path="res://game/scenes/enemies/EnemyFighter.tscn" id="17_fighter"]
 [ext_resource type="PackedScene" path="res://game/scenes/enemies/EnemyBomb.tscn" id="18_bomb"]
 [ext_resource type="PackedScene" path="res://game/scenes/enemies/EnemyStation.tscn" id="19_station"]
 [ext_resource type="PackedScene" path="res://game/scenes/enemies/EnemyBase.tscn" id="20_base"]
-[ext_resource type="PackedScene" path="res://game/scenes/enemies/EnemyBossCompass.tscn" id="21_boss"]
-[ext_resource type="Script" uid="uid://iug5h7ruunbr" path="res://game/scripts/multisprite/MultiSprite.gd" id="22_multisprite"]
+[ext_resource type="PackedScene" uid="uid://c0c8o2syq3o55" path="res://game/scenes/enemies/EnemyBossCompass.tscn" id="21_boss"]
 [ext_resource type="Script" uid="uid://cbueqdckalmu0" path="res://game/scripts/spawn/StableSpawner.gd" id="23_stable_spawner"]
 [ext_resource type="PackedScene" path="res://game/scenes/enemies/EnemyBossStingray.tscn" id="24_final_phase"]
-[ext_resource type="Script" path="res://game/scripts/debug/AiGizmos.gd" id="25_ai_gizmos"]
 
 [node name="Main" type="Node2D" unique_id=876947141]
 script = ExtResource("1")
@@ -58,19 +51,6 @@ boss_stingray_scene = ExtResource("24_final_phase")
 sprite_material = ExtResource("11_sprite_mat")
 rope_material = ExtResource("12_rope_mat")
 
-[node name="RockSpawner" type="Node2D" parent="RegolithWorld" unique_id=844842314 node_paths=PackedStringArray("target")]
-script = ExtResource("14_rock_spawner")
-target = NodePath("../../Player")
-props = ExtResource("15_rock_props")
-
-[node name="EnemySpawner" type="Node2D" parent="RegolithWorld" unique_id=1502654375]
-script = ExtResource("16_enemy_spawner")
-
-[node name="DebugDraw" type="RegolithDebugDraw" parent="." unique_id=167902712]
-
-[node name="AiGizmos" type="Node" parent="DebugDraw"]
-script = ExtResource("25_ai_gizmos")
-
 [node name="Slab" type="RegolithSprite" parent="." unique_id=430775866 groups=["regolith"]]
 texture = ExtResource("3")
 dynamic = false
@@ -101,18 +81,3 @@ scale = Vector2(0.99999994, 0.99999994)
 
 [node name="Player" parent="." unique_id=603043386 instance=ExtResource("4")]
 position = Vector2(150, 150)
-
-[node name="RegolithSprite" type="RegolithSprite" parent="." unique_id=2066429507]
-texture = ExtResource("9_lhr70")
-mask_texture = ExtResource("10_wp0k4")
-rope_material = ExtResource("12_rope_mat")
-material = ExtResource("11_sprite_mat")
-position = Vector2(389, 280)
-
-[node name="Snake" type="Node2D" parent="." unique_id=1378116987]
-position = Vector2(900, 150)
-script = ExtResource("22_multisprite")
-file = "res://game/images/multisprites/snake.json"
-sprite_material = ExtResource("11_sprite_mat")
-rope_material = ExtResource("12_rope_mat")
-

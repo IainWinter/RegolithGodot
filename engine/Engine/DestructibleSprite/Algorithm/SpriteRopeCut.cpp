@@ -1,16 +1,17 @@
+#include "Containers/VectorUtil.h"
 #include "SpriteRopeCut.h"
 
 #include "Constants.h"
 #include "Math/MathUtil.h"
 
-#include "glm/geometric.hpp"
 
-#include <unordered_map>
+
+#include <godot_cpp/templates/hash_map.hpp>
 
 constexpr float s_cut_kick = 2.f * k_cell_local_size;
 constexpr int s_cut_kick_nodes = 3;
 
-UnionFind group_ropes_by_rope_anchors(const std::vector<SpriteRope>& ropes) {
+UnionFind group_ropes_by_rope_anchors(const godot::LocalVector<SpriteRope>& ropes) {
     int n = (int)ropes.size();
 
     UnionFind groups;
@@ -30,7 +31,7 @@ UnionFind group_ropes_by_rope_anchors(const std::vector<SpriteRope>& ropes) {
     return groups;
 }
 
-void remap_rope_anchor_indices(SpriteRope& rope, const std::vector<int>& remap, int count) {
+void remap_rope_anchor_indices(SpriteRope& rope, const godot::LocalVector<int>& remap, int count) {
     SpriteRopeAnchor* anchors[2] = {&rope.a, &rope.b};
 
     for (SpriteRopeAnchor* anchor : anchors) {
@@ -61,28 +62,28 @@ static SpriteRope slice_rope(const SpriteRope& rope, int begin, int end) {
         return piece;
     }
 
-    piece.rest_local.assign(rope.rest_local.begin() + begin, rope.rest_local.begin() + end);
+    vector_assign_range(piece.rest_local, rope.rest_local.ptr() + begin, rope.rest_local.ptr() + end);
 
     if ((int)rope.nodes.size() >= end) {
-        piece.nodes.assign(rope.nodes.begin() + begin, rope.nodes.begin() + end);
+        vector_assign_range(piece.nodes, rope.nodes.ptr() + begin, rope.nodes.ptr() + end);
     }
 
     if ((int)rope.node_velocities.size() >= end) {
-        piece.node_velocities.assign(rope.node_velocities.begin() + begin, rope.node_velocities.begin() + end);
+        vector_assign_range(piece.node_velocities, rope.node_velocities.ptr() + begin, rope.node_velocities.ptr() + end);
     }
 
     if ((int)rope.node_health.size() >= end) {
-        piece.node_health.assign(rope.node_health.begin() + begin, rope.node_health.begin() + end);
+        vector_assign_range(piece.node_health, rope.node_health.ptr() + begin, rope.node_health.ptr() + end);
     }
 
     if ((int)rope.rest_len.size() >= end - 1 && begin < end - 1) {
-        piece.rest_len.assign(rope.rest_len.begin() + begin, rope.rest_len.begin() + (end - 1));
+        vector_assign_range(piece.rest_len, rope.rest_len.ptr() + begin, rope.rest_len.ptr() + (end - 1));
     }
 
     return piece;
 }
 
-static void kick_piece_from_cut(SpriteRope& piece, vec2 cut_position, bool cut_at_front) {
+static void kick_piece_from_cut(SpriteRope& piece, godot::Vector2 cut_position, bool cut_at_front) {
     int n = (int)piece.nodes.size();
 
     if (n == 0) {
@@ -92,8 +93,8 @@ static void kick_piece_from_cut(SpriteRope& piece, vec2 cut_position, bool cut_a
     for (int k = 0; k < s_cut_kick_nodes && k < n; k++) {
         int i = cut_at_front ? k : n - 1 - k;
 
-        vec2 dir = piece.nodes[i].position - cut_position;
-        float d = length(dir);
+        godot::Vector2 dir = piece.nodes[i].position - cut_position;
+        float d = (dir).length();
 
         if (d < 1e-6f) {
             continue;
@@ -109,10 +110,10 @@ static void kick_piece_from_cut(SpriteRope& piece, vec2 cut_position, bool cut_a
     }
 }
 
-void compact_dead_sprite_ropes(std::vector<SpriteRope>& ropes) {
+void compact_dead_sprite_ropes(godot::LocalVector<SpriteRope>& ropes) {
     int n = (int)ropes.size();
 
-    std::vector<int> remap(n, -1);
+    godot::LocalVector<int> remap; vector_fill(remap, n, -1);
     int next = 0;
 
     for (int i = 0; i < n; i++) {
@@ -146,7 +147,7 @@ void compact_dead_sprite_ropes(std::vector<SpriteRope>& ropes) {
 SpriteRopeCutResult cut_sprite_rope(SpriteRopeSet& set, int rope_index, int node_index) {
     SpriteRopeCutResult result;
 
-    std::vector<SpriteRope>& ropes = set.ropes;
+    godot::LocalVector<SpriteRope>& ropes = set.ropes;
 
     if (rope_index < 0 || rope_index >= (int)ropes.size()) {
         return result;
@@ -175,7 +176,7 @@ SpriteRopeCutResult cut_sprite_rope(SpriteRopeSet& set, int rope_index, int node
     bool tail_alive = tail.rest_local.size() >= 2;
 
     if ((int)rope.nodes.size() == n) {
-        vec2 cut_position = rope.nodes[node_index].position;
+        godot::Vector2 cut_position = rope.nodes[node_index].position;
 
         kick_piece_from_cut(head, cut_position, false);
         kick_piece_from_cut(tail, cut_position, true);
@@ -212,12 +213,12 @@ SpriteRopeCutResult cut_sprite_rope(SpriteRopeSet& set, int rope_index, int node
 
     auto drop_as_pixels = [&](const SpriteRope& piece) {
         for (const SpriteRopeNode& node : piece.nodes) {
-            result.loose_pixels.emplace_back(node.position, piece.color);
+            result.loose_pixels.push_back({node.position, piece.color});
         }
     };
 
     if ((int)rope.nodes.size() == n) {
-        result.loose_pixels.emplace_back(rope.nodes[node_index].position, rope.color);
+        result.loose_pixels.push_back({rope.nodes[node_index].position, rope.color});
     }
 
     if (!head_alive) {
@@ -251,33 +252,33 @@ static void insert_rope_node(SpriteRope& rope, int segment, float t) {
         return lerp(list[i], list[i + 1], t);
     };
 
-    rope.rest_local.insert(rope.rest_local.begin() + segment + 1, lerp_at(rope.rest_local, segment));
+    rope.rest_local.insert(segment + 1, lerp_at(rope.rest_local, segment));
 
     if ((int)rope.nodes.size() > segment + 1) {
         SpriteRopeNode node;
         node.position = lerp(rope.nodes[segment].position, rope.nodes[segment + 1].position, t);
         node.last_position = lerp(rope.nodes[segment].last_position, rope.nodes[segment + 1].last_position, t);
-        rope.nodes.insert(rope.nodes.begin() + segment + 1, node);
+        rope.nodes.insert(segment + 1, node);
     }
 
     if ((int)rope.node_velocities.size() > segment + 1) {
-        rope.node_velocities.insert(rope.node_velocities.begin() + segment + 1, lerp_at(rope.node_velocities, segment));
+        rope.node_velocities.insert(segment + 1, lerp_at(rope.node_velocities, segment));
     }
 
     if ((int)rope.node_health.size() > segment + 1) {
         uint8_t health = std::max(rope.node_health[segment], rope.node_health[segment + 1]);
-        rope.node_health.insert(rope.node_health.begin() + segment + 1, health);
+        rope.node_health.insert(segment + 1, health);
     }
 
     if ((int)rope.rest_len.size() > segment) {
         float rest = rope.rest_len[segment];
         rope.rest_len[segment] = rest * t;
-        rope.rest_len.insert(rope.rest_len.begin() + segment + 1, rest * (1.f - t));
+        rope.rest_len.insert(segment + 1, rest * (1.f - t));
     }
 }
 
 SpriteRopeCutResult cut_sprite_rope_at(SpriteRopeSet& set, int rope_index, int segment, float t, float gap) {
-    std::vector<SpriteRope>& ropes = set.ropes;
+    godot::LocalVector<SpriteRope>& ropes = set.ropes;
 
     if (rope_index < 0 || rope_index >= (int)ropes.size()) {
         return SpriteRopeCutResult {};
@@ -295,7 +296,7 @@ SpriteRopeCutResult cut_sprite_rope_at(SpriteRopeSet& set, int rope_index, int s
     t = clamp(t, 0.f, 1.f);
 
     float len = (int)rope.nodes.size() == n
-        ? distance(rope.nodes[segment].position, rope.nodes[segment + 1].position)
+        ? (rope.nodes[segment].position).distance_to(rope.nodes[segment + 1].position)
         : ((int)rope.rest_len.size() > segment ? rope.rest_len[segment] : 0.f);
 
     float half = len > 1e-6f ? clamp(0.5f * gap / len, 0.005f, 0.45f) : 0.45f;
@@ -329,13 +330,13 @@ SpriteRopeCutResult cut_sprite_rope_at(SpriteRopeSet& set, int rope_index, int s
     return cut_sprite_rope(set, rope_index, segment + 2);
 }
 
-std::vector<std::vector<SpriteRope>> extract_detached_rope_groups(SpriteRopeSet& set) {
-    std::vector<SpriteRope>& ropes = set.ropes;
+godot::LocalVector<godot::LocalVector<SpriteRope>> extract_detached_rope_groups(SpriteRopeSet& set) {
+    godot::LocalVector<SpriteRope>& ropes = set.ropes;
     int n = (int)ropes.size();
 
     UnionFind groups = group_ropes_by_rope_anchors(ropes);
 
-    std::unordered_map<int, bool> anchored;
+    godot::HashMap<int, bool> anchored;
 
     for (int i = 0; i < n; i++) {
         int root = groups.find(i);
@@ -348,27 +349,27 @@ std::vector<std::vector<SpriteRope>> extract_detached_rope_groups(SpriteRopeSet&
         }
 
         else {
-            anchored.try_emplace(root, false);
+            anchored.insert(root, false);
         }
     }
 
-    std::unordered_map<int, std::vector<int>> detached_members;
+    godot::HashMap<int, godot::LocalVector<int>> detached_members;
 
     for (int i = 0; i < n; i++) {
         int root = groups.find(i);
 
-        if (!anchored.at(root)) {
+        if (!anchored[root]) {
             detached_members[root].push_back(i);
         }
     }
 
-    std::vector<std::vector<SpriteRope>> detached;
+    godot::LocalVector<godot::LocalVector<SpriteRope>> detached;
 
-    if (detached_members.empty()) {
+    if (detached_members.is_empty()) {
         return detached;
     }
 
-    std::vector<int> remap(n, -1);
+    godot::LocalVector<int> remap; vector_fill(remap, n, -1);
 
     for (auto& [root, members] : detached_members) {
         for (size_t k = 0; k < members.size(); k++) {
@@ -377,7 +378,7 @@ std::vector<std::vector<SpriteRope>> extract_detached_rope_groups(SpriteRopeSet&
     }
 
     for (auto& [root, members] : detached_members) {
-        std::vector<SpriteRope> group;
+        godot::LocalVector<SpriteRope> group;
         group.reserve(members.size());
 
         for (int i : members) {

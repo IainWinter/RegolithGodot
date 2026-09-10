@@ -1,13 +1,13 @@
 #pragma once
 
 #include "SpriteChunk.h"
-#include "FlatMap.h"
+#include "Containers/FlatMap.h"
 
 #include "Assets/SpriteAsset.h"
 
 #include <stdint.h>
 
-struct [[Struct]] SpriteMass {
+struct  SpriteMass {
     uint64_t sum_ix;
     uint64_t sum_iy;
     uint64_t sum_ix2;
@@ -16,7 +16,7 @@ struct [[Struct]] SpriteMass {
 };
 
 struct SpriteMassInfo {
-    vec2 center_of_mass;
+    godot::Vector2 center_of_mass;
     float inertia;
     float mass;
     float inv_inertia;
@@ -31,6 +31,6 @@ SpriteMassInfo sprite_mass_get_info(const SpriteMass& mass, const Grid& grid);
 
 SpriteMassInfo sprite_mass_get_info_from_asset(const SpriteAsset& asset);
 
-void sprite_mass_add_cell(SpriteMass& mass, ivec2 grid_index_position);
+void sprite_mass_add_cell(SpriteMass& mass, godot::Vector2i grid_index_position);
 
-void sprite_mass_remove_cell(SpriteMass& mass, ivec2 grid_index_position);
+void sprite_mass_remove_cell(SpriteMass& mass, godot::Vector2i grid_index_position);

@@ -48,6 +48,9 @@ public:
         return m_array;
     }
 
+    T* ptr() { return m_array; }
+    const T* ptr() const { return m_array; }
+
     size_t size() const {
         return m_size;
     }

@@ -7,7 +7,7 @@
 #include <godot_cpp/variant/packed_float32_array.hpp>
 #include <godot_cpp/variant/rid.hpp>
 
-#include <vector>
+#include <godot_cpp/templates/local_vector.hpp>
 
 // mirror of the engine's PixelLinePass. ropes rasterize one cell thick onto
 // their sprite's grid: one multimesh instance per segment carrying the
@@ -18,7 +18,7 @@ class RopeRender {
 public:
     ~RopeRender();
 
-    bool update(godot::RID item, godot::RID mesh, const Transform& pose, const Grid& grid, const std::vector<SpriteRope>& ropes, float fraction, float pixels_per_unit);
+    bool update(godot::RID item, godot::RID mesh, const Transform& pose, const Grid& grid, const godot::LocalVector<SpriteRope>& ropes, float fraction, float pixels_per_unit);
 
     godot::RID multimesh() const;
 

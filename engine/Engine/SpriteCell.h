@@ -4,11 +4,11 @@
 #include "Math/Vector.h"
 
 #include <inttypes.h>
-#include <string_view>
+#include <godot_cpp/variant/string.hpp>
 
 static const int k_sprite_class_count = 9;
 
-struct [[Struct]] ClassMask {
+struct  ClassMask {
     uint16_t bits = 0xFFFF;
 };
 
@@ -33,7 +33,7 @@ enum SpriteCellMaskType {
 enum SpriteCellMaskBits : uint16_t {
 };
 
-inline constexpr std::string_view sprite_cell_mask_type_name(SpriteCellMaskType type) {
+inline constexpr godot::String sprite_cell_mask_type_name(SpriteCellMaskType type) {
     constexpr const char* names[SpriteCellMaskType_Count] = {
         "Empty",
         "Filled",
@@ -52,7 +52,7 @@ inline constexpr std::string_view sprite_cell_mask_type_name(SpriteCellMaskType 
     return names[type];
 }
 
-struct [[Struct]] SpriteCellMask {
+struct  SpriteCellMask {
     uint16_t bits;
 
     // Bit layout:
@@ -175,7 +175,7 @@ struct [[Struct]] SpriteCellMask {
     }
 };
 
-struct [[Struct]] SpriteCell {
+struct  SpriteCell {
     Color4 color;
     SpriteCellMask type;
 };

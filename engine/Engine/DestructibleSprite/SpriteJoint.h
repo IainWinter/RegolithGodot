@@ -6,6 +6,6 @@
 struct SpriteJoint {
     godot::ObjectID entity_0;
     godot::ObjectID entity_1;
-    vec2 r_0;
-    vec2 r_1;
+    godot::Vector2 r_0;
+    godot::Vector2 r_1;
 };

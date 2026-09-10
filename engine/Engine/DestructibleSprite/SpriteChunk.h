@@ -1,18 +1,16 @@
 #pragma once
 
 #include "Color.h"
-#include "ArrayView.h"
+#include "Containers/ArrayView.h"
 #include "Constants.h"
 #include "Assets/SpriteAsset.h"
 #include "SpriteCell.h"
 
 #include "Coordinate/Grid.h"
+#include "Math/Vector.h"
 
-#include "glm/vec2.hpp"
-#include "glm/vec3.hpp"
-using namespace glm;
-
-#include <vector>
+#include <godot_cpp/templates/local_vector.hpp>
+#include <godot_cpp/templates/pair.hpp>
 
 // Each chunk will store:
 //  1. Color   RGBA     (4 bytes)   Host, Device             Read on host for effects 
@@ -72,9 +70,9 @@ public:
     SpriteChunkId id;
     int index;
     
-    ivec2 gridPixelOffset;
-    ivec3 atlasPixelOffset;
-    vec3 uvwOffset;
+    godot::Vector2i gridPixelOffset;
+    godot::Vector3i atlasPixelOffset;
+    godot::Vector3 uvwOffset;
 
     int activePixelCount;
 
@@ -87,5 +85,5 @@ public:
     ArrayView<float> distance;
 
     // corner and round cells, the physics sample points
-    std::vector<std::pair<ivec2, int>> surface;
+    godot::LocalVector<godot::Pair<godot::Vector2i, int>> surface;
 };

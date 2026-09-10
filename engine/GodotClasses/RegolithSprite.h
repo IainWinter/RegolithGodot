@@ -1,3 +1,4 @@
+#include <godot_cpp/templates/pair.hpp>
 #pragma once
 
 #include "DestructibleSprite/Sprite.h"
@@ -147,8 +148,8 @@ private:
     void clear_preview();
     void paint(godot::Vector2i cell, godot::Color color, SpriteCellMask mask);
     void _reload();
-    void after_rope_cut(const std::vector<ivec2>& anchor_cells);
-    void spawn_loose_pixels(const std::vector<std::pair<vec2, Color4>>& pixels);
+    void after_rope_cut(const godot::LocalVector<godot::Vector2i>& anchor_cells);
+    void spawn_loose_pixels(const godot::LocalVector<godot::Pair<godot::Vector2, Color4>>& pixels);
 
 private:
     godot::Ref<godot::Texture2D> m_texture;

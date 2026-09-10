@@ -1,48 +1,50 @@
+#include <godot_cpp/templates/pair.hpp>
 #include "MathUtil.h"
-#include "glm/geometric.hpp"
-#include "glm/gtc/constants.hpp"
+
+#include <godot_cpp/core/math.hpp>
+
 #include <algorithm>
 #include <cmath>
 #include <limits>
 #include <stdlib.h>
 
-static constexpr float _pi = glm::pi<float>();
-static constexpr float _2pi = glm::two_pi<float>();
+static constexpr float _pi = godot::Math::PI;
+static constexpr float _2pi = godot::Math::TAU;
 
-float angle(vec2 v) {
+float angle(godot::Vector2 v) {
     return atan2(v.y, v.x);
 }
 
-vec2 vector(float angle) {
-    return vec2(cos(angle), sin(angle));
+godot::Vector2 vector(float angle) {
+    return godot::Vector2(cos(angle), sin(angle));
 }
 
-vec3 vector3(float phi, float theta) {
+godot::Vector3 vector3(float phi, float theta) {
     float x = sin(phi) * cos(theta);
     float y = sin(phi) * sin(theta);
     float z = cos(phi);
 
-    return vec3(x, y, z);
+    return godot::Vector3(x, y, z);
 }
 
-vec2 right(vec2 v) {
-    return vec2(v.y, -v.x);
+godot::Vector2 right(godot::Vector2 v) {
+    return godot::Vector2(v.y, -v.x);
 }
 
-int length_squared(ivec2 v) {
+int length_squared(godot::Vector2i v) {
     return v.x * v.x + v.y * v.y;
 }
 
-float length_squared(vec2 v) {
+float length_squared(godot::Vector2 v) {
     return v.x * v.x + v.y * v.y;
 }
 
-float cross(vec2 a, vec2 b) {
+float cross(godot::Vector2 a, godot::Vector2 b) {
     return a.x * b.y - a.y * b.x;
 }
 
-vec2 cross(float a, vec2 b) {
-    return vec2(-a * b.y, a * b.x);
+godot::Vector2 cross(float a, godot::Vector2 b) {
+    return godot::Vector2(-a * b.y, a * b.x);
 }
 
 float clamp(float x, float min, float max) {
@@ -83,61 +85,61 @@ float lerp(float a, float b, float w) {
     return a + (b - a) * clamp(w, 0.f, 1.f);
 }
 
-vec2 lerp(const vec2& a, const vec2& b, float w) {
-    return vec2(lerp(a.x, b.x, w), lerp(a.y, b.y, w));
+godot::Vector2 lerp(const godot::Vector2& a, const godot::Vector2& b, float w) {
+    return godot::Vector2(lerp(a.x, b.x, w), lerp(a.y, b.y, w));
 }
 
-vec4 lerp(const vec4& a, const vec4& b, float w) {
-    return vec4(lerp(a.x, b.x, w), lerp(a.y, b.y, w), lerp(a.z, b.z, w), lerp(a.w, b.w, w));
+godot::Vector4 lerp(const godot::Vector4& a, const godot::Vector4& b, float w) {
+    return godot::Vector4(lerp(a.x, b.x, w), lerp(a.y, b.y, w), lerp(a.z, b.z, w), lerp(a.w, b.w, w));
 }
 
 float dampen(float x, float damping, float deltaTime) {
     return x * clamp(1.f - damping * deltaTime, 0.f, 1.f);
 }
 
-vec2 dampen(vec2 vec, float damping, float deltaTime) {
-    return vec2(dampen(vec.x, damping, deltaTime), dampen(vec.y, damping, deltaTime));
+godot::Vector2 dampen(godot::Vector2 vec, float damping, float deltaTime) {
+    return godot::Vector2(dampen(vec.x, damping, deltaTime), dampen(vec.y, damping, deltaTime));
 }
 
-vec2 rotate_local_point(vec2 localPoint, float angle) {
+godot::Vector2 rotate_local_point(godot::Vector2 localPoint, float angle) {
     float s = sinf(angle);
     float c = cosf(angle);
     return rotate_local_point(localPoint, s, c);
 }
 
-vec2 rotate_local_point(vec2 localPoint, float angleSin, float angleCos) {
-    return vec2(localPoint.x * angleCos - localPoint.y * angleSin, localPoint.x * angleSin + localPoint.y * angleCos);
+godot::Vector2 rotate_local_point(godot::Vector2 localPoint, float angleSin, float angleCos) {
+    return godot::Vector2(localPoint.x * angleCos - localPoint.y * angleSin, localPoint.x * angleSin + localPoint.y * angleCos);
 }
 
-vec2 rotate_around_pivot_point(vec2 point, vec2 pivot, float angle) {
-    vec2 local = point - pivot;
+godot::Vector2 rotate_around_pivot_point(godot::Vector2 point, godot::Vector2 pivot, float angle) {
+    godot::Vector2 local = point - pivot;
     return rotate_local_point(local, angle) + pivot;
 }
 
-std::pair<vec2, float> rotate_object_with_center_of_mass(vec2 center_of_mass, vec2 position, float angle,
-                                                    vec2 linear_velocity, float angular_velocity, float delta_time) {
-    vec2 delta_position = linear_velocity * delta_time;
+godot::Pair<godot::Vector2, float> rotate_object_with_center_of_mass(godot::Vector2 center_of_mass, godot::Vector2 position, float angle,
+                                                    godot::Vector2 linear_velocity, float angular_velocity, float delta_time) {
+    godot::Vector2 delta_position = linear_velocity * delta_time;
     float delta_angle = angular_velocity * delta_time;
 
     position += delta_position;
     angle += delta_angle;
 
-    vec2 correction = rotate_local_point(position - center_of_mass, delta_angle);
+    godot::Vector2 correction = rotate_local_point(position - center_of_mass, delta_angle);
     position = center_of_mass + correction;
 
     return {position, angle};
 }
 
-bool inbounds(int index, ivec2 dimensions) {
+bool inbounds(int index, godot::Vector2i dimensions) {
     return index >= 0 && index < dimensions.x * dimensions.y;
 }
 
-vec2 safe_normalize(vec2 vec) {
+godot::Vector2 safe_normalize(godot::Vector2 vec) {
     return safe_normalize_distance(vec).first;
 }
 
-std::pair<vec2, float> safe_normalize_distance(vec2 vec) {
-    float len = length(vec);
+godot::Pair<godot::Vector2, float> safe_normalize_distance(godot::Vector2 vec) {
+    float len = vec.length();
     if (len == 0.0) {
         return {vec, len};
     }
@@ -145,7 +147,7 @@ std::pair<vec2, float> safe_normalize_distance(vec2 vec) {
     return {vec / len, len};
 }
 
-std::pair<vec2, float> safe_normalize_distance(vec2 vec, float length_sqr) {
+godot::Pair<godot::Vector2, float> safe_normalize_distance(godot::Vector2 vec, float length_sqr) {
     if (length_sqr == 0.f) {
         return {vec, 0.f};
     }
@@ -155,8 +157,8 @@ std::pair<vec2, float> safe_normalize_distance(vec2 vec, float length_sqr) {
     return {vec / len, len};
 }
 
-vec2 limit_length(vec2 vec, float length) {
-    float l = ::length(vec);
+godot::Vector2 limit_length(godot::Vector2 vec, float length) {
+    float l = vec.length();
     if (l > length) {
         return vec / l * length;
     }
@@ -164,30 +166,30 @@ vec2 limit_length(vec2 vec, float length) {
     return vec;
 }
 
-ivec2 pixel_position_from_index(int index, int width) {
+godot::Vector2i pixel_position_from_index(int index, int width) {
     int x = index % width;
     int y = index / width;
 
-    return ivec2(x, y);
+    return godot::Vector2i(x, y);
 }
 
-float max_element(vec2 vec) {
+float max_element(godot::Vector2 vec) {
     return vec.x > vec.y ? vec.x : vec.y;
 }
 
-float min_element(vec2 vec) {
+float min_element(godot::Vector2 vec) {
     return vec.x < vec.y ? vec.x : vec.y;
 }
 
-vec2 velocity_at_local_point(vec2 velocity, float angularVelocity, vec2 centerOfMass, vec2 localPoint) {
-    vec2 r = localPoint - centerOfMass;
-    vec2 angularLinearComponent = vec2(-r.y, r.x) * angularVelocity;
+godot::Vector2 velocity_at_local_point(godot::Vector2 velocity, float angularVelocity, godot::Vector2 centerOfMass, godot::Vector2 localPoint) {
+    godot::Vector2 r = localPoint - centerOfMass;
+    godot::Vector2 angularLinearComponent = godot::Vector2(-r.y, r.x) * angularVelocity;
     return velocity + angularLinearComponent;
 }
 
-float penetration_in_circle(vec2 point, vec2 center, float radius) {
-    vec2 d = point - center;
-    float distanceSqr = dot(d, d);
+float penetration_in_circle(godot::Vector2 point, godot::Vector2 center, float radius) {
+    godot::Vector2 d = point - center;
+    float distanceSqr = d.dot(d);
     float radiusSqr = radius * radius;
 
     if (distanceSqr > radiusSqr) {
@@ -197,37 +199,37 @@ float penetration_in_circle(vec2 point, vec2 center, float radius) {
     return radiusSqr - distanceSqr; // dont really need to sqr
 }
 
-vec2 turn_vector_towards(vec2 current, vec2 target, float strength) {
-    vec2 n_curent = safe_normalize(current);
-    vec2 n_target = safe_normalize(target);
-    vec2 delta = (n_target - n_curent) * strength;
+godot::Vector2 turn_vector_towards(godot::Vector2 current, godot::Vector2 target, float strength) {
+    godot::Vector2 n_curent = safe_normalize(current);
+    godot::Vector2 n_target = safe_normalize(target);
+    godot::Vector2 delta = (n_target - n_curent) * strength;
 
-    return safe_normalize(current + delta) * length(current);
+    return safe_normalize(current + delta) * current.length();
 }
 
-float closest_t_on_segment(vec2 a, vec2 b, vec2 point) {
-    vec2 ab = b - a;
-    float len2 = dot(ab, ab);
+float closest_t_on_segment(godot::Vector2 a, godot::Vector2 b, godot::Vector2 point) {
+    godot::Vector2 ab = b - a;
+    float len2 = ab.dot(ab);
 
     if (len2 < 1e-12f) {
         return 0.f;
     }
 
-    return clamp(dot(point - a, ab) / len2, 0.f, 1.f);
+    return clamp((point - a).dot(ab) / len2, 0.f, 1.f);
 }
 
-vec2 closest_point_on_segment(vec2 a, vec2 b, vec2 point) {
+godot::Vector2 closest_point_on_segment(godot::Vector2 a, godot::Vector2 b, godot::Vector2 point) {
     return a + closest_t_on_segment(a, b, point) * (b - a);
 }
 
-void closest_segment_segment(vec2 a0, vec2 a1, vec2 b0, vec2 b1, float* s, float* t) {
-    vec2 d1 = a1 - a0;
-    vec2 d2 = b1 - b0;
-    vec2 r = a0 - b0;
+void closest_segment_segment(godot::Vector2 a0, godot::Vector2 a1, godot::Vector2 b0, godot::Vector2 b1, float* s, float* t) {
+    godot::Vector2 d1 = a1 - a0;
+    godot::Vector2 d2 = b1 - b0;
+    godot::Vector2 r = a0 - b0;
 
-    float len1 = dot(d1, d1);
-    float len2 = dot(d2, d2);
-    float f = dot(d2, r);
+    float len1 = d1.dot(d1);
+    float len2 = d2.dot(d2);
+    float f = d2.dot(r);
 
     if (len1 < 1e-12f && len2 < 1e-12f) {
         *s = 0.f;
@@ -243,7 +245,7 @@ void closest_segment_segment(vec2 a0, vec2 a1, vec2 b0, vec2 b1, float* s, float
         return;
     }
 
-    float c = dot(d1, r);
+    float c = d1.dot(r);
 
     if (len2 < 1e-12f) {
         *t = 0.f;
@@ -252,7 +254,7 @@ void closest_segment_segment(vec2 a0, vec2 a1, vec2 b0, vec2 b1, float* s, float
         return;
     }
 
-    float b = dot(d1, d2);
+    float b = d1.dot(d2);
     float denom = len1 * len2 - b * b;
 
     float s_out = denom > 1e-12f ? clamp((b * f - c * len2) / denom, 0.f, 1.f) : 0.f;
@@ -272,20 +274,21 @@ void closest_segment_segment(vec2 a0, vec2 a1, vec2 b0, vec2 b1, float* s, float
     *t = t_out;
 }
 
-vec2 closest_point_on_polygon(const vec2* points, int point_count, vec2 point) {
+godot::Vector2 closest_point_on_polygon(const godot::Vector2* points, int point_count, godot::Vector2 point) {
     if (point_count == 0) {
         return point;
     }
 
-    vec2 closest;
+    godot::Vector2 closest;
     float min_dist = std::numeric_limits<float>::max();
 
     for (int i = 0; i < point_count; i++) {
-        const vec2& a = points[i];
-        const vec2& b = points[(i + 1) % point_count];
+        const godot::Vector2& a = points[i];
+        const godot::Vector2& b = points[(i + 1) % point_count];
 
-        vec2 candidate = closest_point_on_segment(a, b, point);
-        float dist = dot(candidate - point, candidate - point);
+        godot::Vector2 candidate = closest_point_on_segment(a, b, point);
+        godot::Vector2 d = candidate - point;
+        float dist = d.dot(d);
 
         if (dist < min_dist) {
             min_dist = dist;
@@ -296,12 +299,12 @@ vec2 closest_point_on_polygon(const vec2* points, int point_count, vec2 point) {
     return closest;
 }
 
-bool is_point_in_polygon(const vec2* points, int point_count, vec2 point) {
+bool is_point_in_polygon(const godot::Vector2* points, int point_count, godot::Vector2 point) {
     bool inside = false;
 
     for (int i = 0, j = point_count - 1; i < point_count; j = i++) {
-        vec2 pi = points[i];
-        vec2 pj = points[j];
+        godot::Vector2 pi = points[i];
+        godot::Vector2 pj = points[j];
 
         bool intersect = ((pi.y > point.y) != (pj.y > point.y))
                       && (point.x < (pj.x - pi.x) * (point.y - pi.y) / (pj.y - pi.y) + pi.x);
@@ -313,8 +316,8 @@ bool is_point_in_polygon(const vec2* points, int point_count, vec2 point) {
     return inside;
 }
 
-vec2 polygon_centroid(const vec2* points, int point_count) {
-    vec2 centeroid = vec2(0.f);
+godot::Vector2 polygon_centroid(const godot::Vector2* points, int point_count) {
+    godot::Vector2 centeroid = godot::Vector2(0.f, 0.f);
     for (int i = 0; i < point_count; i++) {
         centeroid += points[i];
     }
@@ -322,13 +325,13 @@ vec2 polygon_centroid(const vec2* points, int point_count) {
     return centeroid / static_cast<float>(point_count);
 }
 
-bool is_clockwise(const vec2& centroid, const vec2& a, const vec2& b) {
+bool is_clockwise(const godot::Vector2& centroid, const godot::Vector2& a, const godot::Vector2& b) {
     return cross(a - centroid, b - centroid) < 0;
 }
 
-vec2 lerp_list(const std::vector<vec2>& points, float w) {
-    if (points.empty()) {
-        return vec2(0.0f);
+godot::Vector2 lerp_list(const godot::LocalVector<godot::Vector2>& points, float w) {
+    if (points.is_empty()) {
+        return godot::Vector2(0.0f, 0.0f);
     }
 
     if (points.size() == 1) {
@@ -342,26 +345,26 @@ vec2 lerp_list(const std::vector<vec2>& points, float w) {
     float t = scaled - i;
 
     if (i >= points.size() - 1) {
-        return points.back();
+        return points[points.size() - 1];
     }
 
     return (1.0f - t) * points[i] + t * points[i + 1];
 }
 
-float list_length(const std::vector<vec2>& points) {
+float list_length(const godot::LocalVector<godot::Vector2>& points) {
     float len = 0.f;
 
     for (size_t i = 1; i < points.size(); i++) {
-        len += distance(points.at(i - 1), points.at(i));
+        len += points[i - 1].distance_to(points[i]);
     }
 
     return len;
 }
 
-bool is_circle_circle_overlapping(vec2 center_0, float radius_0, vec2 center_1, float radius_1) {
-    vec2 vec_01 = center_1 - center_0;
+bool is_circle_circle_overlapping(godot::Vector2 center_0, float radius_0, godot::Vector2 center_1, float radius_1) {
+    godot::Vector2 vec_01 = center_1 - center_0;
     float radius_01 = radius_0 + radius_1;
-    float dist_sqr = dot(vec_01, vec_01);
+    float dist_sqr = vec_01.dot(vec_01);
     return dist_sqr < radius_01 * radius_01;
 }
 
@@ -369,7 +372,7 @@ float infinity() {
     return std::numeric_limits<float>::infinity();
 }
 
-vec2 transform_r_from_local_space(vec2 local_point, vec2 center_of_mass, vec2 scale, float angle) {
+godot::Vector2 transform_r_from_local_space(godot::Vector2 local_point, godot::Vector2 center_of_mass, godot::Vector2 scale, float angle) {
     return rotate_local_point((local_point - center_of_mass) * scale, angle);
 }
 

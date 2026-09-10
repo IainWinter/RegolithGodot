@@ -1,8 +1,8 @@
 #pragma once
 
-#include <vector>
+#include <godot_cpp/templates/local_vector.hpp>
 #include <assert.h>
-#include <utility>
+#include <godot_cpp/templates/pair.hpp>
 
 template<typename T>
 class FlatMap {
@@ -10,35 +10,40 @@ public:
     FlatMap() = default;
 
     FlatMap(int size) {
-        m_map.resize(size, -1);
+        m_map.resize(size);
+        for (uint32_t _i = 0; _i < m_map.size(); _i++) m_map[_i] = -1;
     }
 
     T& emplace(int key, const T& value) {
         assert(!contains(key));
 
         if (key >= static_cast<int>(m_map.size())) {
-            m_map.resize(key + 1, -1);
+            uint32_t _old = m_map.size();
+            m_map.resize(key + 1);
+            for (uint32_t _i = _old; _i < m_map.size(); _i++) m_map[_i] = -1;
         }
 
         m_map[key] = static_cast<int>(m_items.size());
         m_items.push_back(value);
         m_keys.push_back(key);
 
-        return m_items.back();
+        return m_items[m_items.size() - 1];
     }
 
     T& emplace(int key, T&& value) {
         assert(!contains(key));
 
         if (key >= static_cast<int>(m_map.size())) {
-            m_map.resize(key + 1, -1);
+            uint32_t _old = m_map.size();
+            m_map.resize(key + 1);
+            for (uint32_t _i = _old; _i < m_map.size(); _i++) m_map[_i] = -1;
         }
 
         m_map[key] = static_cast<int>(m_items.size());
-        m_items.emplace_back(std::forward<T>(value));
+        m_items.push_back({std::forward<T>(value)});
         m_keys.push_back(key);
 
-        return m_items.back();
+        return m_items[m_items.size() - 1];
     }
 
     void erase(int key) {
@@ -55,8 +60,8 @@ public:
             m_map[moved_key] = index_to_remove;
         }
 
-        m_items.pop_back();
-        m_keys.pop_back();
+        m_items.remove_at(m_items.size() - 1);
+        m_keys.remove_at(m_keys.size() - 1);
 
         m_map[key] = -1;
     }
@@ -67,6 +72,8 @@ public:
             && m_map[key] != -1;
     }
 
+    bool has(int key) const { return contains(key); }
+
     T& at(int key) {
         assert(contains(key));
         return m_items[m_map[key]];
@@ -76,6 +83,9 @@ public:
         assert(contains(key));
         return m_items[m_map[key]];
     }
+
+    T& operator[](int key) { return at(key); }
+    const T& operator[](int key) const { return at(key); }
 
     T get_or(int key, T fallback) const {
         const T* found = try_get(key);
@@ -136,13 +146,11 @@ public:
 
     class Iterator {
     public:
-        using value_type = std::pair<int, T&>;
+        using value_type = godot::Pair<int, T&>;
         using reference = value_type;
         using pointer = void;
-        using difference_type = std::ptrdiff_t;
-        using iterator_category = std::forward_iterator_tag;
 
-        Iterator(std::vector<int>::iterator k, std::vector<T>::iterator v)
+        Iterator(godot::LocalVector<int>::Iterator k, typename godot::LocalVector<T>::Iterator v)
             : m_key_it(k), m_val_it(v) {}
 
         reference operator*() const { return { *m_key_it, *m_val_it }; }
@@ -154,19 +162,17 @@ public:
         bool operator!=(const Iterator& other) const { return !(*this == other); }
 
     private:
-        std::vector<int>::iterator m_key_it;
-        std::vector<T>::iterator m_val_it;
+        godot::LocalVector<int>::Iterator m_key_it;
+        typename godot::LocalVector<T>::Iterator m_val_it;
     };
 
     class ConstIterator {
     public:
-        using value_type = std::pair<int, const T&>;
+        using value_type = godot::Pair<int, const T&>;
         using reference = value_type;
         using pointer = void;
-        using difference_type = std::ptrdiff_t;
-        using iterator_category = std::forward_iterator_tag;
 
-        ConstIterator(std::vector<int>::const_iterator k, std::vector<T>::const_iterator v)
+        ConstIterator(godot::LocalVector<int>::ConstIterator k, typename godot::LocalVector<T>::ConstIterator v)
             : m_key_it(k), m_val_it(v) {}
 
         reference operator*() const { return { *m_key_it, *m_val_it }; }
@@ -178,8 +184,8 @@ public:
         bool operator!=(const ConstIterator& other) const { return !(*this == other); }
 
     private:
-        std::vector<int>::const_iterator m_key_it;
-        std::vector<T>::const_iterator m_val_it;
+        godot::LocalVector<int>::ConstIterator m_key_it;
+        typename godot::LocalVector<T>::ConstIterator m_val_it;
     };
 
     Iterator begin() { return Iterator(m_keys.begin(), m_items.begin()); }
@@ -189,12 +195,12 @@ public:
     ConstIterator cbegin() const { return ConstIterator(m_keys.begin(), m_items.begin()); }
     ConstIterator cend() const { return ConstIterator(m_keys.end(), m_items.end()); }
 
-    const std::vector<int>& keys() const { return m_keys; }
-    const std::vector<T>& items() const { return m_items; }
-    std::vector<T>& items() { return m_items; }
+    const godot::LocalVector<int>& keys() const { return m_keys; }
+    const godot::LocalVector<T>& items() const { return m_items; }
+    godot::LocalVector<T>& items() { return m_items; }
 
 private:
-    std::vector<int> m_map;
-    std::vector<int> m_keys;
-    std::vector<T> m_items;
+    godot::LocalVector<int> m_map;
+    godot::LocalVector<int> m_keys;
+    godot::LocalVector<T> m_items;
 };

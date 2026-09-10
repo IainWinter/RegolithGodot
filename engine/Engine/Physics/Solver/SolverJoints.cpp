@@ -4,9 +4,9 @@
 
 // joints, solved like rope attaches so momentum carries through
 
-static void solve_joint_axis(SolverBody& b0, SolverBody& b1, vec2 p0, vec2 p1, vec2 n, float c) {
-    vec2 r_0 = p0 - b0.com;
-    vec2 r_1 = p1 - b1.com;
+static void solve_joint_axis(SolverBody& b0, SolverBody& b1, godot::Vector2 p0, godot::Vector2 p1, godot::Vector2 n, float c) {
+    godot::Vector2 r_0 = p0 - b0.com;
+    godot::Vector2 r_1 = p1 - b1.com;
 
     float w = body_inverse_mass_at(b0, r_0, n) + body_inverse_mass_at(b1, r_1, n);
 
@@ -20,20 +20,20 @@ static void solve_joint_axis(SolverBody& b0, SolverBody& b1, vec2 p0, vec2 p1, v
     body_apply_correction(b1, n * -lambda, r_1);
 }
 
-void solve_joint(std::vector<SolverBody>& bodies, const SolverJoint& joint) {
-    SolverBody& b0 = bodies.at(joint.proxy_0);
-    SolverBody& b1 = bodies.at(joint.proxy_1);
+void solve_joint(godot::LocalVector<SolverBody>& bodies, const SolverJoint& joint) {
+    SolverBody& b0 = bodies[joint.proxy_0];
+    SolverBody& b1 = bodies[joint.proxy_1];
 
     if (joint.type == PhysicsWorldJointType_Pin) {
         // one axis at a time, the error is re derived so rotation from the
         // first axis feeds the second
-        vec2 axes[2] = {vec2(1.f, 0.f), vec2(0.f, 1.f)};
+        godot::Vector2 axes[2] = {godot::Vector2(1.f, 0.f), godot::Vector2(0.f, 1.f)};
 
-        for (const vec2& axis : axes) {
-            vec2 p0 = body_point_world(b0, joint.local_0);
-            vec2 p1 = body_point_world(b1, joint.local_1);
+        for (const godot::Vector2& axis : axes) {
+            godot::Vector2 p0 = body_point_world(b0, joint.local_0);
+            godot::Vector2 p1 = body_point_world(b1, joint.local_1);
 
-            float c = dot(p1 - p0, axis);
+            float c = (p1 - p0).dot(axis);
 
             if (fabsf(c) < 1e-9f) {
                 continue;
@@ -45,8 +45,8 @@ void solve_joint(std::vector<SolverBody>& bodies, const SolverJoint& joint) {
         return;
     }
 
-    vec2 p0 = body_point_world(b0, joint.local_0);
-    vec2 p1 = body_point_world(b1, joint.local_1);
+    godot::Vector2 p0 = body_point_world(b0, joint.local_0);
+    godot::Vector2 p1 = body_point_world(b1, joint.local_1);
 
     auto [n, len] = safe_normalize_distance(p1 - p0);
 

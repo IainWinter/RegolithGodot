@@ -4,26 +4,26 @@
 #include "Coordinate/Grid.h"
 #include "Math/MathUtil.h"
 
-#include "glm/geometric.hpp"
+
 
 float sprite_rope_radius(const Transform& transform, const Grid& grid) {
     return grid.cells.x > 0 ? transform.scale.x / (float)grid.cells.x : 0.f;
 }
 
-float sprite_rope_group_pixels(const std::vector<SpriteRope>& ropes) {
+float sprite_rope_group_pixels(const godot::LocalVector<SpriteRope>& ropes) {
     float length = 0.f;
 
     for (const SpriteRope& rope : ropes) {
         for (size_t i = 0; i + 1 < rope.rest_local.size(); i++) {
-            length += distance(rope.rest_local[i], rope.rest_local[i + 1]);
+            length += (rope.rest_local[i]).distance_to(rope.rest_local[i + 1]);
         }
     }
 
     return length / k_cell_local_size;
 }
 
-bool find_rope_hit_segment(const SpriteRopeSet& set, vec2 a, vec2 b, float radius, SpriteRopeHitResult* hit) {
-    const std::vector<SpriteRope>& ropes = set.ropes;
+bool find_rope_hit_segment(const SpriteRopeSet& set, godot::Vector2 a, godot::Vector2 b, float radius, SpriteRopeHitResult* hit) {
+    const godot::LocalVector<SpriteRope>& ropes = set.ropes;
 
     bool found = false;
     float best_along = 2.f;
@@ -33,16 +33,16 @@ bool find_rope_hit_segment(const SpriteRopeSet& set, vec2 a, vec2 b, float radiu
         int n = (int)rope.nodes.size();
 
         for (int i = 0; i + 1 < n; i++) {
-            vec2 r0 = rope.nodes[i].position;
-            vec2 r1 = rope.nodes[i + 1].position;
+            godot::Vector2 r0 = rope.nodes[i].position;
+            godot::Vector2 r1 = rope.nodes[i + 1].position;
 
             float s, t;
             closest_segment_segment(a, b, r0, r1, &s, &t);
 
-            vec2 on_query = a + (b - a) * s;
-            vec2 on_rope = r0 + (r1 - r0) * t;
+            godot::Vector2 on_query = a + (b - a) * s;
+            godot::Vector2 on_rope = r0 + (r1 - r0) * t;
 
-            if (distance(on_query, on_rope) > radius) {
+            if ((on_query).distance_to(on_rope) > radius) {
                 continue;
             }
 
@@ -63,8 +63,8 @@ bool find_rope_hit_segment(const SpriteRopeSet& set, vec2 a, vec2 b, float radiu
     return found;
 }
 
-bool find_rope_hit_point(const SpriteRopeSet& set, vec2 point, float radius, SpriteRopeHitResult* hit) {
-    const std::vector<SpriteRope>& ropes = set.ropes;
+bool find_rope_hit_point(const SpriteRopeSet& set, godot::Vector2 point, float radius, SpriteRopeHitResult* hit) {
+    const godot::LocalVector<SpriteRope>& ropes = set.ropes;
 
     bool found = false;
     float best_dist = radius;
@@ -74,13 +74,13 @@ bool find_rope_hit_point(const SpriteRopeSet& set, vec2 point, float radius, Spr
         int n = (int)rope.nodes.size();
 
         for (int i = 0; i + 1 < n; i++) {
-            vec2 r0 = rope.nodes[i].position;
-            vec2 r1 = rope.nodes[i + 1].position;
+            godot::Vector2 r0 = rope.nodes[i].position;
+            godot::Vector2 r1 = rope.nodes[i + 1].position;
 
             float t = closest_t_on_segment(r0, r1, point);
-            vec2 on_rope = r0 + (r1 - r0) * t;
+            godot::Vector2 on_rope = r0 + (r1 - r0) * t;
 
-            float d = distance(point, on_rope);
+            float d = (point).distance_to(on_rope);
 
             if (d > best_dist) {
                 continue;

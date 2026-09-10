@@ -3,13 +3,12 @@
 #include "Color.h"
 #include "Coordinate/AxisAlignedAreaTree.h"
 #include "Coordinate/Transform.h"
+#include "Math/Vector.h"
 
-#include "glm/vec2.hpp"
-using namespace glm;
+#include <godot_cpp/templates/local_vector.hpp>
 
-#include <string_view>
-#include <vector>
-#include <array>
+#include <godot_cpp/variant/string.hpp>
+
 #include <ostream>
 #include <istream>
 #include <mutex>
@@ -24,7 +23,7 @@ enum DebugLayer {
 
 enum DebugName {
     DebugName_Default,
-    
+
     DebugName_Physics_Broadphase_Tree,
     DebugName_Physics_Broadphase_Overlap_World_Bounds,
     DebugName_Physics_Broadphase_Overlap_World_Pair_Line,
@@ -70,6 +69,11 @@ enum DebugName {
     DebugName_Count
 };
 
+struct DebugColorEntry {
+    Color4 color;
+    bool enabled;
+};
+
 class DebugRendererColorMap {
 public:
     DebugRendererColorMap();
@@ -91,44 +95,44 @@ public:
     const auto& tints() const { return m_debug_layer_tint; }
 
 private:
-    std::array<std::pair<Color4, bool>, static_cast<size_t>(DebugName_Count)> m_debug_name_color;
-    std::array<std::pair<Color4, bool>, static_cast<size_t>(DebugLayer_Count)> m_debug_layer_tint;
+    DebugColorEntry m_debug_name_color[static_cast<size_t>(DebugName_Count)];
+    DebugColorEntry m_debug_layer_tint[static_cast<size_t>(DebugLayer_Count)];
 };
 
 struct DebugRendererLine {
-    vec2 a, b;
+    godot::Vector2 a, b;
     Color4 color;
 };
 
 struct DebugRendererLineInternal {
-    vec2 a, b;
+    godot::Vector2 a, b;
     DebugLayer layer;
     DebugName name;
 };
 
 class DebugRendererLineList {
 public:
-    const std::vector<DebugRendererLine>& get_lines();
+    const godot::LocalVector<DebugRendererLine>& get_lines();
 
     void invalidate_cache();
     void clear_lines();
 
-    void line                  (vec2 a, vec2 b,                       DebugName name = DebugName_Default, DebugLayer layer = DebugLayer_Default);
-    void ray                   (vec2 origin, vec2 ray,                DebugName name = DebugName_Default, DebugLayer layer = DebugLayer_Default);
-    void circle                (vec2 origin, float radius,            DebugName name = DebugName_Default, DebugLayer layer = DebugLayer_Default);
-    void capsule               (vec2 a, vec2 b, float radius,         DebugName name = DebugName_Default, DebugLayer layer = DebugLayer_Default);
-    void arc                   (vec2 origin, float radius, float min_angle, float max_angle, DebugName name = DebugName_Default, DebugLayer layer = DebugLayer_Default);
+    void line                  (godot::Vector2 a, godot::Vector2 b,                       DebugName name = DebugName_Default, DebugLayer layer = DebugLayer_Default);
+    void ray                   (godot::Vector2 origin, godot::Vector2 ray,                DebugName name = DebugName_Default, DebugLayer layer = DebugLayer_Default);
+    void circle                (godot::Vector2 origin, float radius,            DebugName name = DebugName_Default, DebugLayer layer = DebugLayer_Default);
+    void capsule               (godot::Vector2 a, godot::Vector2 b, float radius,         DebugName name = DebugName_Default, DebugLayer layer = DebugLayer_Default);
+    void arc                   (godot::Vector2 origin, float radius, float min_angle, float max_angle, DebugName name = DebugName_Default, DebugLayer layer = DebugLayer_Default);
     void axis_aligned_box      (const AxisAlignedBox& box,            DebugName name = DebugName_Default, DebugLayer layer = DebugLayer_Default);
     void axis_aligned_area_tree(const AxisAlignedAreaTreeIndex& tree, DebugName name = DebugName_Default, DebugLayer layer = DebugLayer_Default);
-    void polygon               (const vec2* points, int count,        DebugName name = DebugName_Default, DebugLayer layer = DebugLayer_Default);
+    void polygon               (const godot::Vector2* points, int count,        DebugName name = DebugName_Default, DebugLayer layer = DebugLayer_Default);
     void transform             (const Transform& transform,           DebugName name = DebugName_Default, DebugLayer layer = DebugLayer_Default);
 
 private:
     std::mutex m_lines_mutex;
-    std::vector<DebugRendererLineInternal> m_lines;
+    godot::LocalVector<DebugRendererLineInternal> m_lines;
 
     bool m_cache_valid;
-    std::vector<DebugRendererLine> m_cache;
+    godot::LocalVector<DebugRendererLine> m_cache;
 };
 
 // Static accessors so this doesn't need to be passed around

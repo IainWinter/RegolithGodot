@@ -4,18 +4,17 @@
 #include "SpriteCell.h"
 #include "Assets/SpriteAsset.h"
 
-#include "Memory/FreeListChunkAllocator.h"
-#include "Memory/FreeList.h"
+#include "Containers/FreeListChunkAllocator.h"
+#include "Containers/FreeList.h"
 
 #include <godot_cpp/classes/texture2d_array.hpp>
 #include <godot_cpp/templates/spin_lock.hpp>
+#include <godot_cpp/templates/hash_map.hpp>
+#include <godot_cpp/templates/hash_set.hpp>
+#include <godot_cpp/templates/local_vector.hpp>
 #include <godot_cpp/variant/packed_byte_array.hpp>
 
-#include "glm/vec3.hpp"
-
-#include <unordered_map>
-#include <unordered_set>
-#include <vector>
+#include "Math/Vector.h"
 
 /*
     Owns every chunk's cell memory and the atlas textures they render from.
@@ -71,7 +70,7 @@ private:
 
     // only for testing
 public:
-    ivec3 atlas_index_to_xyz(size_t index) const;
+    godot::Vector3i atlas_index_to_xyz(size_t index) const;
 
 private:
     uint32_t m_chunk_size = 0;
@@ -86,13 +85,13 @@ private:
     FreeListChunkAllocator<SpriteCellMask> m_mask_allocator;
     FreeListChunkAllocator<float> m_distance_allocator;
 
-    std::unordered_map<SpriteChunk*, SpriteChunkState> m_dirty;
+    godot::HashMap<SpriteChunk*, SpriteChunkState> m_dirty;
 
-    std::unordered_set<SpriteChunkId> m_alive;
+    godot::HashSet<SpriteChunkId> m_alive;
 
-    std::vector<godot::PackedByteArray> m_color_pages;
-    std::vector<godot::PackedByteArray> m_mask_pages;
-    std::vector<bool> m_page_dirty;
+    godot::LocalVector<godot::PackedByteArray> m_color_pages;
+    godot::LocalVector<godot::PackedByteArray> m_mask_pages;
+    godot::LocalVector<bool> m_page_dirty;
 
     godot::Ref<godot::Texture2DArray> m_color_texture;
     godot::Ref<godot::Texture2DArray> m_mask_texture;

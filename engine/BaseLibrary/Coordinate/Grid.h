@@ -1,15 +1,15 @@
 #pragma once
 
 #include "Result.h"
+#include "Math/Vector.h"
 
-#include "glm/vec2.hpp"
-using namespace glm;
+#include <godot_cpp/templates/pair.hpp>
 
 struct GridCellNeighbors {
     struct ChunkCellIndexPosition {
         bool exists;
-        ivec2 chunkIndexPosition;
-        ivec2 cellIndexPosition;
+        godot::Vector2i chunkIndexPosition;
+        godot::Vector2i cellIndexPosition;
     };
 
     union {
@@ -49,16 +49,16 @@ struct GridCellNeighbors {
  *  - (chunkIndex, cellIndex) -> gridPoint
  *  - (chunkIndex, cellIndex) -> gridIndexPosition
 */
-struct [[Struct]] Grid {
+struct  Grid {
     int chunkSize;
-    ivec2 chunks;
-    ivec2 cells;
+    godot::Vector2i chunks;
+    godot::Vector2i cells;
 
     Grid();
 
-    Grid(int chunkSize, ivec2 chunks);
+    Grid(int chunkSize, godot::Vector2i chunks);
 
-    static Grid from_cells(int chunkSize, ivec2 cells);
+    static Grid from_cells(int chunkSize, godot::Vector2i cells);
 
     // Counts
 
@@ -70,57 +70,57 @@ struct [[Struct]] Grid {
 
     // Sort these
 
-    int to_chunk_index(ivec2 chunkIndexPosition) const;
+    int to_chunk_index(godot::Vector2i chunkIndexPosition) const;
 
-    ivec2 to_chunk_index_position(int chunkIndex) const;
+    godot::Vector2i to_chunk_index_position(int chunkIndex) const;
 
-    int to_cell_index(ivec2 cellIndexPosition) const;
+    int to_cell_index(godot::Vector2i cellIndexPosition) const;
 
-    ivec2 to_cell_index_position(int cellIndex) const;
+    godot::Vector2i to_cell_index_position(int cellIndex) const;
 
-    vec2 to_grid_point(vec2 localPoint) const;
+    godot::Vector2 to_grid_point(godot::Vector2 localPoint) const;
 
-    vec2 to_local_scale(vec2 gridPoint) const;
+    godot::Vector2 to_local_scale(godot::Vector2 gridPoint) const;
 
-    vec2 to_local_point(vec2 gridPoint) const;
+    godot::Vector2 to_local_point(godot::Vector2 gridPoint) const;
 
-    vec2 to_local_point(ivec2 gridIndexPosition) const;
+    godot::Vector2 to_local_point(godot::Vector2i gridIndexPosition) const;
 
-    vec2 to_local_point(int chunkIndex, int cellIndex) const;
+    godot::Vector2 to_local_point(int chunkIndex, int cellIndex) const;
 
-    vec2 to_local_point_centered(vec2 gridPoint) const;
+    godot::Vector2 to_local_point_centered(godot::Vector2 gridPoint) const;
 
-    vec2 to_local_point_centered(ivec2 gridIndexPosition) const;
+    godot::Vector2 to_local_point_centered(godot::Vector2i gridIndexPosition) const;
 
-    vec2 to_local_point_centered(int chunkIndex, int cellIndex) const;
+    godot::Vector2 to_local_point_centered(int chunkIndex, int cellIndex) const;
 
-    int to_grid_index(vec2 localPoint) const;
+    int to_grid_index(godot::Vector2 localPoint) const;
 
-    ivec2 to_grid_index_position(vec2 localPoint) const;
+    godot::Vector2i to_grid_index_position(godot::Vector2 localPoint) const;
 
-    ivec2 to_grid_index_position(int chunkIndex, int cellIndex) const;
+    godot::Vector2i to_grid_index_position(int chunkIndex, int cellIndex) const;
 
-    ivec2 to_grid_index_position(ivec2 chunkIndexPosition, ivec2 cellIndexPosition) const;
+    godot::Vector2i to_grid_index_position(godot::Vector2i chunkIndexPosition, godot::Vector2i cellIndexPosition) const;
 
-    std::pair<int, int> to_chunk_cell_index(vec2 gridPoint) const;
+    godot::Pair<int, int> to_chunk_cell_index(godot::Vector2 gridPoint) const;
 
-    std::pair<int, int> to_chunk_cell_index(ivec2 gridIndexPosition) const;
+    godot::Pair<int, int> to_chunk_cell_index(godot::Vector2i gridIndexPosition) const;
 
-    std::pair<ivec2, ivec2> to_chunk_cell_index_positions(ivec2 gridIndexPosition) const;
+    godot::Pair<godot::Vector2i, godot::Vector2i> to_chunk_cell_index_positions(godot::Vector2i gridIndexPosition) const;
 
-    std::pair<vec2, vec2> calc_fractional_difference(vec2 gridPoint) const;
+    godot::Pair<godot::Vector2, godot::Vector2> calc_fractional_difference(godot::Vector2 gridPoint) const;
 
     bool is_chunk_index_valid(int chunkIndex) const;
 
-    bool is_chunk_index_position_valid(ivec2 chunkIndexPosition) const;
+    bool is_chunk_index_position_valid(godot::Vector2i chunkIndexPosition) const;
 
     bool is_cell_index_valid(int cellIndex) const;
 
-    bool is_cell_index_position_valid(ivec2 cellIndexPosition) const;
+    bool is_cell_index_position_valid(godot::Vector2i cellIndexPosition) const;
 
     bool is_grid_index_valid(int gridIndex) const;
 
-    bool is_grid_index_position_valid(ivec2 gridIndexPosition) const;
+    bool is_grid_index_position_valid(godot::Vector2i gridIndexPosition) const;
 
-    GridCellNeighbors get_cell_neighbors_in_bordering_chunks(ivec2 chunkIndexPosition, ivec2 cellIndexPosition) const;
+    GridCellNeighbors get_cell_neighbors_in_bordering_chunks(godot::Vector2i chunkIndexPosition, godot::Vector2i cellIndexPosition) const;
 };

@@ -1,19 +1,21 @@
 #include "FloodFill.h"
 #include "Math/MathUtil.h"
 
+#include <algorithm>
+
 
 FloodFillResult flood_fill(int seed, int id, int size, const SpriteCellMask* mask, int* working) {
 
     FloodFillResult result{};
     result.seedIndex = seed;
     
-    std::vector<ivec2> stack;
+    godot::LocalVector<godot::Vector2i> stack;
     stack.reserve(size * size);
     stack.push_back({ seed % size, seed / size });
 
     while (stack.size() > 0) {
-        ivec2 cur = stack.back();
-        stack.pop_back();
+        godot::Vector2i cur = stack[stack.size() - 1];
+        stack.remove_at(stack.size() - 1);
         
         if (   cur.x < 0 || cur.x >= size 
             || cur.y < 0 || cur.y >= size) 
@@ -40,18 +42,18 @@ FloodFillResult flood_fill(int seed, int id, int size, const SpriteCellMask* mas
         result.typeCounts[mask_index.get_type()] += 1;
         result.index.push_back(index);
 
-        constexpr ivec2 offsets[8] = {
-            ivec2(-1, -1),
-            ivec2( 0, -1),
-            ivec2( 1, -1),
-            ivec2(-1,  0),
-            ivec2( 1,  0),
-            ivec2(-1,  1),
-            ivec2( 0,  1),
-            ivec2( 1,  1)
+        constexpr godot::Vector2i offsets[8] = {
+            godot::Vector2i(-1, -1),
+            godot::Vector2i( 0, -1),
+            godot::Vector2i( 1, -1),
+            godot::Vector2i(-1,  0),
+            godot::Vector2i( 1,  0),
+            godot::Vector2i(-1,  1),
+            godot::Vector2i( 0,  1),
+            godot::Vector2i( 1,  1)
         };
         
-        for (const ivec2& offset : offsets) {
+        for (const godot::Vector2i& offset : offsets) {
             stack.push_back(cur + offset);
         }
 

@@ -1,3 +1,4 @@
+@tool
 class_name EnemyBossShield
 extends Node
 
@@ -67,14 +68,12 @@ func update(host: Enemy, delta: float) -> void:
 
 # the hull polygon and its centroid in world units, built on first use
 func world_points(host: Enemy) -> PackedVector2Array:
-	if local_points.is_empty():
-		build_local_points(host)
+	build_local_points(host)
 
 	return host.global_transform.scaled(Vector2.ONE / Steering.ppu()) * local_points
 
 func world_centroid(host: Enemy) -> Vector2:
-	if local_points.is_empty():
-		build_local_points(host)
+	build_local_points(host)
 
 	return host.global_transform.scaled(Vector2.ONE / Steering.ppu()) * local_centroid
 
@@ -83,9 +82,12 @@ func slot_point(host: Enemy, point: Vector2) -> Vector2:
 	return Steering.closest_point_on_polygon(world_points(host), point)
 
 func build_local_points(host: Enemy) -> void:
-	var half := Vector2(host.get_cell_count()) * 0.5 * Steering.cell_pixels()
+	local_points.clear()
 	local_centroid = Vector2.ZERO
+	if not host.is_loaded():
+		return
 
+	var half := Vector2(host.get_cell_count()) * 0.5 * Steering.cell_pixels()
 	for p in points:
 		var local := Vector2(p.x, -p.y) * half
 		local_points.append(local)
@@ -132,3 +134,30 @@ static func is_rock(sprite: Node, host: Enemy) -> bool:
 		return false
 
 	return not sprite is Enemy and sprite != host.player
+
+# emits in host-local pixels; the walker sets g.transform to the host's
+# global_transform, so everything lifts to scene pixels at push time
+func draw_gizmos(g: RegolithGizmos) -> void:
+	var host := get_parent() as Enemy
+	if host == null or points.size() < 3:
+		return
+
+	build_local_points(host)
+	if local_points.is_empty():
+		return
+
+	var color := Color(0.24, 0.86, 1.0)
+	var name := RegolithDebugDraw.AI_SHIELD
+	var ppu := Steering.ppu()
+
+	g.polygon(local_points, color, name)
+	g.cross(local_centroid, 0.25 * ppu, color, name)
+	g.circle(local_centroid, capture_radius * ppu, color, name)
+
+	if not Engine.is_editor_hint() and host.player != null:
+		var to_local := host.global_transform.affine_inverse()
+		var slot_local := to_local * (slot_point(host, host.player_pos) * ppu)
+		g.cross(slot_local, 0.5 * ppu, color, name)
+		for rock in holding:
+			if is_instance_valid(rock):
+				g.line(to_local * rock.global_position, slot_local, color, name)

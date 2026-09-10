@@ -1,3 +1,4 @@
+#include <algorithm>
 #include "SpriteDistanceField.h"
 
 #include "DestructibleSprite/Sprite.h"
@@ -5,7 +6,7 @@
 #include "Constants.h"
 
 #include <cmath>
-#include <unordered_set>
+#include <godot_cpp/templates/hash_set.hpp>
 
 static constexpr float k_edt_inf = 1e20f;
 
@@ -43,16 +44,16 @@ static void edt_1d(const float* f, float* d, int* v, float* z, int n) {
 }
 
 // squared distance to the nearest zero cell, rows then columns
-static void edt_squared(std::vector<float>& field, ivec2 size) {
-    int n = glm::max(size.x, size.y);
+static void edt_squared(godot::LocalVector<float>& field, godot::Vector2i size) {
+    int n = std::max(size.x, size.y);
 
-    std::vector<float> f(n);
-    std::vector<float> d(n);
-    std::vector<int> v(n);
-    std::vector<float> z(n + 1);
+    godot::LocalVector<float> f; f.resize(n);
+    godot::LocalVector<float> d; d.resize(n);
+    godot::LocalVector<int> v; v.resize(n);
+    godot::LocalVector<float> z; z.resize(n + 1);
 
     for (int y = 0; y < size.y; y++) {
-        edt_1d(&field[y * size.x], d.data(), v.data(), z.data(), size.x);
+        edt_1d(&field[y * size.x], d.ptr(), v.ptr(), z.ptr(), size.x);
 
         for (int x = 0; x < size.x; x++) {
             field[x + y * size.x] = d[x];
@@ -64,7 +65,7 @@ static void edt_squared(std::vector<float>& field, ivec2 size) {
             f[y] = field[x + y * size.x];
         }
 
-        edt_1d(f.data(), d.data(), v.data(), z.data(), size.y);
+        edt_1d(f.ptr(), d.ptr(), v.ptr(), z.ptr(), size.y);
 
         for (int y = 0; y < size.y; y++) {
             field[x + y * size.x] = d[y];
@@ -72,11 +73,11 @@ static void edt_squared(std::vector<float>& field, ivec2 size) {
     }
 }
 
-std::vector<float> sprite_distance_field_compute(const uint8_t* filled, ivec2 size) {
+godot::LocalVector<float> sprite_distance_field_compute(const uint8_t* filled, godot::Vector2i size) {
     int total = size.x * size.y;
 
-    std::vector<float> outside(total);
-    std::vector<float> inside(total);
+    godot::LocalVector<float> outside; outside.resize(total);
+    godot::LocalVector<float> inside; inside.resize(total);
 
     for (int i = 0; i < total; i++) {
         outside[i] = filled[i] ? 0.f : k_edt_inf;
@@ -86,12 +87,12 @@ std::vector<float> sprite_distance_field_compute(const uint8_t* filled, ivec2 si
     edt_squared(outside, size);
     edt_squared(inside, size);
 
-    std::vector<float> field(total);
+    godot::LocalVector<float> field; field.resize(total);
 
     for (int i = 0; i < total; i++) {
         float signed_distance = filled[i] ? 0.5f - sqrtf(inside[i]) : sqrtf(outside[i]) - 0.5f;
 
-        field[i] = glm::clamp(signed_distance, -k_sdf_band_cells, k_sdf_band_cells);
+        field[i] = clamp(signed_distance, -k_sdf_band_cells, k_sdf_band_cells);
     }
 
     return field;
@@ -100,13 +101,13 @@ std::vector<float> sprite_distance_field_compute(const uint8_t* filled, ivec2 si
 static SpriteChunkNeighbors8 gather_neighbors(const Sprite& sprite, int chunkIndex) {
     const Grid& grid = sprite.grid();
 
-    ivec2 cp = grid.to_chunk_index_position(chunkIndex);
+    godot::Vector2i cp = grid.to_chunk_index_position(chunkIndex);
 
     SpriteChunkNeighbors8 neighbors {};
 
     for (int dy = -1; dy <= 1; dy++) {
         for (int dx = -1; dx <= 1; dx++) {
-            ivec2 p = cp + ivec2(dx, dy);
+            godot::Vector2i p = cp + godot::Vector2i(dx, dy);
 
             if (!grid.is_chunk_index_position_valid(p)) {
                 continue;
@@ -128,17 +129,17 @@ void sprite_distance_field_build(Sprite& sprite) {
     }
 }
 
-void sprite_distance_field_update_chunks(Sprite& sprite, const std::vector<SpriteChunk*>& dirtyChunks) {
+void sprite_distance_field_update_chunks(Sprite& sprite, const godot::LocalVector<SpriteChunk*>& dirtyChunks) {
     const Grid& grid = sprite.grid();
 
-    std::unordered_set<int> affected;
+    godot::HashSet<int> affected;
 
     for (const SpriteChunk* dirtyChunk : dirtyChunks) {
-        ivec2 cp = grid.to_chunk_index_position(dirtyChunk->index);
+        godot::Vector2i cp = grid.to_chunk_index_position(dirtyChunk->index);
 
         for (int dy = -1; dy <= 1; dy++) {
             for (int dx = -1; dx <= 1; dx++) {
-                ivec2 p = cp + ivec2(dx, dy);
+                godot::Vector2i p = cp + godot::Vector2i(dx, dy);
 
                 if (!grid.is_chunk_index_position_valid(p)) {
                     continue;

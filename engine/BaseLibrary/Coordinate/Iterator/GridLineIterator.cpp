@@ -2,23 +2,23 @@
 
 #include <cmath>
 
-GridLineIterator::GridLineIterator(vec2 startGridPoint, vec2 dir, float length) {
+GridLineIterator::GridLineIterator(godot::Vector2 startGridPoint, godot::Vector2 dir, float length) {
     m_start = startGridPoint;
-    m_cell = ivec2(startGridPoint);
+    m_cell = godot::Vector2i((int)startGridPoint.x, (int)startGridPoint.y);
     m_ray_current_length = 0.f;
     m_ray_final_length = length;
     init(dir);
 }
 
-ivec2 GridLineIterator::current() const {
+godot::Vector2i GridLineIterator::current() const {
     return m_cell;
 }
 
-vec2 GridLineIterator::current_position() const {
+godot::Vector2 GridLineIterator::current_position() const {
     return m_start + m_ray_direction * m_ray_current_length; 
 }
 
-vec2 GridLineIterator::current_direction() const {
+godot::Vector2 GridLineIterator::current_direction() const {
     return m_ray_direction;
 }
 
@@ -48,7 +48,7 @@ void GridLineIterator::next() {
     }
 }
 
-void GridLineIterator::set_direction(vec2 dir) {
+void GridLineIterator::set_direction(godot::Vector2 dir) {
     m_start = current_position();
     m_ray_final_length -= m_ray_current_length;
     m_ray_current_length = 0.f;
@@ -56,7 +56,7 @@ void GridLineIterator::set_direction(vec2 dir) {
     init(dir);
 }
 
-void GridLineIterator::init(vec2 dir) {
+void GridLineIterator::init(godot::Vector2 dir) {
     m_ray_direction = dir;
 
     // X axis

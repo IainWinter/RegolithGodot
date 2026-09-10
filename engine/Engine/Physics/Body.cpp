@@ -1,21 +1,21 @@
 #include "Body.h"
 #include "Math/MathUtil.h"
 
-#include "glm/geometric.hpp"
+
 
 PhysicsBody::PhysicsBody()
-    : PhysicsBody(vec2(0.f), 0.f) {}
+    : PhysicsBody(godot::Vector2(0.f, 0.f), 0.f) {}
 
-PhysicsBody::PhysicsBody(vec2 position, float angle)
+PhysicsBody::PhysicsBody(godot::Vector2 position, float angle)
     : position(position)
     , angle(angle)
     , last_position(position)
     , last_angle(angle)
-    , linear_velocity(vec2(0.f))
+    , linear_velocity(godot::Vector2(0.f, 0.f))
     , angular_velocity(0.f)
     , linear_damping(0.01f)
     , angular_damping(0.01f)
-    , center_of_mass(vec2(0.f))
+    , center_of_mass(godot::Vector2(0.f, 0.f))
     , inv_mass(1.f)
     , inv_inertia(1.f)
     , angle_fixed(false)
@@ -32,7 +32,7 @@ float PhysicsBody::inertia() const {
 }
 
 float PhysicsBody::speed() const {
-    return length(linear_velocity);
+    return (linear_velocity).length();
 }
 
 void PhysicsBody::set_mass(float mass, float inertia) {
@@ -45,20 +45,25 @@ void PhysicsBody::add_joint(const PhysicsJoint& joint) {
 }
 
 void PhysicsBody::remove_joint(int id) {
-    std::erase_if(joints, [id](const auto& x) { return x.id == id; });
+    for (uint32_t i = 0; i < joints.size(); ) {
+        if (joints[i].id == id) {
+            joints.remove_at(i);
+        } else {
+            i++;
+        }
+    }
 }
 
 const PhysicsJoint* PhysicsBody::get_joint(int id) const {
-    auto it = std::find_if(joints.begin(), joints.end(), [id](const auto& x) { return x.id == id; });
-
-    if (it == joints.end()) {
-        return nullptr;
+    for (uint32_t i = 0; i < joints.size(); i++) {
+        if (joints[i].id == id) {
+            return &joints[i];
+        }
     }
-
-    return &*it;
+    return nullptr;
 }
 
-Transform PhysicsBody::transform(vec2 scale) const {
+Transform PhysicsBody::transform(godot::Vector2 scale) const {
     return Transform {
         .position = position,
         .scale = scale,
@@ -66,11 +71,11 @@ Transform PhysicsBody::transform(vec2 scale) const {
     };
 }
 
-void PhysicsBody::apply_impulse_center_of_mass(vec2 impulse) {
+void PhysicsBody::apply_impulse_center_of_mass(godot::Vector2 impulse) {
     linear_velocity += impulse * inv_mass;
 }
 
-void PhysicsBody::apply_impulse_r(vec2 impulse, vec2 r) {
+void PhysicsBody::apply_impulse_r(godot::Vector2 impulse, godot::Vector2 r) {
     apply_impulse_center_of_mass(impulse);
 
     if (!angle_fixed) {
@@ -78,7 +83,7 @@ void PhysicsBody::apply_impulse_r(vec2 impulse, vec2 r) {
     }
 }
 
-vec2 PhysicsBody::velocity_at_local_point(vec2 local_point) const {
-    vec2 r = rotate_local_point(local_point - center_of_mass, angle);
+godot::Vector2 PhysicsBody::velocity_at_local_point(godot::Vector2 local_point) const {
+    godot::Vector2 r = rotate_local_point(local_point - center_of_mass, angle);
     return linear_velocity + cross(angular_velocity, r);
 }

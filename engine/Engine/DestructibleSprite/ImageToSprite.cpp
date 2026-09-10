@@ -1,3 +1,4 @@
+#include "Containers/VectorUtil.h"
 #include "ImageToSprite.h"
 
 #include "DestructibleSprite/SpriteMaskPack.h"
@@ -51,19 +52,19 @@ static SpriteCellMaskType color4_to_mask(Color4 color) {
     return SpriteCellMaskType_Empty;
 }
 
-static SpriteAssetCore flood_fill_core(const uint8_t* mask_cells, std::vector<bool>& floor_fill_state, int width, int height, int iseed,
+static SpriteAssetCore flood_fill_core(const uint8_t* mask_cells, godot::LocalVector<bool>& floor_fill_state, int width, int height, int iseed,
                                      SpriteCellMaskType seed_type) {
     SpriteAssetCore r{};
-    r.min = ivec2(INT_MAX, INT_MAX);
-    r.max = ivec2(-INT_MAX, -INT_MAX);
+    r.min = godot::Vector2i(INT_MAX, INT_MAX);
+    r.max = godot::Vector2i(-INT_MAX, -INT_MAX);
     r.type = seed_type;
 
-    std::vector<int> stack;
+    godot::LocalVector<int> stack;
     stack.push_back(iseed);
 
     while (stack.size() > 0) {
-        int index = stack.back();
-        stack.pop_back();
+        int index = stack[stack.size() - 1];
+        stack.remove_at(stack.size() - 1);
 
         if (index < 0 || index >= width * height) { // guard out of bounds
             continue;
@@ -121,16 +122,17 @@ static Color4 normal_pixel_or_flat(const uint8_t* normal_pixels, int normal_chan
 }
 
 template <typename T> static void image_to_chunks_iterator(SpriteAsset& asset, int width, int height, int channels, T&& func) {
-    ivec2 chunkDimensions = (ivec2(width, height) + k_cells_per_chunk - 1) / k_cells_per_chunk;
+    godot::Vector2i chunkDimensions = godot::Vector2i((width + k_cells_per_chunk - 1) / k_cells_per_chunk, (height + k_cells_per_chunk - 1) / k_cells_per_chunk);
 
     asset.chunkCount = chunkDimensions;
-    asset.cellCount = ivec2(width, height);
+    asset.cellCount = godot::Vector2i(width, height);
 
     for (int cy = 0; cy < chunkDimensions.y; cy++) {
         for (int cx = 0; cx < chunkDimensions.x; cx++) {
-            SpriteAssetChunk& chunk = asset.chunks.emplace_back();
+            asset.chunks.push_back(SpriteAssetChunk{});
+            SpriteAssetChunk& chunk = asset.chunks[asset.chunks.size() - 1];
 
-            chunk.gridPixelOffset = ivec2(cx, cy) * k_cells_per_chunk;
+            chunk.gridPixelOffset = godot::Vector2i(cx * k_cells_per_chunk, cy * k_cells_per_chunk);
             chunk.index = cx + cy * chunkDimensions.x;
 
             for (int y = 0; y < k_cells_per_chunk; y++) {
@@ -145,13 +147,12 @@ template <typename T> static void image_to_chunks_iterator(SpriteAsset& asset, i
                     int iindex = (ix + iy * width) * channels;
                     int cindex = x + y * k_cells_per_chunk;
 
-                    func(chunk, iindex, cindex, ivec2(ix, iy));
+                    func(chunk, iindex, cindex, godot::Vector2i(ix, iy));
                 }
             }
 
-            // Erase if there are no cells
             if (chunk.activePixelCount == 0) {
-                asset.chunks.pop_back();
+                asset.chunks.remove_at(asset.chunks.size() - 1);
             }
         }
     }
@@ -167,9 +168,9 @@ SpriteAsset image_to_sprite_chunks(const uint8_t* pixels, int width, int height,
     SpriteAsset asset{};
     asset.has_normal = normal_pixels != nullptr;
 
-    auto fill = [&](SpriteAssetChunk& chunk, int iindex, int cindex, ivec2 gridIndexPosition) {
-        if (asset.has_normal && chunk.normal.empty()) {
-            chunk.normal.assign(k_cells_per_chunk * k_cells_per_chunk, Color4{128, 128, 255, 255});
+    auto fill = [&](SpriteAssetChunk& chunk, int iindex, int cindex, godot::Vector2i gridIndexPosition) {
+        if (asset.has_normal && chunk.normal.is_empty()) {
+            vector_fill(chunk.normal, k_cells_per_chunk * k_cells_per_chunk,  Color4{128, 128, 255, 255});
         }
 
         Color4 color = pixel_to_color4(pixels, channels, iindex);
@@ -209,14 +210,14 @@ SpriteAsset image_to_sprite_chunks(const uint8_t* pixels, int width, int height,
 
 SpriteAsset image_with_mask_to_sprite_chunks(const uint8_t* pixels, int width, int height, const uint8_t* mask_cells, const uint8_t* normal_pixels, int normal_channels) {
 
-    std::vector<bool> floor_fill_state(width * height, true);
+    godot::LocalVector<bool> floor_fill_state; vector_fill(floor_fill_state, width * height, true);
 
     SpriteAsset asset{};
     asset.has_normal = normal_pixels != nullptr;
 
-    auto fill = [&](SpriteAssetChunk& chunk, int iindex, int cindex, ivec2 gridIndexPosition) {
-        if (asset.has_normal && chunk.normal.empty()) {
-            chunk.normal.assign(k_cells_per_chunk * k_cells_per_chunk, Color4{128, 128, 255, 255});
+    auto fill = [&](SpriteAssetChunk& chunk, int iindex, int cindex, godot::Vector2i gridIndexPosition) {
+        if (asset.has_normal && chunk.normal.is_empty()) {
+            vector_fill(chunk.normal, k_cells_per_chunk * k_cells_per_chunk,  Color4{128, 128, 255, 255});
         }
 
         Color4 color;
@@ -269,14 +270,13 @@ SpriteAsset image_with_mask_to_sprite_chunks(const uint8_t* pixels, int width, i
             if (mask != SpriteCellMaskType_Filled && needs_flood_fill) {
                 SpriteAssetCore core = flood_fill_core(mask_cells, floor_fill_state, width, height, cell_index, mask);
 
-                ivec2 dims = core.max - core.min + 1;
+                godot::Vector2i dims = godot::Vector2i(core.max.x - core.min.x + 1, core.max.y - core.min.y + 1);
 
                 core.width = dims.x;
                 core.height = dims.y;
-                core.gridPointOffset = vec2(core.max + core.min + 1) / 2.f;
+                core.gridPointOffset = godot::Vector2((core.max.x + core.min.x + 1) * 0.5f, (core.max.y + core.min.y + 1) * 0.5f);
 
-                // reset all colors to 0
-                core.color = std::vector<Color4>(dims.x * dims.y, Color4{});
+                vector_fill(core.color, dims.x * dims.y, Color4{});
 
                 // copy colors of only the mask in the rectangle region
                 int coreColorIndex = 0;
@@ -307,8 +307,8 @@ SpriteAsset image_with_mask_to_sprite_chunks(const uint8_t* pixels, int width, i
     // scan ropes from the whole mask at once so diagonal lines stay connected
     // and the editor preview (same scan) matches
 
-    std::vector<SpriteCellMaskType> scan_mask(width * height);
-    std::vector<Color4> scan_pixels(width * height);
+    godot::LocalVector<SpriteCellMaskType> scan_mask; scan_mask.resize(width * height);
+    godot::LocalVector<Color4> scan_pixels; scan_pixels.resize(width * height);
 
     for (int i = 0; i < width * height; i++) {
         scan_mask[i] = packed_mask_type(mask_cells[i]);
@@ -324,7 +324,7 @@ SpriteAsset image_with_mask_to_sprite_chunks(const uint8_t* pixels, int width, i
 
         uint8_t rope_class = 0;
 
-        for (ivec2 p : scanned.path) {
+        for (godot::Vector2i p : scanned.path) {
             uint8_t c = packed_mask_class(mask_cells[p.x + p.y * width]) & 0b11;
 
             if (c > rope_class) {

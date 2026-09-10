@@ -1,3 +1,4 @@
+#include <godot_cpp/templates/pair.hpp>
 #include "RegolithJoints.h"
 #include "RegolithSprite.h"
 
@@ -20,7 +21,7 @@ static bool can_join(RegolithSprite* a, RegolithSprite* b) {
     return a && b && a != b && a->is_loaded() && b->is_loaded();
 }
 
-int RegolithJoints::push(Type type, RegolithSprite* a, RegolithSprite* b, vec2 world_a, vec2 world_b, float rest) {
+int RegolithJoints::push(Type type, RegolithSprite* a, RegolithSprite* b, godot::Vector2 world_a, godot::Vector2 world_b, float rest) {
     if (!can_join(a, b)) {
         return -1;
     }
@@ -32,23 +33,29 @@ int RegolithJoints::push(Type type, RegolithSprite* a, RegolithSprite* b, vec2 w
     joint.b = ObjectID(b->get_instance_id());
     joint.local_a = a->transform().to_local_point(world_a);
     joint.local_b = b->transform().to_local_point(world_b);
-    joint.distance = rest < 0.f ? length(world_b - world_a) : rest;
+    joint.distance = rest < 0.f ? (world_b - world_a).length() : rest;
 
     m_joints.push_back(joint);
 
     return joint.id;
 }
 
-int RegolithJoints::add(RegolithSprite* a, RegolithSprite* b, vec2 world_point) {
+int RegolithJoints::add(RegolithSprite* a, RegolithSprite* b, godot::Vector2 world_point) {
     return push(Pin, a, b, world_point, world_point, 0.f);
 }
 
-int RegolithJoints::add_distance(RegolithSprite* a, RegolithSprite* b, vec2 world_a, vec2 world_b, float rest) {
+int RegolithJoints::add_distance(RegolithSprite* a, RegolithSprite* b, godot::Vector2 world_a, godot::Vector2 world_b, float rest) {
     return push(Distance, a, b, world_a, world_b, rest);
 }
 
 void RegolithJoints::remove(int id) {
-    std::erase_if(m_joints, [id](const Joint& joint) { return joint.id == id; });
+    for (uint32_t i = 0; i < m_joints.size(); ) {
+        if (m_joints[i].id == id) {
+            m_joints.remove_at(i);
+        } else {
+            i++;
+        }
+    }
 }
 
 void RegolithJoints::clear() {
@@ -69,46 +76,46 @@ const RegolithJoints::Joint* RegolithJoints::find(int id) const {
     return nullptr;
 }
 
-std::optional<std::pair<RegolithSprite*, RegolithSprite*>> RegolithJoints::resolve(const Joint* joint, bool loaded) const {
+Optional<godot::Pair<RegolithSprite*, RegolithSprite*>> RegolithJoints::resolve(const Joint* joint, bool loaded) const {
     if (!joint) {
-        return std::nullopt;
+        return Nothing{};
     }
 
     RegolithSprite* a = sprite_of(joint->a);
     RegolithSprite* b = sprite_of(joint->b);
 
     if (!a || !b || (loaded && (!a->is_loaded() || !b->is_loaded()))) {
-        return std::nullopt;
+        return Nothing{};
     }
 
-    return std::make_pair(a, b);
+    return godot::Pair<RegolithSprite*, RegolithSprite*>{a, b};
 }
 
-std::optional<std::pair<vec2, vec2>> RegolithJoints::anchors(int id) const {
+Optional<godot::Pair<godot::Vector2, godot::Vector2>> RegolithJoints::anchors(int id) const {
     const Joint* joint = find(id);
 
     if (auto sprites = resolve(joint, true)) {
-        return std::make_pair(sprites->first->transform().to_world_point(joint->local_a), sprites->second->transform().to_world_point(joint->local_b));
+        return godot::Pair<godot::Vector2, godot::Vector2>{sprites->first->transform().to_world_point(joint->local_a), sprites->second->transform().to_world_point(joint->local_b)};
     }
 
-    return std::nullopt;
+    return Nothing{};
 }
 
-std::optional<std::pair<RegolithSprite*, RegolithSprite*>> RegolithJoints::sprites(int id) const {
+Optional<godot::Pair<RegolithSprite*, RegolithSprite*>> RegolithJoints::sprites(int id) const {
     return resolve(find(id), false);
 }
 
-std::optional<RegolithJoints::Type> RegolithJoints::type(int id) const {
+Optional<RegolithJoints::Type> RegolithJoints::type(int id) const {
     const Joint* joint = find(id);
-    return joint ? std::optional<Type>(joint->type) : std::nullopt;
+    return joint ? Optional<Type>(joint->type) : Nothing{};
 }
 
-static bool holds_cell(RegolithSprite* sprite, ivec2 cell) {
+static bool holds_cell(RegolithSprite* sprite, godot::Vector2i cell) {
     return sprite->has_cell(Vector2i(cell.x, cell.y));
 }
 
-static RegolithSprite* find_holder(RegolithSprite* source, const std::vector<RegolithJoints::Piece>& pieces, ivec2 cell) {
-    auto holder_at = [&](ivec2 at) -> RegolithSprite* {
+static RegolithSprite* find_holder(RegolithSprite* source, const godot::LocalVector<RegolithJoints::Piece>& pieces, godot::Vector2i cell) {
+    auto holder_at = [&](godot::Vector2i at) -> RegolithSprite* {
         if (holds_cell(source, at)) {
             return source;
         }
@@ -133,7 +140,7 @@ static RegolithSprite* find_holder(RegolithSprite* source, const std::vector<Reg
                     continue;
                 }
 
-                if (RegolithSprite* holder = holder_at(cell + ivec2(dx, dy))) {
+                if (RegolithSprite* holder = holder_at(cell + godot::Vector2i(dx, dy))) {
                     return holder;
                 }
             }
@@ -143,9 +150,9 @@ static RegolithSprite* find_holder(RegolithSprite* source, const std::vector<Reg
     return nullptr;
 }
 
-static bool resolve_anchor(RegolithSprite* source, const std::vector<RegolithJoints::Piece>& pieces, ObjectID& id, vec2& local) {
-    vec2 grid_point = source->sprite().grid().to_grid_point(local);
-    ivec2 cell(static_cast<int>(floorf(grid_point.x)), static_cast<int>(floorf(grid_point.y)));
+static bool resolve_anchor(RegolithSprite* source, const godot::LocalVector<RegolithJoints::Piece>& pieces, ObjectID& id, godot::Vector2& local) {
+    godot::Vector2 grid_point = source->sprite().grid().to_grid_point(local);
+    godot::Vector2i cell(static_cast<int>(floorf(grid_point.x)), static_cast<int>(floorf(grid_point.y)));
 
     RegolithSprite* holder = find_holder(source, pieces, cell);
 
@@ -154,7 +161,7 @@ static bool resolve_anchor(RegolithSprite* source, const std::vector<RegolithJoi
     }
 
     if (holder != source) {
-        vec2 world = source->transform().to_world_point(local);
+        godot::Vector2 world = source->transform().to_world_point(local);
 
         id = ObjectID(holder->get_instance_id());
         local = holder->transform().to_local_point(world);
@@ -163,10 +170,11 @@ static bool resolve_anchor(RegolithSprite* source, const std::vector<RegolithJoi
     return true;
 }
 
-void RegolithJoints::resolve_split(RegolithSprite* source, const std::vector<Piece>& pieces) {
+void RegolithJoints::resolve_split(RegolithSprite* source, const godot::LocalVector<Piece>& pieces) {
     ObjectID source_id(source->get_instance_id());
 
-    std::erase_if(m_joints, [&](Joint& joint) {
+    for (uint32_t i = 0; i < m_joints.size(); ) {
+        Joint& joint = m_joints[i];
         bool alive = true;
 
         if (joint.a == source_id) {
@@ -177,16 +185,25 @@ void RegolithJoints::resolve_split(RegolithSprite* source, const std::vector<Pie
             alive = resolve_anchor(source, pieces, joint.b, joint.local_b);
         }
 
-        return !alive || joint.a == joint.b;
-    });
+        if (!alive || joint.a == joint.b) {
+            m_joints.remove_at(i);
+        } else {
+            i++;
+        }
+    }
 }
 
 void RegolithJoints::feed(PhysicsWorld& physics) {
     physics.clear_joints();
 
-    std::erase_if(m_joints, [](const Joint& joint) {
-        return !sprite_of(joint.a) || !sprite_of(joint.b);
-    });
+    for (uint32_t i = 0; i < m_joints.size(); ) {
+        const Joint& j = m_joints[i];
+        if (!sprite_of(j.a) || !sprite_of(j.b)) {
+            m_joints.remove_at(i);
+        } else {
+            i++;
+        }
+    }
 
     for (const Joint& joint : m_joints) {
         RegolithSprite* a = sprite_of(joint.a);
@@ -210,8 +227,8 @@ void RegolithJoints::debug_lines(DebugRendererLineList& lines) const {
             continue;
         }
 
-        vec2 pa = sprites->first->transform().to_world_point(joint.local_a);
-        vec2 pb = sprites->second->transform().to_world_point(joint.local_b);
+        godot::Vector2 pa = sprites->first->transform().to_world_point(joint.local_a);
+        godot::Vector2 pb = sprites->second->transform().to_world_point(joint.local_b);
 
         lines.line(pa, pb, DebugName_Physics_Joint);
         lines.circle(pa, 0.1f, DebugName_Physics_Joint_Anchor);
@@ -219,6 +236,6 @@ void RegolithJoints::debug_lines(DebugRendererLineList& lines) const {
     }
 }
 
-const std::vector<RegolithJoints::Joint>& RegolithJoints::items() const {
+const godot::LocalVector<RegolithJoints::Joint>& RegolithJoints::items() const {
     return m_joints;
 }

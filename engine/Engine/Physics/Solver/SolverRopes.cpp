@@ -1,38 +1,39 @@
+#include <algorithm>
 #include "SolverInternal.h"
 
 #include "DestructibleSprite/Algorithm/SpriteDistanceField.h"
 
 #include "DebugLineList.h"
 
-PhysicsRope physics_create_rope(vec2 world_a, vec2 world_b, int node_count, float slack) {
+PhysicsRope physics_create_rope(godot::Vector2 world_a, godot::Vector2 world_b, int node_count, float slack) {
     PhysicsRope rope;
 
-    node_count = glm::max(node_count, 2);
+    node_count = std::max(node_count, 2);
 
     for (int i = 0; i < node_count; i++) {
         float t = i / static_cast<float>(node_count - 1);
-        rope.positions.push_back(mix(world_a, world_b, t));
-        rope.velocities.push_back(vec2(0.f));
-        rope.prev_positions.push_back(rope.positions.back());
+        rope.positions.push_back(((world_a) * (1.f - (t)) + (world_b) * (t)));
+        rope.velocities.push_back(godot::Vector2(0.f, 0.f));
+        rope.prev_positions.push_back(rope.positions[rope.positions.size() - 1]);
     }
 
-    rope.segment_rest_length = distance(world_a, world_b) * slack / (node_count - 1);
+    rope.segment_rest_length = (world_a).distance_to(world_b) * slack / (node_count - 1);
 
     return rope;
 }
 
-void solve_rope_attach(std::vector<SolverBody>& bodies, PhysicsRope& rope, const PhysicsRopeAnchor& anchor,
+void solve_rope_attach(godot::LocalVector<SolverBody>& bodies, PhysicsRope& rope, const PhysicsRopeAnchor& anchor,
                        int particle) {
     if (anchor.proxy_index < 0) {
         return;
     }
 
-    SolverBody& b = bodies.at(anchor.proxy_index);
+    SolverBody& b = bodies[anchor.proxy_index];
 
     bool one_way = anchor.proxy_index == rope.owner_proxy && !rope.externally_pushed;
 
-    vec2 target = body_point_world(b, anchor.local_point);
-    vec2 p = rope.positions[particle];
+    godot::Vector2 target = body_point_world(b, anchor.local_point);
+    godot::Vector2 p = rope.positions[particle];
 
     auto [n, c] = safe_normalize_distance(p - target);
 
@@ -40,7 +41,7 @@ void solve_rope_attach(std::vector<SolverBody>& bodies, PhysicsRope& rope, const
         return;
     }
 
-    vec2 r = target - b.com;
+    godot::Vector2 r = target - b.com;
 
     float w_particle = rope.node_inv_mass;
     float w_body = one_way ? 0.f : body_inverse_mass_at(b, r, n);
@@ -60,11 +61,11 @@ void solve_rope_attach(std::vector<SolverBody>& bodies, PhysicsRope& rope, const
 }
 
 static float rope_segment_rest(const PhysicsRope& rope, size_t i) {
-    return rope.rest_lengths.empty() ? rope.segment_rest_length : rope.rest_lengths[i];
+    return rope.rest_lengths.is_empty() ? rope.segment_rest_length : rope.rest_lengths[i];
 }
 
 static float rope_total_rest(const PhysicsRope& rope) {
-    if (rope.rest_lengths.empty()) {
+    if (rope.rest_lengths.is_empty()) {
         return rope.segment_rest_length * (static_cast<int>(rope.positions.size()) - 1);
     }
 
@@ -77,22 +78,22 @@ static float rope_total_rest(const PhysicsRope& rope) {
     return total;
 }
 
-void solve_rope_pin_to_rope(std::vector<PhysicsRope>& ropes, PhysicsRope& rope,
+void solve_rope_pin_to_rope(godot::LocalVector<PhysicsRope>& ropes, PhysicsRope& rope,
                             const PhysicsRopeAnchor& anchor, int particle) {
     if (anchor.rope_index < 0 || anchor.rope_index >= static_cast<int>(ropes.size())) {
         return;
     }
 
-    PhysicsRope& other = ropes.at(anchor.rope_index);
+    PhysicsRope& other = ropes[anchor.rope_index];
 
-    if (other.positions.empty()) {
+    if (other.positions.is_empty()) {
         return;
     }
 
-    int node = glm::clamp(anchor.node_index, 0, static_cast<int>(other.positions.size()) - 1);
+    int node = clamp(anchor.node_index, 0, static_cast<int>(other.positions.size()) - 1);
 
-    vec2 p = rope.positions[particle];
-    vec2 q = other.positions[node];
+    godot::Vector2 p = rope.positions[particle];
+    godot::Vector2 q = other.positions[node];
 
     auto [n, c] = safe_normalize_distance(p - q);
 
@@ -114,16 +115,16 @@ void solve_rope_pin_to_rope(std::vector<PhysicsRope>& ropes, PhysicsRope& rope,
     other.positions[node] += n * (lambda * w_q);
 }
 
-void solve_rope_long_range(std::vector<SolverBody>& bodies, PhysicsRope& rope) {
+void solve_rope_long_range(godot::LocalVector<SolverBody>& bodies, PhysicsRope& rope) {
     if (rope.anchor_a.proxy_index < 0 || rope.anchor_b.proxy_index < 0) {
         return;
     }
 
-    SolverBody& ba = bodies.at(rope.anchor_a.proxy_index);
-    SolverBody& bb = bodies.at(rope.anchor_b.proxy_index);
+    SolverBody& ba = bodies[rope.anchor_a.proxy_index];
+    SolverBody& bb = bodies[rope.anchor_b.proxy_index];
 
-    vec2 pa = body_point_world(ba, rope.anchor_a.local_point);
-    vec2 pb = body_point_world(bb, rope.anchor_b.local_point);
+    godot::Vector2 pa = body_point_world(ba, rope.anchor_a.local_point);
+    godot::Vector2 pb = body_point_world(bb, rope.anchor_b.local_point);
 
     float total_rest = rope_total_rest(rope);
 
@@ -135,8 +136,8 @@ void solve_rope_long_range(std::vector<SolverBody>& bodies, PhysicsRope& rope) {
 
     float c = len - total_rest;
 
-    vec2 r_a = pa - ba.com;
-    vec2 r_b = pb - bb.com;
+    godot::Vector2 r_a = pa - ba.com;
+    godot::Vector2 r_b = pb - bb.com;
 
     bool one_way_a = rope.anchor_a.proxy_index == rope.owner_proxy && !rope.externally_pushed;
     bool one_way_b = rope.anchor_b.proxy_index == rope.owner_proxy && !rope.externally_pushed;
@@ -164,7 +165,7 @@ void solve_rope_segments(PhysicsRope& rope, float compliance, float min_length_f
     float alpha = compliance / (substep_time * substep_time);
 
     for (size_t i = 0; i + 1 < rope.positions.size(); i++) {
-        vec2 d = rope.positions[i + 1] - rope.positions[i];
+        godot::Vector2 d = rope.positions[i + 1] - rope.positions[i];
 
         auto [n, len] = safe_normalize_distance(d);
 
@@ -198,7 +199,7 @@ void solve_rope_segments(PhysicsRope& rope, float compliance, float min_length_f
     }
 }
 
-void solve_rope_shape(const std::vector<SolverBody>& bodies, PhysicsRope& rope, float stiffness) {
+void solve_rope_shape(const godot::LocalVector<SolverBody>& bodies, PhysicsRope& rope, float stiffness) {
     int n = static_cast<int>(rope.positions.size());
 
     if (stiffness <= 0.f || static_cast<int>(rope.rest_locals.size()) != n) {
@@ -209,11 +210,11 @@ void solve_rope_shape(const std::vector<SolverBody>& bodies, PhysicsRope& rope, 
         return;
     }
 
-    const SolverBody& ob = bodies.at(rope.owner_proxy);
+    const SolverBody& ob = bodies[rope.owner_proxy];
 
     for (int i = 0; i < n; i++) {
-        vec2 aim = body_point_world(ob, rope.rest_locals[i]);
-        vec2 delta = (aim - rope.positions[i]) * stiffness;
+        godot::Vector2 aim = body_point_world(ob, rope.rest_locals[i]);
+        godot::Vector2 delta = (aim - rope.positions[i]) * stiffness;
 
         rope.positions[i] += delta;
         rope.bias[i] += delta;
@@ -234,15 +235,15 @@ static bool rope_particle_skips_proxy(const PhysicsRope& rope, int particle, int
     return false;
 }
 
-void solve_rope_collision(const std::vector<PhysicsProxy>& proxies, std::vector<SolverBody>& bodies,
+void solve_rope_collision(const godot::LocalVector<PhysicsProxy>& proxies, godot::LocalVector<SolverBody>& bodies,
                           PhysicsRope& rope, int proxy_index, float max_depenetration_cells) {
-    const PhysicsProxy& proxy = proxies.at(proxy_index);
+    const PhysicsProxy& proxy = proxies[proxy_index];
 
     if (!proxy.sprite) {
         return;
     }
 
-    SolverBody& fb = bodies.at(proxy_index);
+    SolverBody& fb = bodies[proxy_index];
 
     bool one_way = proxy_index == rope.owner_proxy && !rope.externally_pushed;
 
@@ -259,8 +260,8 @@ void solve_rope_collision(const std::vector<PhysicsProxy>& proxies, std::vector<
         }
 
         AxisAlignedBox segment_box(rope.positions[i], rope.positions[i + 1]);
-        segment_box.min -= vec2(radius);
-        segment_box.max += vec2(radius);
+        segment_box.min -= godot::Vector2(radius, radius);
+        segment_box.max += godot::Vector2(radius, radius);
 
         if (!segment_box.intersects_box(proxy.extended_box)) {
             continue;
@@ -269,21 +270,21 @@ void solve_rope_collision(const std::vector<PhysicsProxy>& proxies, std::vector<
         float t_min = skip_a ? 0.5f : 0.f;
         float t_max = skip_b ? 0.5f : 1.f;
 
-        float seg_len = distance(rope.positions[i], rope.positions[i + 1]);
-        int steps = glm::max(1, static_cast<int>(seg_len * (t_max - t_min) / fb.cell_world) + 1);
+        float seg_len = (rope.positions[i]).distance_to(rope.positions[i + 1]);
+        int steps = std::max(1, static_cast<int>(seg_len * (t_max - t_min) / fb.cell_world) + 1);
 
         int s_end = (i + 2 < count && !skip_b) ? steps - 1 : steps;
 
         float deepest = 0.f;
-        vec2 deepest_normal = vec2(0.f);
-        vec2 deepest_point = vec2(0.f);
+        godot::Vector2 deepest_normal = godot::Vector2(0.f, 0.f);
+        godot::Vector2 deepest_point = godot::Vector2(0.f, 0.f);
         float deepest_t = 0.f;
 
         for (int s = 0; s <= s_end; s++) {
-            float t = mix(t_min, t_max, s / static_cast<float>(steps));
+            float t = (t_min) * (1.f - (s / static_cast<float>(steps))) + (t_max) * (s / static_cast<float>(steps));
 
-            vec2 p = mix(rope.positions[i], rope.positions[i + 1], t);
-            vec2 grid = body_world_to_grid(fb, p);
+            godot::Vector2 p = ((rope.positions[i]) * (1.f - (t)) + (rope.positions[i + 1]) * (t));
+            godot::Vector2 grid = body_world_to_grid(fb, p);
 
             float separation = sprite_distance_field_sample(*proxy.sprite, grid) * fb.cell_world - radius;
 
@@ -291,14 +292,14 @@ void solve_rope_collision(const std::vector<PhysicsProxy>& proxies, std::vector<
                 continue;
             }
 
-            separation = glm::max(separation, -max_depenetration_cells * fb.cell_world);
+            separation = std::max(separation, -max_depenetration_cells * fb.cell_world);
 
             if (!one_way) {
                 rope.externally_pushed = true;
             }
 
-            vec2 normal = contact_normal(proxy, fb, grid, p);
-            vec2 r = p - fb.com;
+            godot::Vector2 normal = contact_normal(proxy, fb, grid, p);
+            godot::Vector2 r = p - fb.com;
 
             float w_a = skip_a ? 0.f : rope.node_inv_mass * (1.f - t) * (1.f - t);
             float w_b = skip_b ? 0.f : rope.node_inv_mass * t * t;
@@ -315,14 +316,14 @@ void solve_rope_collision(const std::vector<PhysicsProxy>& proxies, std::vector<
             debug_render_fixed().ray(p, normal * -separation, DebugName_Physics_Contact_Point_Normal);
 
             if (!skip_a) {
-                vec2 delta = normal * (lambda * rope.node_inv_mass * (1.f - t));
+                godot::Vector2 delta = normal * (lambda * rope.node_inv_mass * (1.f - t));
 
                 rope.positions[i] += delta;
                 rope.bias[i] += delta;
             }
 
             if (!skip_b) {
-                vec2 delta = normal * (lambda * rope.node_inv_mass * t);
+                godot::Vector2 delta = normal * (lambda * rope.node_inv_mass * t);
 
                 rope.positions[i + 1] += delta;
                 rope.bias[i + 1] += delta;
@@ -359,14 +360,14 @@ void solve_rope_collision(const std::vector<PhysicsProxy>& proxies, std::vector<
     }
 }
 
-void solve_rope_contact_velocity(std::vector<SolverBody>& bodies, PhysicsRope& rope) {
+void solve_rope_contact_velocity(godot::LocalVector<SolverBody>& bodies, PhysicsRope& rope) {
     for (const PhysicsRopeContact& contact : rope.contacts) {
-        SolverBody& fb = bodies.at(contact.proxy_index);
+        SolverBody& fb = bodies[contact.proxy_index];
 
         float w_a = contact.node_a >= 0 ? contact.weight_a : 0.f;
         float w_b = contact.node_b >= 0 ? contact.weight_b : 0.f;
 
-        vec2 rope_velocity = vec2(0.f);
+        godot::Vector2 rope_velocity = godot::Vector2(0.f, 0.f);
 
         if (contact.node_a >= 0) {
             rope_velocity += rope.velocities[contact.node_a] * w_a;
@@ -376,10 +377,10 @@ void solve_rope_contact_velocity(std::vector<SolverBody>& bodies, PhysicsRope& r
             rope_velocity += rope.velocities[contact.node_b] * w_b;
         }
 
-        vec2 r = contact.point - fb.com;
-        vec2 relative = rope_velocity - body_velocity_at(fb, r);
+        godot::Vector2 r = contact.point - fb.com;
+        godot::Vector2 relative = rope_velocity - body_velocity_at(fb, r);
 
-        float vn = dot(relative, contact.normal);
+        float vn = (relative).dot(contact.normal);
 
         if (vn >= 0.f) {
             continue;
@@ -418,7 +419,7 @@ static bool rope_rope_segments_tied(const PhysicsRope& ra, int i, int index_b, i
             continue;
         }
 
-        if (glm::abs(i - ends[k]) <= 1 && glm::abs(j - anchors[k]->node_index) <= 1) {
+        if (abs(i - ends[k]) <= 1 && abs(j - anchors[k]->node_index) <= 1) {
             return true;
         }
     }
@@ -426,9 +427,9 @@ static bool rope_rope_segments_tied(const PhysicsRope& ra, int i, int index_b, i
     return false;
 }
 
-void solve_rope_rope_collision(std::vector<PhysicsRope>& ropes, int index_a, int index_b) {
-    PhysicsRope& ra = ropes.at(index_a);
-    PhysicsRope& rb = ropes.at(index_b);
+void solve_rope_rope_collision(godot::LocalVector<PhysicsRope>& ropes, int index_a, int index_b) {
+    PhysicsRope& ra = ropes[index_a];
+    PhysicsRope& rb = ropes[index_b];
 
     if (ra.radius <= 0.f || rb.radius <= 0.f) {
         return;
@@ -441,11 +442,11 @@ void solve_rope_rope_collision(std::vector<PhysicsRope>& ropes, int index_a, int
     int count_b = static_cast<int>(rb.positions.size());
 
     if (!self) {
-        AxisAlignedBox box_a(ra.positions.data(), count_a);
-        AxisAlignedBox box_b(rb.positions.data(), count_b);
+        AxisAlignedBox box_a(ra.positions.ptr(), count_a);
+        AxisAlignedBox box_b(rb.positions.ptr(), count_b);
 
-        box_a.min -= vec2(sum_radius);
-        box_a.max += vec2(sum_radius);
+        box_a.min -= godot::Vector2(sum_radius, sum_radius);
+        box_a.max += godot::Vector2(sum_radius, sum_radius);
 
         if (!box_a.intersects_box(box_b)) {
             return;
@@ -469,8 +470,8 @@ void solve_rope_rope_collision(std::vector<PhysicsRope>& ropes, int index_a, int
             float s, t;
             closest_segment_segment(ra.positions[i], ra.positions[i + 1], rb.positions[j], rb.positions[j + 1], &s, &t);
 
-            vec2 pa = mix(ra.positions[i], ra.positions[i + 1], s);
-            vec2 pb = mix(rb.positions[j], rb.positions[j + 1], t);
+            godot::Vector2 pa = ((ra.positions[i]) * (1.f - (s)) + (ra.positions[i + 1]) * (s));
+            godot::Vector2 pb = ((rb.positions[j]) * (1.f - (t)) + (rb.positions[j + 1]) * (t));
 
             auto [n, dist] = safe_normalize_distance(pa - pb);
 
@@ -486,7 +487,7 @@ void solve_rope_rope_collision(std::vector<PhysicsRope>& ropes, int index_a, int
             }
 
             if (dist < 1e-6f) {
-                n = vec2(0.f, 1.f);
+                n = godot::Vector2(0.f, 1.f);
             }
 
             float w_a = ra.node_inv_mass * ((1.f - s) * (1.f - s) + s * s);

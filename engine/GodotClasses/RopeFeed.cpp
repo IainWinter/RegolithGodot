@@ -7,13 +7,13 @@
 
 #include <godot_cpp/core/object.hpp>
 
-#include <unordered_map>
+#include <godot_cpp/templates/hash_map.hpp>
 
 using namespace godot;
 
 // entity anchors follow a cell on another sprite, they let go once that
 // sprite is gone or the cell and its neighbours are destroyed
-static void release_dead_entity_anchors(std::vector<SpriteRope>& ropes) {
+static void release_dead_entity_anchors(godot::LocalVector<SpriteRope>& ropes) {
     auto alive = [](const SpriteRopeEntityAnchor& anchor) {
         RegolithSprite* far = Object::cast_to<RegolithSprite>(ObjectDB::get_instance(anchor.entity));
         return far && far->is_loaded() && sprite_rope_anchor_cell_alive(far->sprite(), anchor.cell);
@@ -32,12 +32,12 @@ static void release_dead_entity_anchors(std::vector<SpriteRope>& ropes) {
     }
 }
 
-void feed_ropes(PhysicsWorld& physics, const std::vector<RegolithSprite*>& sprites, float time, float delta_time, std::vector<SpriteRope*>& sources) {
-    std::vector<PhysicsProxy>& proxies = physics.proxies();
-    std::vector<PhysicsRope>& solver_ropes = physics.ropes();
+void feed_ropes(PhysicsWorld& physics, const godot::LocalVector<RegolithSprite*>& sprites, float time, float delta_time, godot::LocalVector<SpriteRope*>& sources) {
+    godot::LocalVector<PhysicsProxy>& proxies = physics.proxies();
+    godot::LocalVector<PhysicsRope>& solver_ropes = physics.ropes();
     solver_ropes.clear();
 
-    std::unordered_map<const PhysicsBody*, int> proxy_of;
+    godot::HashMap<const PhysicsBody*, int> proxy_of;
 
     for (int i = 0; i < static_cast<int>(proxies.size()); i++) {
         proxy_of[proxies[i].body] = i;
@@ -45,7 +45,7 @@ void feed_ropes(PhysicsWorld& physics, const std::vector<RegolithSprite*>& sprit
 
     auto proxy_index_of = [&](RegolithSprite* node) {
         auto it = proxy_of.find(&node->body());
-        return it == proxy_of.end() ? -1 : it->second;
+        return it == proxy_of.end() ? -1 : it->value;
     };
 
     for (RegolithSprite* node : sprites) {
@@ -60,7 +60,7 @@ void feed_ropes(PhysicsWorld& physics, const std::vector<RegolithSprite*>& sprit
         }
 
         SpriteRopeSet& rope_set = node->ropes();
-        std::vector<SpriteRope>& ropes = rope_set.ropes;
+        godot::LocalVector<SpriteRope>& ropes = rope_set.ropes;
 
         release_dead_entity_anchors(ropes);
 
@@ -75,7 +75,7 @@ void feed_ropes(PhysicsWorld& physics, const std::vector<RegolithSprite*>& sprit
                 && anchor.rope_index >= 0 && anchor.rope_index < static_cast<int>(ropes.size());
         };
 
-        std::vector<int> incoming(ropes.size(), 0);
+        godot::LocalVector<int> incoming; vector_fill(incoming, ropes.size(), 0);
 
         for (const SpriteRope& rope : ropes) {
             if (rope_anchor_valid(rope.a)) {
@@ -87,7 +87,7 @@ void feed_ropes(PhysicsWorld& physics, const std::vector<RegolithSprite*>& sprit
             }
         }
 
-        std::vector<uint8_t> owner_rooted(ropes.size(), 0);
+        godot::LocalVector<uint8_t> owner_rooted; vector_fill(owner_rooted, ropes.size(), 0);
 
         for (size_t i = 0; i < ropes.size(); i++) {
             owner_rooted[i] = ropes[i].a.type == SpriteRopeAnchorType_Cell || ropes[i].b.type == SpriteRopeAnchorType_Cell;
@@ -111,7 +111,7 @@ void feed_ropes(PhysicsWorld& physics, const std::vector<RegolithSprite*>& sprit
             }
         }
 
-        std::vector<int> solver_index(ropes.size(), -1);
+        godot::LocalVector<int> solver_index; vector_fill(solver_index, ropes.size(), -1);
 
         for (int rope_i = 0; rope_i < static_cast<int>(ropes.size()); rope_i++) {
             SpriteRope& rope = ropes[rope_i];
@@ -157,8 +157,8 @@ void feed_ropes(PhysicsWorld& physics, const std::vector<RegolithSprite*>& sprit
             resolve(rope.a, rope.entity_a, out.anchor_a);
             resolve(rope.b, rope.entity_b, out.anchor_b);
 
-            if (!held && own_proxy != -1 && !rope.rest_local.empty()) {
-                out.anchor_a = {own_proxy, rope.rest_local.front()};
+            if (!held && own_proxy != -1 && !rope.rest_local.is_empty()) {
+                out.anchor_a = {own_proxy, rope.rest_local[0]};
             }
 
             else if (!owner_rooted[rope_i]) {

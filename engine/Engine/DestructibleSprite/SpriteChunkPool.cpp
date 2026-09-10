@@ -102,9 +102,9 @@ SpriteChunk* SpriteChunkPool::create_chunk_empty() {
 
     SpriteChunkId id = m_free.allocate();
 
-    ivec3 slot = atlas_index_to_xyz(id);
-    ivec3 pixel_offset = slot * ivec3(atlas_slot_size(), atlas_slot_size(), 1) + ivec3(k_atlas_chunk_padding, k_atlas_chunk_padding, 0);
-    vec3 uvw_offset = vec3(vec2(pixel_offset) / float(m_atlas_page_size), float(slot.z));
+    godot::Vector3i slot = atlas_index_to_xyz(id);
+    godot::Vector3i pixel_offset = godot::Vector3i(slot.x * atlas_slot_size() + k_atlas_chunk_padding, slot.y * atlas_slot_size() + k_atlas_chunk_padding, slot.z);
+    godot::Vector3 uvw_offset = godot::Vector3(float(pixel_offset.x) / float(m_atlas_page_size), float(pixel_offset.y) / float(m_atlas_page_size), float(slot.z));
 
     SpriteChunk* chunk = m_sprite_chunk_allocator.allocate(id).data();
     chunk->id = id;
@@ -114,7 +114,7 @@ SpriteChunk* SpriteChunkPool::create_chunk_empty() {
     chunk->mask = m_mask_allocator.allocate(id, SpriteCellMaskType_Empty);
     chunk->distance = m_distance_allocator.allocate(id, k_sdf_band_cells);
     chunk->activePixelCount = 0;
-    chunk->gridPixelOffset = ivec2(0);
+    chunk->gridPixelOffset = godot::Vector2i(0, 0);
     chunk->atlasPixelOffset = pixel_offset;
     chunk->uvwOffset = uvw_offset;
 
@@ -133,7 +133,7 @@ SpriteChunk* SpriteChunkPool::create_chunk(const SpriteAssetChunk& asset) {
     chunk->gridPixelOffset = asset.gridPixelOffset;
     chunk->activePixelCount = asset.activePixelCount;
 
-    bool has_normal = !asset.normal.empty();
+    bool has_normal = !asset.normal.is_empty();
 
     for (int i = 0; i < k_cells_per_chunk_total; i++) {
         SpriteCellMask mask(asset.mask[i]);
@@ -197,25 +197,25 @@ void SpriteChunkPool::free_chunk(SpriteChunk* chunk) {
 void SpriteChunkPool::write_chunk_pixels(SpriteChunk* chunk) {
     auto [x, y, z] = unpack3(chunk->atlasPixelOffset);
 
-    uint8_t* color = m_color_pages.at(z).ptrw();
-    uint8_t* mask = m_mask_pages.at(z).ptrw();
+    uint8_t* color = m_color_pages[z].ptrw();
+    uint8_t* mask = m_mask_pages[z].ptrw();
 
     for (uint32_t row = 0; row < m_chunk_size; row++) {
         size_t dst = static_cast<size_t>(y + row) * m_atlas_page_size + x;
         size_t src = static_cast<size_t>(row) * m_chunk_size;
 
-        memcpy(color + dst * sizeof(Color4), chunk->color.data() + src, m_chunk_size * sizeof(Color4));
-        memcpy(mask + dst * sizeof(SpriteCellMask), chunk->mask.data() + src, m_chunk_size * sizeof(SpriteCellMask));
+        memcpy(color + dst * sizeof(Color4), chunk->color.ptr() + src, m_chunk_size * sizeof(Color4));
+        memcpy(mask + dst * sizeof(SpriteCellMask), chunk->mask.ptr() + src, m_chunk_size * sizeof(SpriteCellMask));
     }
 
-    m_page_dirty.at(z) = true;
+    m_page_dirty[z] = true;
 }
 
 void SpriteChunkPool::clear_chunk_pixels(SpriteChunk* chunk) {
     auto [x, y, z] = unpack3(chunk->atlasPixelOffset);
 
-    uint8_t* color = m_color_pages.at(z).ptrw();
-    uint8_t* mask = m_mask_pages.at(z).ptrw();
+    uint8_t* color = m_color_pages[z].ptrw();
+    uint8_t* mask = m_mask_pages[z].ptrw();
 
     for (uint32_t row = 0; row < m_chunk_size; row++) {
         size_t dst = static_cast<size_t>(y + row) * m_atlas_page_size + x;
@@ -224,19 +224,19 @@ void SpriteChunkPool::clear_chunk_pixels(SpriteChunk* chunk) {
         memset(mask + dst * sizeof(SpriteCellMask), 0, m_chunk_size * sizeof(SpriteCellMask));
     }
 
-    m_page_dirty.at(z) = true;
+    m_page_dirty[z] = true;
 }
 
 void SpriteChunkPool::upload_pages() {
     for (uint32_t page = 0; page < m_atlas_page_count; page++) {
-        if (!m_page_dirty.at(page)) {
+        if (!m_page_dirty[page]) {
             continue;
         }
 
-        m_page_dirty.at(page) = false;
+        m_page_dirty[page] = false;
 
-        godot::Ref<godot::Image> color = godot::Image::create_from_data(m_atlas_page_size, m_atlas_page_size, false, godot::Image::FORMAT_RGBA8, m_color_pages.at(page));
-        godot::Ref<godot::Image> mask = godot::Image::create_from_data(m_atlas_page_size, m_atlas_page_size, false, godot::Image::FORMAT_RG8, m_mask_pages.at(page));
+        godot::Ref<godot::Image> color = godot::Image::create_from_data(m_atlas_page_size, m_atlas_page_size, false, godot::Image::FORMAT_RGBA8, m_color_pages[page]);
+        godot::Ref<godot::Image> mask = godot::Image::create_from_data(m_atlas_page_size, m_atlas_page_size, false, godot::Image::FORMAT_RG8, m_mask_pages[page]);
 
         m_color_texture->update_layer(color, page);
         m_mask_texture->update_layer(mask, page);
@@ -244,31 +244,25 @@ void SpriteChunkPool::upload_pages() {
 }
 
 void SpriteChunkPool::mark_chunk(SpriteChunk* chunk, SpriteChunkState state) {
-    auto itr = m_dirty.find(chunk);
-    if (itr == m_dirty.end()) {
-        m_dirty.emplace_hint(itr, chunk, state);
+    if (!m_dirty.has(chunk)) {
+        m_dirty.insert(chunk, state);
         return;
     }
 
-    // [ New ] --------> [ Delete ]
-    //              |
-    // [ Dirty ] ---^
-
-    const SpriteChunkState& current = itr->second;
+    SpriteChunkState current = m_dirty[chunk];
 
     constexpr SpriteChunkState valid[3][3] = {{SpriteChunkState_New, SpriteChunkState_New, SpriteChunkState_Delete},
                                               {SpriteChunkState_Dirty, SpriteChunkState_Dirty, SpriteChunkState_Delete},
                                               {SpriteChunkState_Delete, SpriteChunkState_Delete, SpriteChunkState_Delete}};
 
-    SpriteChunkState next = valid[current][state];
-    itr->second = next;
+    m_dirty[chunk] = valid[current][state];
 }
 
 SpriteChunk* SpriteChunkPool::get_chunk(SpriteChunkId id) {
-    return m_sprite_chunk_allocator.at(id);
+    return m_sprite_chunk_allocator[id];
 }
 
-ivec3 SpriteChunkPool::atlas_index_to_xyz(size_t index) const {
+godot::Vector3i SpriteChunkPool::atlas_index_to_xyz(size_t index) const {
     int per_row = chunks_per_page();
 
     int i = int(index);
@@ -276,5 +270,5 @@ ivec3 SpriteChunkPool::atlas_index_to_xyz(size_t index) const {
     int x = i % per_row;
     int y = (i / per_row) % per_row;
     int z = i / (per_row * per_row);
-    return ivec3(x, y, z);
+    return godot::Vector3i(x, y, z);
 }

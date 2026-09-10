@@ -3,7 +3,7 @@
 [ext_resource type="Script" uid="uid://bh7graqg2edvt" path="res://game/scripts/enemies/EnemyBossCompass.gd" id="1"]
 [ext_resource type="Texture2D" uid="uid://2aw5odt5pfnc" path="res://game/images/sprites/boss1.png" id="2"]
 [ext_resource type="Texture2D" uid="uid://dx8vhs334hja8" path="res://game/images/sprites/boss1_mask.png" id="3"]
-[ext_resource type="Resource" path="res://game/config/enemies/boss_bolt.tres" id="4"]
+[ext_resource type="Resource" uid="uid://dx73j4g5x4ufx" path="res://game/config/enemies/boss_bolt.tres" id="4"]
 [ext_resource type="Resource" path="res://game/config/rocks/default_rock.tres" id="5"]
 [ext_resource type="Material" uid="uid://b2w7nuyl6835o" path="res://game/shaders/regolith_sprite_material.tres" id="6"]
 [ext_resource type="Material" uid="uid://b7bdqliowpujk" path="res://game/shaders/regolith_rope_material.tres" id="7"]

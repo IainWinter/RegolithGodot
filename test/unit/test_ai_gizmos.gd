@@ -1,7 +1,10 @@
 extends GutTest
 
-# AiGizmos: with the debug drawer visible the enemy parts get their lines
-# under the AI_* names, hiding the drawer draws nothing
+# with the debug drawer visible the enemy parts push their draw_gizmos
+# shapes into the AI_* lists, hiding the drawer draws nothing. spawns a
+# local GizmoWalker under the test's drawer, same as the autoload does
+
+const GizmoWalker := preload("res://addons/regolith_debug/GizmoWalker.gd")
 
 var arena: Node2D
 var world: RegolithWorld
@@ -20,7 +23,9 @@ func before_each() -> void:
 	draw.set_name_enabled(RegolithDebugDraw.AI_SHIELD, true)
 	draw.set_name_enabled(RegolithDebugDraw.AI_TRAP, true)
 	world.add_child(draw)
-	draw.add_child(load("res://game/scripts/debug/AiGizmos.gd").new())
+	var walker := GizmoWalker.new()
+	walker.draw = draw
+	draw.add_child(walker)
 
 func after_each() -> void:
 	draw.set_all_names_enabled(false)

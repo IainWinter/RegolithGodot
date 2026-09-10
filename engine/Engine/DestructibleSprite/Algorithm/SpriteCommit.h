@@ -2,7 +2,7 @@
 
 #include "DestructibleSprite/Sprite.h"
 
-#include <vector>
+#include <godot_cpp/templates/local_vector.hpp>
 
 
 struct SpriteCommitProxy {
@@ -13,7 +13,7 @@ struct SpriteCommitProxy {
 // runs every proxy's commit calc across the thread pool, then recomputes the
 // surface of every dirty chunk from all sprites in one parallel pass over all
 // chunks at once. the returned results line up with proxies by index
-std::vector<SpriteCommitResult> sprite_commit_all(const std::vector<SpriteCommitProxy>& proxies, const SpriteCommitConfig& config);
+godot::LocalVector<SpriteCommitResult> sprite_commit_all(const godot::LocalVector<SpriteCommitProxy>& proxies, const SpriteCommitConfig& config);
 
 // copy the sprite's current mass onto its body
 void sprite_commit_sync_mass(const Sprite& sprite, PhysicsBody& body);

@@ -20,11 +20,11 @@ void AxisAlignedAreaTreeIndex::insert(const AxisAlignedBox& box, int item_index)
     m_root = insert_recursive(m_root, leaf_index);
 }
 
-void AxisAlignedAreaTreeIndex::query(const AxisAlignedBox& box, std::vector<int>& out) const {
+void AxisAlignedAreaTreeIndex::query(const AxisAlignedBox& box, godot::LocalVector<int>& out) const {
     query_recursive(m_root, box, out);
 }
 
-void AxisAlignedAreaTreeIndex::query_ray(vec2 origin, vec2 direction, float max_length, std::vector<int>& out) const {
+void AxisAlignedAreaTreeIndex::query_ray(godot::Vector2 origin, godot::Vector2 direction, float max_length, godot::LocalVector<int>& out) const {
     query_ray_recursive(m_root, origin, direction, max_length, out);
 }
 
@@ -42,7 +42,7 @@ const AxisAlignedBox& AxisAlignedAreaTreeIndex::get_box(int item_index) const {
     return none;
 }
 
-const std::vector<AxisAlignedAreaTreeIndex::Node>& AxisAlignedAreaTreeIndex::nodes() const {
+const godot::LocalVector<AxisAlignedAreaTreeIndex::Node>& AxisAlignedAreaTreeIndex::nodes() const {
     return m_nodes;
 }
 
@@ -106,7 +106,7 @@ int AxisAlignedAreaTreeIndex::insert_recursive(int root_index, int leaf_index) {
     return root_index;
 }
 
-void AxisAlignedAreaTreeIndex::query_recursive(int root_index, const AxisAlignedBox& box, std::vector<int>& out) const {
+void AxisAlignedAreaTreeIndex::query_recursive(int root_index, const AxisAlignedBox& box, godot::LocalVector<int>& out) const {
     if (root_index == s_empty) {
         return;
     }
@@ -126,7 +126,7 @@ void AxisAlignedAreaTreeIndex::query_recursive(int root_index, const AxisAligned
     out.push_back(current.item_index);
 }
 
-void AxisAlignedAreaTreeIndex::query_ray_recursive(int root_index, vec2 origin, vec2 direction, float max_length, std::vector<int>& out) const {
+void AxisAlignedAreaTreeIndex::query_ray_recursive(int root_index, godot::Vector2 origin, godot::Vector2 direction, float max_length, godot::LocalVector<int>& out) const {
     if (root_index == s_empty) {
         return;
     }
@@ -147,5 +147,5 @@ void AxisAlignedAreaTreeIndex::query_ray_recursive(int root_index, vec2 origin, 
 }
 
 AxisAlignedAreaTreeIndex::Node& AxisAlignedAreaTreeIndex::get_node(int index) {
-    return m_nodes.at(index);
+    return m_nodes[index];
 }

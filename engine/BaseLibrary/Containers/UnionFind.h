@@ -1,7 +1,8 @@
+#include "VectorUtil.h"
 #pragma once
 
-#include <vector>
-#include <unordered_map>
+#include <godot_cpp/templates/local_vector.hpp>
+#include <godot_cpp/templates/hash_map.hpp>
 
 #include <mutex>
 
@@ -12,6 +13,8 @@ public:
     bool contains(int x) {
         return x >= 0 && x < (int)parent.size();
     }
+
+    bool has(int x) { return contains(x); }
 
     int find(int x) {
         ensure_exists(x);
@@ -55,8 +58,8 @@ public:
         return rootY;
     }
 
-    std::unordered_map<int, std::vector<int>> get_groups() {
-        std::unordered_map<int, std::vector<int>> groups;
+    godot::HashMap<int, godot::LocalVector<int>> get_groups() {
+        godot::HashMap<int, godot::LocalVector<int>> groups;
         groups.reserve(parent.size());
 
         for (int i = 0; i < (int)parent.size(); ++i) {
@@ -76,13 +79,13 @@ private:
 
         int new_size = x + 1;
         parent.resize(new_size);
-        rank.resize(new_size, 0);
+        vector_fill(rank, new_size,  0);
         for (int i = size; i < new_size; ++i) {
             parent[i] = i;
         }
     }
 
 private:
-    std::vector<int> parent;
-    std::vector<int> rank;
+    godot::LocalVector<int> parent;
+    godot::LocalVector<int> rank;
 };

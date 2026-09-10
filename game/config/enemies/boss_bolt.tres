@@ -1,31 +1,21 @@
-[gd_resource type="Resource" script_class="LightningWeaponProps" load_steps=6 format=3]
+[gd_resource type="Resource" script_class="LightningWeaponProps" format=3 uid="uid://dx73j4g5x4ufx"]
 
-[ext_resource type="Script" path="res://game/scripts/weapons/LightningWeaponProps.gd" id="1"]
+[ext_resource type="Script" uid="uid://c8x3yamxvv4fi" path="res://game/scripts/weapons/LightningWeaponProps.gd" id="1"]
 [ext_resource type="Resource" path="res://game/config/weapons/bolt_lightning.tres" id="2"]
 [ext_resource type="Resource" path="res://game/config/weapons/bolt_hit_lightning.tres" id="3"]
-[ext_resource type="ShaderMaterial" path="res://game/shaders/regolith_lightning_material.tres" id="4"]
+[ext_resource type="Material" path="res://game/shaders/regolith_lightning_material.tres" id="4"]
 [ext_resource type="PackedScene" path="res://game/scenes/weapons/LightningBolt.tscn" id="5"]
 
 [resource]
 script = ExtResource("1")
-ammo = -1
-shots_per_ammo = 1
+lightning = ExtResource("2")
+lightning_hit = ExtResource("3")
+lightning_material = ExtResource("4")
+projectile_scene = ExtResource("5")
 delay_cooldown = 4.0
 inaccuracy_angle = 0.0
 inaccuracy_tangent = 0.0
 speed = 9.0
-lifetime = 5.0
-cell_life = 8
 color_front = Color(0.705882, 0.784314, 1, 1)
-burn_strength = 255
-scorch_strength = 110
-damage_ratio = 0.65
-damage = 1
-projectile_scene = ExtResource("5")
-lightning = ExtResource("2")
-lightning_hit = ExtResource("3")
-lightning_material = ExtResource("4")
-target_range = 3.0
 turn_speed = 2.0
-segment_length = 2.0
-strikes_per_second = 30.0
+target_range = 3.0

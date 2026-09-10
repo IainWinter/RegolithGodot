@@ -12,15 +12,13 @@
 #include "SpriteCell.h"
 #include "SpriteMass.h"
 
-#include "FlatMap.h"
+#include "Containers/FlatMap.h"
+#include "Result.h"
 
-#include "Serializer/Serialize.h"
-
-#include <array>
-#include <optional>
-#include <unordered_map>
-#include <unordered_set>
-#include <vector>
+#include <godot_cpp/templates/hash_map.hpp>
+#include <godot_cpp/templates/hash_set.hpp>
+#include <godot_cpp/templates/local_vector.hpp>
+#include <godot_cpp/templates/pair.hpp>
 
 struct SpriteCommitConfig {
     bool debug = false;
@@ -28,32 +26,23 @@ struct SpriteCommitConfig {
 };
 
 struct SpriteChunkLocation {
-    vec2 pos;
+    godot::Vector2 pos;
 };
 
-struct [[Struct]] SpriteCellGroup {
+struct  SpriteCellGroup {
     int activeCount;
-    ivec2 root_grid_index_position;
-    std::vector<ivec2> removed;
+    godot::Vector2i root_grid_index_position;
+    godot::LocalVector<godot::Vector2i> removed;
 };
 
 class Sprite;
-
-using SpriteCut = std::tuple<Transform, Sprite, vec2>;
-
-struct SpriteCommitResult {
-    std::vector<SpriteCut> splits; // needs to be a tuple for fwd
-    std::vector<std::pair<ivec2, Color4>> removedPixelColors;
-    bool selfIsEmpty;
-    vec2 offset;
-    std::unordered_map<SpriteCellMaskType, size_t> split_index_with_majority_of_type;
-    std::vector<SpriteChunk*> dirty_chunks; // chunks whose cells changed, seed the parallel surface and distance field passes
-};
+struct SpriteCut;
+struct SpriteCommitResult;
 
 class Sprite {
   public:
     Sprite() = default;
-    Sprite(SpriteChunkPool& chunk_pool, Grid grid, const std::vector<SpriteChunk*>& chunks, bool repairable);
+    Sprite(SpriteChunkPool& chunk_pool, Grid grid, const godot::LocalVector<SpriteChunk*>& chunks, bool repairable);
     Sprite(SpriteChunkPool& chunk_pool, const SpriteAsset& asset, bool repairable);
     ~Sprite();
 
@@ -66,11 +55,11 @@ class Sprite {
   public:
     const Grid& grid() const;
     const FlatMap<SpriteChunk*>& chunks() const;
-    const std::unordered_set<SpriteChunk*>& dirty_chunks() const;
+    const godot::HashSet<SpriteChunk*>& dirty_chunks() const;
     const SpriteCellGroup& group(const SpriteCellMaskType& type) const;
     const SpriteMassInfo mass_info() const;
     int active_cell_count() const;
-    ivec2 cell_dim() const;
+    godot::Vector2i cell_dim() const;
     bool is_repairable() const;
     void set_repairable(bool repairable);
 
@@ -86,7 +75,7 @@ class Sprite {
     // editor write. sets color and mask of one cell, creating the chunk when
     // the grid position has none, keeps counts and mass in step. an empty
     // mask clears the cell
-    void paint_cell(ivec2 gridIndexPosition, Color4 color, SpriteCellMask mask);
+    void paint_cell(godot::Vector2i gridIndexPosition, Color4 color, SpriteCellMask mask);
     void damage_cell(int chunkIndex, int cellIndex);
     void repair_cell(SpriteCellMaskType type);
 
@@ -115,7 +104,7 @@ class Sprite {
 
     // every cell removed since the last take, with its color. the world
     // drains this each commit so no cell leaves without a particle
-    void take_loose_pixels(std::vector<std::pair<ivec2, Color4>>& out);
+    void take_loose_pixels(godot::LocalVector<godot::Pair<godot::Vector2i, Color4>>& out);
     void repair_all_cells();
 
     SpriteCutter start_cutter() const;
@@ -129,24 +118,26 @@ class Sprite {
     // across threads. driven by the commit system's parallel surface pass
     void recalc_chunk_surface(SpriteChunk* chunk);
 
-    std::optional<ivec2> ray_cast(vec2 local_origin, vec2 local_end) const;
+    Optional<godot::Vector2i> ray_cast(godot::Vector2 local_origin, godot::Vector2 local_end) const;
 
     // This is annoying because it has to replace all colliders
     // doesn't work right now.
-    vec2 optimize_grid(Transform& transform);
+    godot::Vector2 optimize_grid(Transform& transform);
 
   private:
-    std::tuple<Sprite, vec2, vec2> cut_island(const std::vector<FloodFillResult>& islands,
-                                             std::vector<std::pair<ivec2, Color4>>& colors);
+    // (Sprite, offset, world_offset) — Sprite is move-only so return by out-param
+    void cut_island(const godot::LocalVector<FloodFillResult>& islands,
+                    godot::LocalVector<godot::Pair<godot::Vector2i, Color4>>& colors,
+                    Sprite& out_sprite, godot::Vector2& out_offset, godot::Vector2& out_world_offset);
 
-    void get_all_pixels_colors(std::vector<std::pair<ivec2, Color4>>& colors) const;
+    void get_all_pixels_colors(godot::LocalVector<godot::Pair<godot::Vector2i, Color4>>& colors) const;
 
     SpriteChunkNeighbors gather_surface_neighbors(int chunkIndex) const;
 
     // loose records the cell as gone from the world, off when it moves to a
     // split piece instead
-    void remove_chunk_cell(SpriteChunk* chunk, int cellIndex, ivec2 gridIndexPosition, bool loose = true);
-    void repair_chunk_cell(SpriteChunk* chunk, int cellIndex, ivec2 gridIndexPosition);
+    void remove_chunk_cell(SpriteChunk* chunk, int cellIndex, godot::Vector2i gridIndexPosition, bool loose = true);
+    void repair_chunk_cell(SpriteChunk* chunk, int cellIndex, godot::Vector2i gridIndexPosition);
 
     void delete_chunk(SpriteChunk* chunk);
 
@@ -157,18 +148,33 @@ class Sprite {
     SpriteMass m_mass = {};
 
     FlatMap<SpriteChunk*> m_chunks;
-    std::unordered_set<SpriteChunk*> m_dirty;
-    std::unordered_set<int> m_hot_chunks;
+    godot::HashSet<SpriteChunk*> m_dirty;
+    godot::HashSet<int> m_hot_chunks;
 
-    std::array<SpriteCellGroup, SpriteCellMaskType_Count> m_groups = {};
+    SpriteCellGroup m_groups[SpriteCellMaskType_Count] = {};
     int m_active_cell_count = 0;
 
-    ivec2 m_cells_dim = ivec2(0); // only for player
+    godot::Vector2i m_cells_dim = godot::Vector2i(0, 0); // only for player
     bool m_is_m_repairable = false;
 
     uint16_t m_damageable_classes = 0xFFFF;
 
-    std::vector<std::pair<ivec2, Color4>> m_loose_pixels;
+    godot::LocalVector<godot::Pair<godot::Vector2i, Color4>> m_loose_pixels;
+};
+
+struct SpriteCut {
+    Transform transform;
+    Sprite sprite;
+    godot::Vector2 offset;
+};
+
+struct SpriteCommitResult {
+    godot::LocalVector<SpriteCut> splits;
+    godot::LocalVector<godot::Pair<godot::Vector2i, Color4>> removedPixelColors;
+    bool selfIsEmpty;
+    godot::Vector2 offset;
+    godot::HashMap<SpriteCellMaskType, size_t> split_index_with_majority_of_type;
+    godot::LocalVector<SpriteChunk*> dirty_chunks; // chunks whose cells changed, seed the parallel surface and distance field passes
 };
 
 constexpr const char* type_name_of(const Sprite*) {

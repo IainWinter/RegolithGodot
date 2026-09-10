@@ -1,40 +1,31 @@
 #pragma once
 
 #include "AxisAlignedBox.h"
+#include "Math/Vector.h"
 
-#include "glm/vec2.hpp"
-#include "glm/mat4x4.hpp"
-using namespace glm;
-
-/**
- * A 2D matrix stored as its components
-*/
-class [[Component]] Transform {
+class Transform {
 public:
-    vec2 position = vec2(0.f);
-    vec2 scale = vec2(1.f);
+    godot::Vector2 position = godot::Vector2(0.f, 0.f);
+    godot::Vector2 scale = godot::Vector2(1.f, 1.f);
     float angle = 0;
-    float z = 0;
 
-    vec2 to_world_point(vec2 localPoint, float sinAngle, float cosAngle) const;
+    godot::Vector2 to_world_point(godot::Vector2 localPoint, float sinAngle, float cosAngle) const;
 
-    vec2 to_world_point(vec2 localPoint) const;
+    godot::Vector2 to_world_point(godot::Vector2 localPoint) const;
 
-    vec2 to_local_point(vec2 worldPoint, float negSinAngle, float negCosAngle) const;
-    
-    vec2 to_local_point(vec2 worldPoint) const;
+    godot::Vector2 to_local_point(godot::Vector2 worldPoint, float negSinAngle, float negCosAngle) const;
 
-    mat4x4 matrix4() const;
+    godot::Vector2 to_local_point(godot::Vector2 worldPoint) const;
 
     Transform child(const Transform& parent) const; // rename
 
-    Transform sweep(vec2 linear_velocity, float angular_velocity, float delta_time) const;
+    Transform sweep(godot::Vector2 linear_velocity, float angular_velocity, float delta_time) const;
 
-    Transform sweep_around_center(vec2 center_of_mass, vec2 linear_velocity, float angular_velocity, float delta_time) const;
+    Transform sweep_around_center(godot::Vector2 center_of_mass, godot::Vector2 linear_velocity, float angular_velocity, float delta_time) const;
 
     AxisAlignedBox bounds() const;
 
-    void corners(vec2* corners) const;
+    void corners(godot::Vector2* corners) const;
 
-    bool contains_local_point(vec2 localPoint) const;
+    bool contains_local_point(godot::Vector2 localPoint) const;
 };

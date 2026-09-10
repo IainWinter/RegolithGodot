@@ -120,18 +120,18 @@ static const char* const k_fracture_patterns[][k_fracture_size] = {
 
 static const int k_fracture_pattern_count = sizeof(k_fracture_patterns) / sizeof(k_fracture_patterns[0]);
 
-static ivec2 rotate_fracture_offset(ivec2 offset, int rotation) {
+static godot::Vector2i rotate_fracture_offset(godot::Vector2i offset, int rotation) {
     switch (rotation) {
-        case 1: return ivec2(offset.y, -offset.x);
-        case 2: return ivec2(-offset.x, -offset.y);
-        case 3: return ivec2(-offset.y, offset.x);
+        case 1: return godot::Vector2i(offset.y, -offset.x);
+        case 2: return godot::Vector2i(-offset.x, -offset.y);
+        case 3: return godot::Vector2i(-offset.y, offset.x);
     }
 
     return offset;
 }
 
-static void burn_offset(Sprite& sprite, ivec2 grid_point, ivec2 offset, int distance, int radius, const SpriteBurnProps& props) {
-    ivec2 point = grid_point + offset;
+static void burn_offset(Sprite& sprite, godot::Vector2i grid_point, godot::Vector2i offset, int distance, int radius, const SpriteBurnProps& props) {
+    godot::Vector2i point = grid_point + offset;
 
     if (!sprite.grid().is_grid_index_position_valid(point)) {
         return;
@@ -186,13 +186,13 @@ void sprite_burn_cell(Sprite& sprite, int chunk_index, int cell_index, int stren
     }
 }
 
-void sprite_burn_point(Sprite& sprite, ivec2 grid_point, int strength, int damage) {
+void sprite_burn_point(Sprite& sprite, godot::Vector2i grid_point, int strength, int damage) {
     auto [chunk_index, cell_index] = sprite.grid().to_chunk_cell_index(grid_point);
 
     sprite_burn_cell(sprite, chunk_index, cell_index, strength, damage);
 }
 
-void sprite_burn_fracture(Sprite& sprite, ivec2 grid_point, const SpriteBurnProps& props) {
+void sprite_burn_fracture(Sprite& sprite, godot::Vector2i grid_point, const SpriteBurnProps& props) {
     sprite_burn_point(sprite, grid_point, props.strength, props.damage);
 
     const char* const* pattern = k_fracture_patterns[random_int_max(k_fracture_pattern_count)];
@@ -204,7 +204,7 @@ void sprite_burn_fracture(Sprite& sprite, ivec2 grid_point, const SpriteBurnProp
                 continue;
             }
 
-            ivec2 offset = rotate_fracture_offset(ivec2(x - k_fracture_radius, y - k_fracture_radius), rotation);
+            godot::Vector2i offset = rotate_fracture_offset(godot::Vector2i(x - k_fracture_radius, y - k_fracture_radius), rotation);
 
             if (offset.x == 0 && offset.y == 0) {
                 continue;
@@ -217,7 +217,7 @@ void sprite_burn_fracture(Sprite& sprite, ivec2 grid_point, const SpriteBurnProp
     }
 }
 
-void sprite_burn_radius(Sprite& sprite, ivec2 grid_point, int radius, const SpriteBurnProps& props) {
+void sprite_burn_radius(Sprite& sprite, godot::Vector2i grid_point, int radius, const SpriteBurnProps& props) {
     sprite_burn_point(sprite, grid_point, props.strength, props.damage);
 
     for (int y = -radius; y <= radius; y++) {
@@ -230,7 +230,7 @@ void sprite_burn_radius(Sprite& sprite, ivec2 grid_point, int radius, const Spri
                 continue;
             }
 
-            ivec2 offset = ivec2(x, y);
+            godot::Vector2i offset = godot::Vector2i(x, y);
             int distance = abs(x) > abs(y) ? abs(x) : abs(y);
 
             burn_offset(sprite, grid_point, offset, distance, radius, props);

@@ -1,6 +1,8 @@
 #pragma once
 
-#include <vector>
+#include <godot_cpp/core/memory.hpp>
+
+#include <godot_cpp/templates/local_vector.hpp>
 
 // An allocator which assumes that it is givin valid ids from an external FreeList
 template<typename T>
@@ -31,7 +33,7 @@ public:
 
     ~FreeListChunkAllocator() {
         for (Block& block : m_blocks) {
-            ::free(block.memory);
+            memfree(block.memory);
         }
     }
 
@@ -44,7 +46,7 @@ public:
             allocate_new_block();
         }
         
-        Block& block = m_blocks.at(blockId);
+        Block& block = m_blocks[blockId];
 
         if (block.memory == nullptr) {
             allocate_existing_block(blockId);
@@ -70,11 +72,14 @@ public:
         return data;
     }
 
+    T* operator[](size_t id) { return at(id); }
+    const T* operator[](size_t id) const { return at(id); }
+
     T* at(size_t id) {
         size_t blockId = id / m_blockSize;
         size_t instanceId = id % m_blockSize;
         if (blockId >= m_blocks.size()) return nullptr;
-        Block& block = m_blocks.at(blockId);
+        Block& block = m_blocks[blockId];
         if (block.memory == nullptr) return nullptr;
         return block.memory + instanceId * m_chunkTotalSize;
     }
@@ -83,7 +88,7 @@ public:
         size_t blockId = id / m_blockSize;
         size_t instanceId = id % m_blockSize;
         if (blockId >= m_blocks.size()) return nullptr;
-        const Block& block = m_blocks.at(blockId);
+        const Block& block = m_blocks[blockId];
         if (block.memory == nullptr) return nullptr;
         return block.memory + instanceId * m_chunkTotalSize;
     }
@@ -92,7 +97,7 @@ public:
         size_t blockId = id / m_blockSize;
         size_t instanceId = id % m_blockSize;
 
-        Block& block = m_blocks.at(blockId);
+        Block& block = m_blocks[blockId];
         block.instances -= 1;
 
         T* memory = block.memory + instanceId * m_chunkTotalSize;
@@ -109,20 +114,20 @@ public:
 private:
     void allocate_new_block() {
         Block block;
-        block.memory = static_cast<T*>(malloc(m_chunkTotalSize * m_blockSize * sizeof(T)));
+        block.memory = static_cast<T*>(memalloc(m_chunkTotalSize * m_blockSize * sizeof(T)));
         block.instances = 0;
         m_blocks.push_back(block);
     }
 
     void allocate_existing_block(size_t blockId) {
-        Block& block = m_blocks.at(blockId);
-        block.memory = static_cast<T*>(malloc(m_chunkTotalSize * m_blockSize * sizeof(T)));
+        Block& block = m_blocks[blockId];
+        block.memory = static_cast<T*>(memalloc(m_chunkTotalSize * m_blockSize * sizeof(T)));
         block.instances = 0;
     }
 
     void free_block(size_t blockId) {
-        Block& block = m_blocks.at(blockId);
-        ::free(block.memory);
+        Block& block = m_blocks[blockId];
+        memfree(block.memory);
         block.memory = nullptr;
     }
 
@@ -135,5 +140,5 @@ private:
         size_t instances;
     };
 
-    std::vector<Block> m_blocks;
+    godot::LocalVector<Block> m_blocks;
 };

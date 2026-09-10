@@ -8,18 +8,18 @@
 #include <godot_cpp/core/object_id.hpp>
 #include "Math/Vector.h"
 
-#include <vector>
+#include <godot_cpp/templates/local_vector.hpp>
 
 constexpr int k_rope_entity_min_pixels = 10;
 
 struct SpriteRopeNode {
-    vec2 position;
-    vec2 last_position;
+    godot::Vector2 position;
+    godot::Vector2 last_position;
 };
 
-struct [[Struct]] SpriteRopeEntityAnchor {
+struct  SpriteRopeEntityAnchor {
     godot::ObjectID entity;
-    ivec2 cell;
+    godot::Vector2i cell;
 };
 
 struct [[Struct, ManualMembers]] SpriteRope {
@@ -39,7 +39,7 @@ struct [[Struct, ManualMembers]] SpriteRope {
     float wiggle_amount = 1.f;
 
     [[Member]]
-    std::vector<vec2> rest_local;
+    godot::LocalVector<godot::Vector2> rest_local;
 
     [[Member]]
     SpriteRopeEntityAnchor entity_a;
@@ -47,23 +47,23 @@ struct [[Struct, ManualMembers]] SpriteRope {
     [[Member]]
     SpriteRopeEntityAnchor entity_b;
 
-    std::vector<SpriteRopeNode> nodes;
-    std::vector<vec2> node_velocities;
+    godot::LocalVector<SpriteRopeNode> nodes;
+    godot::LocalVector<godot::Vector2> node_velocities;
 
-    std::vector<float> rest_len;
-    std::vector<uint8_t> node_health;
+    godot::LocalVector<float> rest_len;
+    godot::LocalVector<uint8_t> node_health;
 
     float wiggle_phase = -1.f;
 };
 
-struct [[Component]] SpriteRopeSet {
-    std::vector<SpriteRope> ropes;
+struct  SpriteRopeSet {
+    godot::LocalVector<SpriteRope> ropes;
     float angle_stiffness = 0.35f;
     float damping = 0.08f;
     float node_mass = 0.1f;
     float wiggle = 3.f;
 };
 
-struct [[Component]] SpriteRopeGrid {
+struct  SpriteRopeGrid {
     Grid grid;
 };

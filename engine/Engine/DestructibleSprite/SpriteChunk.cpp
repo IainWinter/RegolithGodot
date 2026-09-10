@@ -4,10 +4,8 @@
 #include "Constants.h"
 #include "Math/MathUtil.h"
 
-#include "glm/geometric.hpp"
-
 void SpriteChunk::reset() {
-    surface = {};
+    surface.clear();
 }
 
 void SpriteChunk::remove_cell(int cellIndex) {
@@ -21,7 +19,7 @@ void SpriteChunk::repair_cell(int cellIndex) {
 }
 
 void SpriteChunk::calc_surface(const Grid& grid, const SpriteChunkNeighbors& neighbors) {
-    surface = {};
+    surface.clear();
 
     auto is_filled = [&](int index, bool at_edge, const SpriteChunk* neighbor, int neighbor_index) {
         SpriteCellMask m = at_edge ? (neighbor ? neighbor->mask[neighbor_index] : SpriteCellMask()) : mask[index];
@@ -64,7 +62,7 @@ void SpriteChunk::calc_surface(const Grid& grid, const SpriteChunkNeighbors& nei
             int infoIndex = (up << 3) | (down << 2) | (left << 1) | (right << 0);
 
             if (points[infoIndex]) {
-                surface.emplace_back(ivec2(x, y), cellIndex);
+                surface.push_back({godot::Vector2i(x, y), cellIndex});
             }
         }
     }
@@ -73,10 +71,12 @@ void SpriteChunk::calc_distance_field(const Grid& grid, const SpriteChunkNeighbo
     int band = static_cast<int>(k_sdf_band_cells) + 1;
     int cs = grid.chunkSize;
 
-    ivec2 size(cs + 2 * band);
-    ivec2 window_min = gridPixelOffset - band;
+    godot::Vector2i size(cs + 2 * band, cs + 2 * band);
+    godot::Vector2i window_min = godot::Vector2i(gridPixelOffset.x - band, gridPixelOffset.y - band);
 
-    std::vector<uint8_t> filled(size.x * size.y, 0u);
+    godot::LocalVector<uint8_t> filled;
+    filled.resize(size.x * size.y);
+    for (uint32_t i = 0; i < filled.size(); i++) filled[i] = 0u;
 
     for (int dy = -1; dy <= 1; dy++) {
         for (int dx = -1; dx <= 1; dx++) {
@@ -86,26 +86,28 @@ void SpriteChunk::calc_distance_field(const Grid& grid, const SpriteChunkNeighbo
                 continue;
             }
 
-            ivec2 lo = glm::max(window_min, chunk->gridPixelOffset);
-            ivec2 hi = glm::min(window_min + size, chunk->gridPixelOffset + ivec2(cs));
+            godot::Vector2i lo = window_min.max(chunk->gridPixelOffset);
+            godot::Vector2i hi_win = godot::Vector2i(window_min.x + size.x, window_min.y + size.y);
+            godot::Vector2i hi_chunk = godot::Vector2i(chunk->gridPixelOffset.x + cs, chunk->gridPixelOffset.y + cs);
+            godot::Vector2i hi = hi_win.min(hi_chunk);
 
             for (int y = lo.y; y < hi.y; y++) {
                 for (int x = lo.x; x < hi.x; x++) {
-                    ivec2 cell = ivec2(x, y) - chunk->gridPixelOffset;
+                    godot::Vector2i cell = godot::Vector2i(x - chunk->gridPixelOffset.x, y - chunk->gridPixelOffset.y);
                     SpriteCellMask cell_mask = chunk->mask[cell.x + cell.y * cs];
 
                     if (!cell_mask.is_filled()) {
                         continue;
                     }
 
-                    ivec2 p = ivec2(x, y) - window_min;
+                    godot::Vector2i p = godot::Vector2i(x - window_min.x, y - window_min.y);
                     filled[p.x + p.y * size.x] = 1u;
                 }
             }
         }
     }
 
-    std::vector<float> field = sprite_distance_field_compute(filled.data(), size);
+    godot::LocalVector<float> field = sprite_distance_field_compute(filled.ptr(), size);
 
     for (int y = 0; y < cs; y++) {
         for (int x = 0; x < cs; x++) {

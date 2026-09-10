@@ -18,27 +18,27 @@ static bool bodies_should_collide(const PhysicsBody& a, const PhysicsBody& b) {
     return true;
 }
 
-void find_pairs(const std::vector<PhysicsProxy>& proxies, const std::vector<SolverBody>& bodies,
+void find_pairs(const godot::LocalVector<PhysicsProxy>& proxies, const godot::LocalVector<SolverBody>& bodies,
                 PhysicsSolverState& state) {
 
     state.pairs.clear();
     state.lowering_overlaps.clear();
     state.broadphase.clear();
 
-    std::vector<int>& overlapping = state.broadphase_overlapping;
+    godot::LocalVector<int>& overlapping = state.broadphase_overlapping;
 
     for (int proxy_index = 0; proxy_index < static_cast<int>(proxies.size()); proxy_index++) {
-        const PhysicsProxy& proxy = proxies.at(proxy_index);
+        const PhysicsProxy& proxy = proxies[proxy_index];
 
         overlapping.clear();
         state.broadphase.query(proxy.extended_box, overlapping);
 
         for (const int& overlap_index : overlapping) {
-            if (!bodies.at(proxy_index).moves && !bodies.at(overlap_index).moves) {
+            if (!bodies[proxy_index].moves && !bodies[overlap_index].moves) {
                 continue;
             }
 
-            const PhysicsProxy& other = proxies.at(overlap_index);
+            const PhysicsProxy& other = proxies[overlap_index];
 
             // a body trying to lower its priority phases through everything it
             // overlaps, but the overlap is recorded so it can settle once clear

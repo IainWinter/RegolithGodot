@@ -7,7 +7,7 @@
 
 using namespace godot;
 
-void SpriteTree::build(const std::vector<RegolithSprite*>& sprites) {
+void SpriteTree::build(const godot::LocalVector<RegolithSprite*>& sprites) {
     m_tree.clear();
 
     for (RegolithSprite* node : sprites) {
@@ -20,8 +20,8 @@ void SpriteTree::build(const std::vector<RegolithSprite*>& sprites) {
     }
 }
 
-void SpriteTree::query(const AxisAlignedBox& box, std::vector<RegolithSprite*>& out) const {
-    std::vector<ObjectID> ids;
+void SpriteTree::query(const AxisAlignedBox& box, godot::LocalVector<RegolithSprite*>& out) const {
+    godot::LocalVector<ObjectID> ids;
     m_tree.query_items(box, ids);
 
     for (ObjectID id : ids) {
@@ -33,11 +33,11 @@ void SpriteTree::query(const AxisAlignedBox& box, std::vector<RegolithSprite*>& 
     }
 }
 
-std::optional<SpriteTree::Hit> SpriteTree::ray_cast(vec2 origin, vec2 end, const RegolithSprite* exclude) const {
-    std::vector<RegolithSprite*> hits;
+Optional<SpriteTree::Hit> SpriteTree::ray_cast(godot::Vector2 origin, godot::Vector2 end, const RegolithSprite* exclude) const {
+    godot::LocalVector<RegolithSprite*> hits;
     query(AxisAlignedBox(origin, end), hits);
 
-    std::optional<Hit> best;
+    Optional<Hit> best;
 
     for (RegolithSprite* sprite : hits) {
         if (sprite == exclude) {
@@ -46,14 +46,14 @@ std::optional<SpriteTree::Hit> SpriteTree::ray_cast(vec2 origin, vec2 end, const
 
         const Transform& transform = sprite->transform();
 
-        std::optional<ivec2> cell = sprite->sprite().ray_cast(transform.to_local_point(origin), transform.to_local_point(end));
+        Optional<godot::Vector2i> cell = sprite->sprite().ray_cast(transform.to_local_point(origin), transform.to_local_point(end));
 
         if (!cell) {
             continue;
         }
 
-        vec2 world = transform.to_world_point(sprite->sprite().grid().to_local_point_centered(*cell));
-        float distance = length(world - origin);
+        godot::Vector2 world = transform.to_world_point(sprite->sprite().grid().to_local_point_centered(*cell));
+        float distance = (world - origin).length();
 
         if (best && distance >= best->distance) {
             continue;
