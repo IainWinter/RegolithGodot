@@ -11,3 +11,4 @@ extensions/macos/
 extensions/linux/
 extensions/web/
 export/
+engine/Thirdparty/godot-cpp/__pycache__/

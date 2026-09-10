@@ -31,6 +31,10 @@ void RegolithDebugDraw::_bind_methods() {
 
     ClassDB::bind_method(D_METHOD("get_line_count"), &RegolithDebugDraw::get_line_count);
 
+    ClassDB::bind_method(D_METHOD("collect"), &RegolithDebugDraw::collect);
+    ClassDB::bind_method(D_METHOD("get_points"), &RegolithDebugDraw::get_points);
+    ClassDB::bind_method(D_METHOD("get_colors"), &RegolithDebugDraw::get_colors);
+
     ClassDB::bind_method(D_METHOD("apply_settings", "settings"), &RegolithDebugDraw::apply_settings);
     ClassDB::bind_method(D_METHOD("get_settings"), &RegolithDebugDraw::get_settings);
     ClassDB::bind_method(D_METHOD("debugger_message", "message", "data"), &RegolithDebugDraw::debugger_message);

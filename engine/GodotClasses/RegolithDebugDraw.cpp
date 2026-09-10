@@ -205,23 +205,43 @@ void RegolithDebugDraw::_process(double delta) {
         return;
     }
 
+    if (is_visible_in_tree()) {
+        collect();
+    } else {
+        m_points.resize(0);
+        m_colors.resize(0);
+        debug_render().clear_lines();
+        debug_render_render().clear_lines();
+    }
+
+    queue_redraw();
+}
+
+int RegolithDebugDraw::collect() {
     m_points.resize(0);
     m_colors.resize(0);
 
-    RegolithWorld* world = RegolithWorld::active();
-
-    if (world && is_visible_in_tree()) {
+    if (RegolithWorld* world = RegolithWorld::active()) {
         emit_world_lines(*world);
-
-        gather(*world, debug_render());
-        gather(*world, debug_render_fixed());
-        gather(*world, debug_render_render());
     }
+
+    float ppu = RegolithWorld::active_pixels_per_unit();
+    gather(ppu, debug_render());
+    gather(ppu, debug_render_fixed());
+    gather(ppu, debug_render_render());
 
     debug_render().clear_lines();
     debug_render_render().clear_lines();
 
-    queue_redraw();
+    return static_cast<int>(m_colors.size());
+}
+
+PackedVector2Array RegolithDebugDraw::get_points() const {
+    return m_points;
+}
+
+PackedColorArray RegolithDebugDraw::get_colors() const {
+    return m_colors;
 }
 
 void RegolithDebugDraw::emit_world_lines(const RegolithWorld& world) {
@@ -270,17 +290,18 @@ void RegolithDebugDraw::emit_world_lines(const RegolithWorld& world) {
     lines.axis_aligned_area_tree(world.tree().index(), DebugName_World_Tree);
 }
 
-void RegolithDebugDraw::gather(const RegolithWorld& world, DebugRendererLineList& list) {
+void RegolithDebugDraw::gather(float pixels_per_unit, DebugRendererLineList& list) {
     for (const DebugRendererLine& line : list.get_lines()) {
-        m_points.push_back(world.to_pixels(line.a));
-        m_points.push_back(world.to_pixels(line.b));
+        m_points.push_back(Vector2(line.a.x, line.a.y) * pixels_per_unit);
+        m_points.push_back(Vector2(line.b.x, line.b.y) * pixels_per_unit);
 
         m_colors.push_back(to_color(line.color));
     }
 }
 
 void RegolithDebugDraw::_draw() {
-    if (m_points.size() < 2) {
+    // in the editor the plugin draws the lines over the viewport itself
+    if (m_points.size() < 2 || Engine::get_singleton()->is_editor_hint()) {
         return;
     }
 
@@ -359,38 +380,51 @@ Color RegolithDebugDraw::get_layer_tint(int layer) const {
     return layer_valid(layer) ? to_color(m_map.tints()[layer].color) : Color();
 }
 
-static RegolithWorld* emit_world(int name, int layer) {
-    return RegolithDebugDraw::name_valid(name) && RegolithDebugDraw::layer_valid(layer) ? RegolithWorld::active() : nullptr;
+// pixels to units for script lines. no world in the tree (an enemy scene
+// open in the editor) falls back to the default scale
+static bool emit_ok(int name, int layer, float* ppu) {
+    *ppu = RegolithWorld::active_pixels_per_unit();
+    return RegolithDebugDraw::name_valid(name) && RegolithDebugDraw::layer_valid(layer);
+}
+
+static vec2 units(Vector2 pixels, float ppu) {
+    return vec2(pixels.x, pixels.y) / ppu;
 }
 
 void RegolithDebugDraw::add_line(Vector2 a, Vector2 b, int name, int layer) {
-    if (RegolithWorld* world = emit_world(name, layer)) {
-        debug_render().line(world->to_units(a), world->to_units(b), static_cast<DebugName>(name), static_cast<DebugLayer>(layer));
+    float ppu;
+    if (emit_ok(name, layer, &ppu)) {
+        debug_render().line(units(a, ppu), units(b, ppu), static_cast<DebugName>(name), static_cast<DebugLayer>(layer));
     }
 }
 
 void RegolithDebugDraw::add_ray(Vector2 origin, Vector2 ray, int name, int layer) {
-    if (RegolithWorld* world = emit_world(name, layer)) {
-        debug_render().ray(world->to_units(origin), world->to_units(ray), static_cast<DebugName>(name), static_cast<DebugLayer>(layer));
+    float ppu;
+    if (emit_ok(name, layer, &ppu)) {
+        debug_render().ray(units(origin, ppu), units(ray, ppu), static_cast<DebugName>(name), static_cast<DebugLayer>(layer));
     }
 }
 
 void RegolithDebugDraw::add_circle(Vector2 origin, float radius, int name, int layer) {
-    if (RegolithWorld* world = emit_world(name, layer)) {
-        debug_render().circle(world->to_units(origin), radius / world->pixels_per_unit(), static_cast<DebugName>(name), static_cast<DebugLayer>(layer));
+    float ppu;
+    if (emit_ok(name, layer, &ppu)) {
+        debug_render().circle(units(origin, ppu), radius / ppu, static_cast<DebugName>(name), static_cast<DebugLayer>(layer));
     }
 }
 
 void RegolithDebugDraw::add_capsule(Vector2 a, Vector2 b, float radius, int name, int layer) {
-    if (RegolithWorld* world = emit_world(name, layer)) {
-        debug_render().capsule(world->to_units(a), world->to_units(b), radius / world->pixels_per_unit(), static_cast<DebugName>(name), static_cast<DebugLayer>(layer));
+    float ppu;
+    if (emit_ok(name, layer, &ppu)) {
+        debug_render().capsule(units(a, ppu), units(b, ppu), radius / ppu, static_cast<DebugName>(name), static_cast<DebugLayer>(layer));
     }
 }
 
 void RegolithDebugDraw::add_rect(Rect2 rect, int name, int layer) {
-    if (RegolithWorld* world = emit_world(name, layer)) {
-        AxisAlignedBox box(world->to_units(rect.position), world->to_units(rect.get_end()));
-        debug_render().axis_aligned_box(box, static_cast<DebugName>(name), static_cast<DebugLayer>(layer));
+    float ppu;
+    if (emit_ok(name, layer, &ppu)) {
+        vec2 lo = units(rect.position, ppu);
+        vec2 hi = units(rect.position + rect.size, ppu);
+        debug_render().axis_aligned_box(AxisAlignedBox(lo, hi), static_cast<DebugName>(name), static_cast<DebugLayer>(layer));
     }
 }
 
