@@ -31,10 +31,6 @@ else()
 endif()
 
 add_subdirectory(${GODOTCPP_DIR} godot-cpp)
-add_subdirectory(Thirdparty/glm)
-add_subdirectory(BaseLibrary)
-add_subdirectory(Engine)
-add_subdirectory(GodotClasses)
 
 if (EMSCRIPTEN)
     set(OUTPUT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../extensions/web")
@@ -50,12 +46,15 @@ else()
     set(OUTPUT_SUFFIX "${CMAKE_SHARED_LIBRARY_SUFFIX}")
 endif()
 
-file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/regolith_stub.cpp "")
-add_library(regolith SHARED ${CMAKE_CURRENT_BINARY_DIR}/regolith_stub.cpp)
+file(GLOB_RECURSE REGOLITH_SOURCES CONFIGURE_DEPENDS Source/*.cpp)
+add_library(regolith SHARED ${REGOLITH_SOURCES})
 
-target_link_libraries(regolith PRIVATE
-    "$<LINK_LIBRARY:WHOLE_ARCHIVE,godot_bindings>"
+target_include_directories(regolith PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/Source
+    ${CMAKE_CURRENT_SOURCE_DIR}/Source/Godot
 )
+
+target_link_libraries(regolith PRIVATE godot-cpp)
 
 get_target_property(GODOTCPP_SUFFIX godot-cpp GODOTCPP_SUFFIX)
 
