@@ -479,12 +479,11 @@ void print_filled_chunks(const FlatMap<SpriteChunk*>& chunks, godot::Vector2i ch
     std::cout << ss.str();
 }
 
-static godot::LocalVector<char> number = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h',
-                                   'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z'};
+static constexpr char number[] = "0123456789abcdefghijklmnopqrstuvwxyz";
 
 void print_all_chunks_searching_header(UnionFind& toSeeds, int originChunk, int targetChunk, int groupIndex) {
     int originState = toSeeds.has(groupIndex) ? toSeeds.find(groupIndex) : groupIndex;
-    printf("Searching:\n    chunk: %d -> chunk: %d\n    group: %c", originChunk, targetChunk, number[originState % number.size()]);
+    printf("Searching:\n    chunk: %d -> chunk: %d\n    group: %c", originChunk, targetChunk, number[originState % (sizeof(number) - 1)]);
 }
 
 void set_console_color(int color) {
@@ -547,7 +546,7 @@ void print_all_chunks(const godot::HashMap<int, ArrayView<int>>& chunkFloodFillS
 
                             set_console_color(originState + 1);
 
-                            printf("%c", number[originState % number.size()]);
+                            printf("%c", number[originState % (sizeof(number) - 1)]);
 
                             set_console_color(15);
                         }
