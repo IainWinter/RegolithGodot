@@ -84,10 +84,20 @@ func slot_point(host: Enemy, point: Vector2) -> Vector2:
 func build_local_points(host: Enemy) -> void:
 	local_points.clear()
 	local_centroid = Vector2.ZERO
-	if not host.is_loaded():
-		return
 
-	var half := Vector2(host.get_cell_count()) * 0.5 * Steering.cell_pixels()
+	# at edit time no world is active so is_loaded() is false and cell_count
+	# is (0,0); fall back to the texture size — "cells are the pixels of the
+	# texture" — so hull previews still draw in the editor viewport
+	var cells: Vector2i = host.get_cell_count()
+	if cells == Vector2i.ZERO:
+		var tex: Texture2D = host.get_texture()
+		if tex == null:
+			return
+		cells = Vector2i(tex.get_size())
+		if cells == Vector2i.ZERO:
+			return
+
+	var half := Vector2(cells) * 0.5 * Steering.cell_pixels()
 	for p in points:
 		var local := Vector2(p.x, -p.y) * half
 		local_points.append(local)
@@ -135,29 +145,31 @@ static func is_rock(sprite: Node, host: Enemy) -> bool:
 
 	return not sprite is Enemy and sprite != host.player
 
-# emits in host-local pixels; the walker sets g.transform to the host's
-# global_transform, so everything lifts to scene pixels at push time
+# computes everything in world sim units; Steering.gz_* lift each emitted
+# point to host-local scene pixels via to_local * (p * ppu), and the walker's
+# host.global_transform puts it back at world position
 func draw_gizmos(g: RegolithGizmos) -> void:
 	var host := get_parent() as Enemy
 	if host == null or points.size() < 3:
 		return
 
-	build_local_points(host)
-	if local_points.is_empty():
+	var hull := world_points(host)
+	if hull.is_empty():
 		return
 
 	var color := Color(0.24, 0.86, 1.0)
 	var name := RegolithDebugDraw.AI_SHIELD
 	var ppu := Steering.ppu()
+	var to_local := host.global_transform.affine_inverse()
 
-	g.polygon(local_points, color, name)
-	g.cross(local_centroid, 0.25 * ppu, color, name)
-	g.circle(local_centroid, capture_radius * ppu, color, name)
+	Steering.gz_polygon(g, to_local, ppu, hull, color, name)
+	var centroid := world_centroid(host)
+	Steering.gz_cross(g, to_local, ppu, centroid, 0.25, color, name)
+	Steering.gz_circle(g, to_local, ppu, centroid, capture_radius, color, name)
 
 	if not Engine.is_editor_hint() and host.player != null:
-		var to_local := host.global_transform.affine_inverse()
-		var slot_local := to_local * (slot_point(host, host.player_pos) * ppu)
-		g.cross(slot_local, 0.5 * ppu, color, name)
+		var slot := slot_point(host, host.player_pos)
+		Steering.gz_cross(g, to_local, ppu, slot, 0.5, color, name)
 		for rock in holding:
 			if is_instance_valid(rock):
-				g.line(to_local * rock.global_position, slot_local, color, name)
+				Steering.gz_line(g, to_local, ppu, rock.global_position / ppu, slot, color, name)

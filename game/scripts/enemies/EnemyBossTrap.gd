@@ -171,28 +171,21 @@ func draw_gizmos(g: RegolithGizmos) -> void:
 	if host == null:
 		return
 
+	# box_corners and push are in world sim units; Steering.gz_* lift each
+	# emitted point to host-local scene pixels and the walker's transform
+	# puts it back at world position
 	var color := Color(0.95, 0.35, 0.35)
 	var name := RegolithDebugDraw.AI_TRAP
 	var ppu := Steering.ppu()
-	# box corners/push live in world sim units; the walker sets g.transform
-	# to the host's global_transform, so we un-transform to host-local pixels
-	# and let the framework put them back where they were
 	var to_local := host.global_transform.affine_inverse()
-	var push_local := to_local * (push * ppu)
 
-	g.polygon(_scaled_corners(0.0, ppu, to_local), color, name)
-	g.polygon(_scaled_corners(boundary_margin, ppu, to_local), color, name)
-	g.cross(push_local, 0.25 * ppu, color, name)
-	g.circle(push_local, margin * ppu, color, name)
+	Steering.gz_polygon(g, to_local, ppu, box_corners(0.0), color, name)
+	Steering.gz_polygon(g, to_local, ppu, box_corners(boundary_margin), color, name)
+	Steering.gz_cross(g, to_local, ppu, push, 0.25, color, name)
+	Steering.gz_circle(g, to_local, ppu, push, margin, color, name)
 
 	if pull_target and is_instance_valid(pull_target):
-		g.line(to_local * pull_target.global_position, push_local, color, name)
-
-func _scaled_corners(grow: float, ppu: float, to_local: Transform2D) -> PackedVector2Array:
-	var out := PackedVector2Array()
-	for corner in box_corners(grow):
-		out.append(to_local * (corner * ppu))
-	return out
+		Steering.gz_line(g, to_local, ppu, pull_target.global_position / ppu, push, color, name)
 
 func damage_player(player: RegolithSprite) -> void:
 	var reach := Steering.sprite_radius_units(player) * Steering.ppu()

@@ -10,6 +10,39 @@ static func ppu() -> float:
 static func cell_pixels() -> float:
 	return RegolithWorld.pixels_per_cell()
 
+# gizmo emit helpers: take world sim-unit points, lift to host-local scene
+# pixels via to_local * (p * ppu), then push through RegolithGizmos. the
+# walker's host.global_transform reverses to_local at draw time, landing
+# each point back at its world position
+
+static func gz_line(g: RegolithGizmos, to_local: Transform2D, ppu_: float, a: Vector2, b: Vector2, color: Color, name: int) -> void:
+	g.line(to_local * (a * ppu_), to_local * (b * ppu_), color, name)
+
+static func gz_cross(g: RegolithGizmos, to_local: Transform2D, ppu_: float, at: Vector2, half: float, color: Color, name: int) -> void:
+	gz_line(g, to_local, ppu_, at + Vector2(-half, 0), at + Vector2(half, 0), color, name)
+	gz_line(g, to_local, ppu_, at + Vector2(0, -half), at + Vector2(0, half), color, name)
+
+static func gz_circle(g: RegolithGizmos, to_local: Transform2D, ppu_: float, center: Vector2, radius: float, color: Color, name: int, steps := 24) -> void:
+	var prev := center + Vector2.RIGHT * radius
+	for i in range(1, steps + 1):
+		var next := center + Vector2.from_angle(TAU * float(i) / steps) * radius
+		gz_line(g, to_local, ppu_, prev, next, color, name)
+		prev = next
+
+static func gz_arc(g: RegolithGizmos, to_local: Transform2D, ppu_: float, center: Vector2, radius: float, a0: float, a1: float, color: Color, name: int, steps := 24) -> void:
+	var prev := center + Vector2.from_angle(a0) * radius
+	for i in range(1, steps + 1):
+		var next := center + Vector2.from_angle(lerpf(a0, a1, float(i) / steps)) * radius
+		gz_line(g, to_local, ppu_, prev, next, color, name)
+		prev = next
+
+static func gz_polygon(g: RegolithGizmos, to_local: Transform2D, ppu_: float, points: PackedVector2Array, color: Color, name: int) -> void:
+	var local := PackedVector2Array()
+	local.resize(points.size())
+	for i in points.size():
+		local[i] = to_local * (points[i] * ppu_)
+	g.polygon(local, color, name)
+
 static func wrap_angle(angle: float) -> float:
 	return fposmod(angle + PI, TAU) - PI
 
