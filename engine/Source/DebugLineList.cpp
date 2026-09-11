@@ -101,7 +101,7 @@ const godot::LocalVector<DebugRendererLine>& DebugRendererLineList::get_lines() 
 
         for (const DebugRendererLineInternal& l : m_lines) {
             if (debug_color_map().is_enabled(l.layer, l.name)) {
-                m_cache.push_back({l.a, l.b, debug_color_map().map_color(l.layer, l.name)});
+                m_cache.push_back({l.a, l.b, debug_color_map().map_color(l.layer, l.name), l.name});
             }
         }
     }

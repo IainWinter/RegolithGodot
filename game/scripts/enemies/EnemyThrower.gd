@@ -8,6 +8,9 @@ extends Node
 
 const FIND_INTERVAL := 0.2
 
+enum ThrowBias { LEFT, RIGHT, BOTH }
+enum ArcSpace { FACE_PLAYER, LOCAL }
+
 signal threw(node: RegolithSprite)
 
 @export var origin := Vector2.ZERO
@@ -16,8 +19,8 @@ signal threw(node: RegolithSprite)
 @export var only_throw_at_radius := 18.0
 @export var hold_arc_min := 0.0
 @export var hold_arc_max := 1.25
-@export var local_arc := false
-@export var swing_left := true
+@export var arc_space: ArcSpace = ArcSpace.FACE_PLAYER
+@export var bias: ThrowBias = ThrowBias.LEFT
 @export var max_holding := 5
 @export var max_cells := 200
 @export var hold_time := 3.0
@@ -59,7 +62,7 @@ func center_units() -> Vector2:
 	return host.local_point_units(origin) if host else Vector2.ZERO
 
 func arc_base_angle(player_pos: Vector2) -> float:
-	if local_arc:
+	if arc_space == ArcSpace.LOCAL:
 		return host.global_rotation
 
 	return (center - player_pos).angle()
@@ -118,13 +121,14 @@ func update(delta: float) -> void:
 				held.timer = 0.0
 
 func is_throwable(sprite: Node) -> bool:
-	if not sprite is RegolithSprite or sprite == host or not sprite.is_dynamic() or sprite.has_meta("thrown"):
+	if sprite == host or not sprite is RegolithSprite or not sprite.is_dynamic():
 		return false
 
-	if sprite is EnemyBomb:
-		return not sprite.exploding and sprite.held_by == null
+	var throwable := Throwable.of(sprite)
+	if throwable == null or throwable.thrown or throwable.held_by != null:
+		return false
 
-	if sprite is Enemy or sprite == host.player:
+	if sprite is EnemyBomb and sprite.exploding:
 		return false
 
 	return sprite.get_active_cell_count() <= max_cells
@@ -145,20 +149,20 @@ func find_things_to_throw() -> void:
 		if (sprite.global_position / Steering.ppu()).distance_to(center) > radius_max:
 			continue
 
-		if sprite is EnemyBomb:
-			sprite.held_by = host
-
+		Throwable.of(sprite).held_by = host
 		holding[sprite.get_instance_id()] = Held.new(sprite, center)
 
 func release(node: Node) -> void:
-	if node is EnemyBomb:
-		node.held_by = null
+	var throwable := Throwable.of(node)
+	if throwable:
+		throwable.held_by = null
 
 func finish_throw(node: RegolithSprite) -> void:
-	node.set_meta("thrown", true)
+	var throwable := Throwable.of(node)
+	throwable.thrown = true
+	throwable.held_by = null
 
 	if node is EnemyBomb:
-		node.held_by = null
 		var distance: float = host.player_pos.distance_to(node.global_position / Steering.ppu())
 		var speed: float = node.linear_velocity.length()
 		node.start_fuse(minf(distance / maxf(speed, 0.001), 4.0))
@@ -213,7 +217,7 @@ func throw_thing_at_target(held: Held, delta: float) -> bool:
 	var damping := 1.0
 
 	if thrower_to_goal.dot(thrower_to_held) < 0.0:
-		target_goal = center + around_direction(target - held_pos)
+		target_goal = center + around_direction(target - held_pos, thrower_to_held)
 		damping = 6.0
 	else:
 		held.timer += delta
@@ -228,8 +232,16 @@ func throw_thing_at_target(held: Held, delta: float) -> bool:
 	node.linear_velocity = Steering.dampen(node.linear_velocity + correction * delta * pull, damping, delta)
 	return false
 
-func around_direction(held_to_goal: Vector2) -> Vector2:
+func around_direction(held_to_goal: Vector2, thrower_to_held: Vector2) -> Vector2:
 	var perp := Vector2(-held_to_goal.y, held_to_goal.x).normalized()
+	var swing_left: bool
+	match bias:
+		ThrowBias.LEFT:
+			swing_left = true
+		ThrowBias.RIGHT:
+			swing_left = false
+		_:
+			swing_left = perp.dot(thrower_to_held) >= 0.0
 	return (perp if swing_left else -perp) * radius_max
 
 func draw_gizmos(g: RegolithGizmos) -> void:
@@ -285,10 +297,16 @@ func orbit_steer(held_pos: Vector2, target_goal: Vector2) -> Vector2:
 
 	if theta <= arc_hi:
 		target_theta = goal_theta
-	elif swing_left:
-		target_theta = arc_lo + TAU
 	else:
-		target_theta = arc_hi
+		match bias:
+			ThrowBias.RIGHT:
+				target_theta = arc_hi
+			ThrowBias.LEFT:
+				target_theta = arc_lo + TAU
+			_:
+				var to_hi := theta - arc_hi
+				var to_lo := (arc_lo + TAU) - theta
+				target_theta = arc_hi if to_hi <= to_lo else arc_lo + TAU
 
 	var step := clampf(target_theta - theta, -0.6, 0.6)
 	var r_goal := clampf((target_goal - center).length(), radius_min, radius_max)

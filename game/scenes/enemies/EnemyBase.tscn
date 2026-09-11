@@ -1,20 +1,21 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene format=3 uid="uid://b116g1wvjgy6w"]
 
-[ext_resource type="Script" path="res://game/scripts/enemies/EnemyBase.gd" id="1"]
-[ext_resource type="Texture2D" path="res://game/images/sprites/base.png" id="2"]
-[ext_resource type="Texture2D" path="res://game/images/sprites/base_mask.png" id="3"]
-[ext_resource type="Material" path="res://game/shaders/regolith_sprite_material.tres" id="4"]
-[ext_resource type="Material" path="res://game/shaders/regolith_rope_material.tres" id="5"]
-[ext_resource type="Script" path="res://game/scripts/enemies/EnemyThrower.gd" id="6"]
+[ext_resource type="Script" uid="uid://ba3sqs1li1i57" path="res://game/scripts/enemies/EnemyBase.gd" id="1"]
+[ext_resource type="Texture2D" uid="uid://bv087seij4006" path="res://game/images/sprites/base.png" id="2"]
+[ext_resource type="Texture2D" uid="uid://cxxfqao0x0nt3" path="res://game/images/sprites/base_mask.png" id="3"]
+[ext_resource type="Material" uid="uid://b2w7nuyl6835o" path="res://game/shaders/regolith_sprite_material.tres" id="4"]
+[ext_resource type="Material" uid="uid://b7bdqliowpujk" path="res://game/shaders/regolith_rope_material.tres" id="5"]
+[ext_resource type="Script" uid="uid://d1yu43p2ctr82" path="res://game/scripts/enemies/EnemyThrower.gd" id="6"]
 
-[node name="EnemyBase" type="RegolithSprite" node_paths=PackedStringArray("thrower") groups=["enemy", "regolith", "thrower"]]
-material = ExtResource("4")
-rope_material = ExtResource("5")
+[node name="EnemyBase" type="RegolithSprite" unique_id=1121209232 node_paths=PackedStringArray("thrower") groups=["enemy", "regolith", "thrower"]]
 texture = ExtResource("2")
 mask_texture = ExtResource("3")
+rope_material = ExtResource("5")
 angular_damping = 1.0
+material = ExtResource("4")
 script = ExtResource("1")
 thrower = NodePath("Thrower")
 
-[node name="Thrower" type="Node" parent="."]
+[node name="Thrower" type="Node" parent="." unique_id=1566605603]
 script = ExtResource("6")
+bias = 2

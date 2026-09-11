@@ -12,6 +12,9 @@ void RegolithDebugDraw::_bind_methods() {
     ClassDB::bind_method(D_METHOD("set_all_names_enabled", "enabled"), &RegolithDebugDraw::set_all_names_enabled);
     ClassDB::bind_method(D_METHOD("set_name_color", "name", "color"), &RegolithDebugDraw::set_name_color);
     ClassDB::bind_method(D_METHOD("get_name_color", "name"), &RegolithDebugDraw::get_name_color);
+    ClassDB::bind_method(D_METHOD("set_name_texture", "name", "texture"), &RegolithDebugDraw::set_name_texture);
+    ClassDB::bind_method(D_METHOD("get_name_texture", "name"), &RegolithDebugDraw::get_name_texture);
+    ClassDB::bind_method(D_METHOD("set_all_names_texture", "texture"), &RegolithDebugDraw::set_all_names_texture);
 
     ClassDB::bind_method(D_METHOD("get_layer_count"), &RegolithDebugDraw::get_layer_count);
     ClassDB::bind_method(D_METHOD("set_layer_enabled", "layer", "enabled"), &RegolithDebugDraw::set_layer_enabled);

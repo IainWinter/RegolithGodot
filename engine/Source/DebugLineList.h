@@ -102,6 +102,7 @@ private:
 struct DebugRendererLine {
     godot::Vector2 a, b;
     Color4 color;
+    DebugName name;
 };
 
 struct DebugRendererLineInternal {

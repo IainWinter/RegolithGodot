@@ -38,8 +38,8 @@ radius_min = 1.85
 radius_max = 2.45
 hold_arc_min = -5.46077
 hold_arc_max = 0.144154
-local_arc = true
-swing_left = false
+arc_space = 1
+bias = 1
 max_holding = 8
 
 [node name="EnemyBossTrap" type="Node" parent="." unique_id=1121439630]

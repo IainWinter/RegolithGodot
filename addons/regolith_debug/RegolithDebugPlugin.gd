@@ -41,6 +41,11 @@ func _enter_tree() -> void:
 	dock.changed.connect(_on_dock_changed)
 	_on_dock_changed(dock.settings)
 
+	# _forward_canvas_draw_over_viewport only fires while the plugin is
+	# handling the current selection; the "force" variant fires on every
+	# viewport redraw regardless, so gizmos show without anything selected
+	set_force_draw_over_forwarding_enabled()
+
 func _exit_tree() -> void:
 	remove_debugger_plugin(debugger)
 	remove_control_from_docks(dock)
@@ -51,15 +56,13 @@ func _on_dock_changed(settings: Dictionary) -> void:
 	settings_source.apply_settings(settings)
 	debugger.push_all(settings)
 
-# claim every object so the editor keeps calling
-# _forward_canvas_draw_over_viewport for us
-func _handles(_object: Object) -> bool:
-	return true
-
 func _process(_delta: float) -> void:
 	update_overlays()
 
-func _forward_canvas_draw_over_viewport(overlay: Control) -> void:
+# _forward_canvas_force_draw_over_viewport fires regardless of selection —
+# enabled in _enter_tree via set_force_draw_over_forwarding_enabled — so
+# gizmos render whether or not an object is picked in the scene tree
+func _forward_canvas_force_draw_over_viewport(overlay: Control) -> void:
 	var root := EditorInterface.get_edited_scene_root()
 	if root == null or not dock.settings.get("visible", true):
 		return

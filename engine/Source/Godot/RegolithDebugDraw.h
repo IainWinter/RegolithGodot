@@ -5,9 +5,11 @@
 class RegolithWorld;
 
 #include <godot_cpp/classes/node2d.hpp>
+#include <godot_cpp/classes/texture2d.hpp>
 #include <godot_cpp/core/binder_common.hpp>
 #include <godot_cpp/variant/dictionary.hpp>
 #include <godot_cpp/variant/packed_color_array.hpp>
+#include <godot_cpp/variant/packed_int32_array.hpp>
 #include <godot_cpp/variant/packed_vector2_array.hpp>
 
 // draws the engine's debug line lists in world pixels. lines carry a name
@@ -56,6 +58,10 @@ public:
     void set_name_color(int name, godot::Color color);
     godot::Color get_name_color(int name) const;
 
+    void set_name_texture(int name, godot::Ref<godot::Texture2D> texture);
+    godot::Ref<godot::Texture2D> get_name_texture(int name) const;
+    void set_all_names_texture(godot::Ref<godot::Texture2D> texture);
+
     int get_layer_count() const;
 
     void set_layer_enabled(int layer, bool enabled);
@@ -102,4 +108,6 @@ private:
     float m_line_width = -1.f;
     godot::PackedVector2Array m_points;
     godot::PackedColorArray m_colors;
+    godot::PackedInt32Array m_names;
+    godot::Ref<godot::Texture2D> m_textures[static_cast<size_t>(DebugName_Count)];
 };

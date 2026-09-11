@@ -4,8 +4,8 @@ class_name EnemyBomb
 # AiBomb + AiThrowable: drifts toward a thrower that has room, else at the
 # player, turning at a bounded rate. near the player it lights its fuse and
 # bursts: a blast of burns through everything close, a shove, and a ring of
-# shrapnel bullets flying out. a thrower that holds it moves it instead, and
-# marks it with the "thrown" meta once it lets go
+# shrapnel bullets flying out. a thrower that holds it moves it instead;
+# hold/thrown state lives on the Throwable child
 
 @export var speed := 3.0
 @export var turn_strength := 4.0
@@ -24,15 +24,16 @@ signal exploded(position: Vector2)
 
 var exploding := false
 var fuse := 0.0
-var held_by: Enemy
 var turn_bias := 0
 
+@onready var throwable: Throwable = Throwable.of(self)
+
 func update_ai(delta: float) -> void:
-	if held_by != null:
-		if is_instance_valid(held_by) and not held_by.dead:
+	if throwable.held_by != null:
+		if is_instance_valid(throwable.held_by) and not (throwable.held_by as Enemy).dead:
 			return
 
-		held_by = null
+		throwable.held_by = null
 
 	if exploding:
 		fuse -= delta
@@ -48,7 +49,7 @@ func update_ai(delta: float) -> void:
 	var target := player_pos
 	var set_fuse := true
 
-	if seek_thrower and not has_meta("thrown"):
+	if seek_thrower and not throwable.thrown:
 		var thrower := nearest_thrower(pos, pos.distance_squared_to(player_pos))
 
 		if thrower:

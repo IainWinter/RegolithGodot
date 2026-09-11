@@ -80,6 +80,8 @@ bool RegolithDebugDraw::layer_valid(int layer) {
 
 RegolithDebugDraw::RegolithDebugDraw() {
     set_z_index(4096);
+    // textures on lines tile along the length (u > 1); need repeat enabled
+    set_texture_repeat(CanvasItem::TEXTURE_REPEAT_ENABLED);
 }
 
 // the node that holds the "regolith" debugger capture, one per process
@@ -210,6 +212,7 @@ void RegolithDebugDraw::_process(double delta) {
     } else {
         m_points.resize(0);
         m_colors.resize(0);
+        m_names.resize(0);
         debug_render().clear_lines();
         debug_render_render().clear_lines();
     }
@@ -220,6 +223,7 @@ void RegolithDebugDraw::_process(double delta) {
 int RegolithDebugDraw::collect() {
     m_points.resize(0);
     m_colors.resize(0);
+    m_names.resize(0);
 
     if (RegolithWorld* world = RegolithWorld::active()) {
         emit_world_lines(*world);
@@ -296,6 +300,7 @@ void RegolithDebugDraw::gather(float pixels_per_unit, DebugRendererLineList& lis
         m_points.push_back(Vector2(line.b.x, line.b.y) * pixels_per_unit);
 
         m_colors.push_back(to_color(line.color));
+        m_names.push_back(static_cast<int>(line.name));
     }
 }
 
@@ -305,7 +310,85 @@ void RegolithDebugDraw::_draw() {
         return;
     }
 
-    draw_multiline_colors(m_points, m_colors, m_line_width);
+    // fast path — no per-name texture assigned, one batched call
+    bool any_textured = false;
+    for (int i = 0; i < DebugName_Count; i++) {
+        if (m_textures[i].is_valid()) {
+            any_textured = true;
+            break;
+        }
+    }
+
+    if (!any_textured) {
+        draw_multiline_colors(m_points, m_colors, m_line_width);
+        return;
+    }
+
+    // textured segments need real geometry width — a hairline (-1) has no
+    // quad to stretch a texture across, so pick a sensible default there
+    const float quad_width = m_line_width > 0.f ? m_line_width : 4.f;
+    const int line_count = m_colors.size();
+
+    PackedVector2Array plain_points;
+    PackedColorArray plain_colors;
+
+    PackedVector2Array quad;
+    PackedVector2Array uvs;
+    PackedColorArray quad_colors;
+    quad.resize(4);
+    uvs.resize(4);
+    quad_colors.resize(4);
+
+    for (int i = 0; i < line_count; i++) {
+        int name = m_names[i];
+        Ref<Texture2D> tex = (name >= 0 && name < DebugName_Count) ? m_textures[name] : Ref<Texture2D>();
+
+        Vector2 a = m_points[i * 2];
+        Vector2 b = m_points[i * 2 + 1];
+
+        if (!tex.is_valid()) {
+            plain_points.push_back(a);
+            plain_points.push_back(b);
+            plain_colors.push_back(m_colors[i]);
+            continue;
+        }
+
+        Vector2 dir = b - a;
+        float len = dir.length();
+        if (len < 1e-6f) {
+            continue;
+        }
+
+        Vector2 x = dir / len;
+        Vector2 y = Vector2(-x.y, x.x);
+        float w = quad_width * 0.5f;
+
+        quad.set(0, a + y * w);
+        quad.set(1, a - y * w);
+        quad.set(2, b - y * w);
+        quad.set(3, b + y * w);
+
+        // aspect-preserving tiling: texture repeats every `quad_width` pixels
+        // along the length so square patterns stay square, gradients stretch
+        // reasonably. relies on TEXTURE_REPEAT_ENABLED set in the constructor
+        float u_end = len / quad_width;
+        uvs.set(0, Vector2(0.f, 0.f));
+        uvs.set(1, Vector2(0.f, 1.f));
+        uvs.set(2, Vector2(u_end, 1.f));
+        uvs.set(3, Vector2(u_end, 0.f));
+
+        const Color& c = m_colors[i];
+        quad_colors.set(0, c);
+        quad_colors.set(1, c);
+        quad_colors.set(2, c);
+        quad_colors.set(3, c);
+
+        draw_polygon(quad, quad_colors, uvs, tex);
+    }
+
+    if (plain_points.size() >= 2) {
+        draw_multiline_colors(plain_points, plain_colors, m_line_width);
+    }
 }
 
 int RegolithDebugDraw::get_name_count() const {
@@ -348,6 +431,26 @@ void RegolithDebugDraw::set_name_color(int name, Color color) {
 
 Color RegolithDebugDraw::get_name_color(int name) const {
     return name_valid(name) ? to_color(m_map.colors()[name].color) : Color();
+}
+
+void RegolithDebugDraw::set_name_texture(int name, Ref<Texture2D> texture) {
+    if (!name_valid(name)) {
+        return;
+    }
+
+    m_textures[name] = texture;
+    queue_redraw();
+}
+
+Ref<Texture2D> RegolithDebugDraw::get_name_texture(int name) const {
+    return name_valid(name) ? m_textures[name] : Ref<Texture2D>();
+}
+
+void RegolithDebugDraw::set_all_names_texture(Ref<Texture2D> texture) {
+    for (int name = 0; name < DebugName_Count; name++) {
+        m_textures[name] = texture;
+    }
+    queue_redraw();
 }
 
 int RegolithDebugDraw::get_layer_count() const {
