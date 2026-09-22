@@ -30,6 +30,7 @@ var trail: Trail
 
 var tip_from := Vector2.ZERO
 var tip_to := Vector2.ZERO
+var visual: Sprite2D
 
 signal hit_cell(sprite: RegolithSprite, cell: Vector2i, position: Vector2)
 
@@ -53,14 +54,27 @@ func _ready() -> void:
 	trail.setup(props, cell_px, global_position)
 	add_child(trail)
 
+	if props.texture != null:
+		visual = Sprite2D.new()
+		visual.texture = props.texture
+		visual.modulate = props.color_front
+		visual.scale = Vector2.ONE * props.texture_scale
+		visual.rotation = velocity.angle()
+		add_child(visual)
+
 func _process(delta: float) -> void:
 	if dead:
+		if visual != null:
+			visual.visible = false
 		if trail.fade(props.speed * pixels_per_unit * delta):
 			queue_free()
 		return
 
 	trail.set_tip(tip_from.lerp(tip_to, Engine.get_physics_interpolation_fraction()))
 	trail.trim(trail_px)
+
+	if visual != null:
+		visual.rotation = velocity.angle()
 
 func _physics_process(delta: float) -> void:
 	if dead:

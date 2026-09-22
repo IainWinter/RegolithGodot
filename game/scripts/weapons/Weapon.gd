@@ -26,9 +26,12 @@ var ammo := 0:
 
 var charge := 0.0
 var cooldown := 0.0
+var charge_time := 0.0
 var beam: SuperLaser
 
 signal fired(bullet: Node2D)
+signal charging(position: Vector2, ratio: float)
+signal cooling(position: Vector2, ratio: float)
 signal emptied
 
 func set_fire_state(is_triggered: bool, direction: Vector2) -> void:
@@ -42,13 +45,19 @@ func holder() -> RegolithSprite:
 
 func fire_origin() -> Vector2:
 	var sprite := holder()
-	return sprite.to_global(local_fire_origin * RegolithWorld.pixels_per_unit()) if sprite else global_position
+	if sprite == null:
+		return global_position
+	if local_fire_origin == Vector2.ZERO:
+		return sprite.get_center_of_mass()
+	return sprite.to_global(local_fire_origin * RegolithWorld.pixels_per_unit())
 
 static func projectile_parent() -> Node:
 	var world := RegolithWorld.active()
 	return world.get_parent() if world else null
 
 func _physics_process(delta: float) -> void:
+	if cooldown > 0.0 and props != null and props.delay_cooldown > 0.0:
+		cooling.emit(fire_origin(), cooldown / props.delay_cooldown)
 	cooldown = maxf(cooldown - delta, 0.0)
 
 	if props == null or props.projectile_scene == null:
@@ -59,7 +68,15 @@ func _physics_process(delta: float) -> void:
 		return
 
 	if not triggered or cooldown > 0.0 or ammo == 0:
+		charge_time = 0.0
 		return
+
+	if props.delay_charge > 0.0:
+		charge_time = minf(charge_time + delta, props.delay_charge)
+		charging.emit(fire_origin(), charge_time / props.delay_charge)
+		if charge_time < props.delay_charge:
+			return
+		charge_time = 0.0
 
 	fire()
 	cooldown = props.delay_cooldown

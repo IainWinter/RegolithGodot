@@ -99,6 +99,7 @@ public:
     godot::TypedArray<godot::Vector2i> trace_cells(godot::Vector2 from, godot::Vector2 to, int max_cells) const;
 
     float get_mass() const;
+    godot::Vector2 get_center_of_mass() const;
     godot::Vector2 get_velocity_at(godot::Vector2 world_position) const;
     godot::Vector2 get_linear_velocity() const;
     void set_linear_velocity(godot::Vector2 velocity);

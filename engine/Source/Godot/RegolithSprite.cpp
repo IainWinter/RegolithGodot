@@ -707,6 +707,15 @@ float RegolithSprite::get_mass() const {
     return m_body.mass();
 }
 
+Vector2 RegolithSprite::get_center_of_mass() const {
+    if (!m_world) {
+        return Vector2();
+    }
+
+    godot::Vector2 world_units = m_transform.to_world_point(m_body.center_of_mass);
+    return m_world->to_pixels(world_units);
+}
+
 Vector2 RegolithSprite::get_velocity_at(Vector2 world_position) const {
     if (!m_world) {
         return Vector2();

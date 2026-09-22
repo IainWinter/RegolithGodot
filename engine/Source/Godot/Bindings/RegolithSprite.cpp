@@ -64,6 +64,7 @@ void RegolithSprite::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_cell_count"), &RegolithSprite::get_cell_count);
     ClassDB::bind_method(D_METHOD("get_active_cell_count"), &RegolithSprite::get_active_cell_count);
     ClassDB::bind_method(D_METHOD("get_mass"), &RegolithSprite::get_mass);
+    ClassDB::bind_method(D_METHOD("get_center_of_mass"), &RegolithSprite::get_center_of_mass);
     ClassDB::bind_method(D_METHOD("get_rope_count"), &RegolithSprite::get_rope_count);
     ClassDB::bind_method(D_METHOD("get_rope_points", "rope_index"), &RegolithSprite::get_rope_points);
     ClassDB::bind_method(D_METHOD("hit_rope", "from", "to"), &RegolithSprite::hit_rope);
