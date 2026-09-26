@@ -21,7 +21,7 @@ public:
         assert(!contains(key));
 
         if (key >= static_cast<int>(m_map.size())) {
-            vector_fill(m_map, key + 1,  -1);
+            vector_grow(m_map, key + 1, -1);
         }
 
         m_map[key] = static_cast<int>(m_items.size());
@@ -34,7 +34,7 @@ public:
         assert(!contains(key));
 
         if (key >= static_cast<int>(m_map.size())) {
-            vector_fill(m_map, key + 1,  -1);
+            vector_grow(m_map, key + 1, -1);
         }
 
         m_map[key] = static_cast<int>(m_items.size());

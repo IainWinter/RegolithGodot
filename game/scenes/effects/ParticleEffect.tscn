@@ -1,0 +1,15 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://game/scripts/effects/ParticleEffect.gd" id="1"]
+[ext_resource type="Material" path="res://game/shaders/regolith_particles_material.tres" id="2"]
+[ext_resource type="Material" path="res://game/shaders/regolith_particles_canvas_material.tres" id="3"]
+[ext_resource type="Texture2D" path="res://game/images/effects/particles_atlas.png" id="4"]
+
+[node name="ParticleEffect" type="GPUParticles2D"]
+texture_filter = 1
+material = ExtResource("3")
+emitting = false
+amount = 4096
+process_material = ExtResource("2")
+texture = ExtResource("4")
+script = ExtResource("1")

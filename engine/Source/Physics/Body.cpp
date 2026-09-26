@@ -1,6 +1,9 @@
 #include "Body.h"
 #include "Math/MathUtil.h"
 
+#include <algorithm>
+#include <cmath>
+
 
 
 PhysicsBody::PhysicsBody()
@@ -75,11 +78,25 @@ void PhysicsBody::apply_impulse_center_of_mass(godot::Vector2 impulse) {
     linear_velocity += impulse * inv_mass;
 }
 
-void PhysicsBody::apply_impulse_r(godot::Vector2 impulse, godot::Vector2 r) {
-    apply_impulse_center_of_mass(impulse);
+void PhysicsBody::apply_impulse_r(godot::Vector2 impulse, godot::Vector2 r, float max_delta_speed, float max_delta_spin) {
+    // the push and the spin are capped on their own so a hit that would over
+    // spin a light body still shoves it
+    godot::Vector2 delta_velocity = impulse * inv_mass;
+
+    if (max_delta_speed > 0.f) {
+        delta_velocity = delta_velocity.limit_length(max_delta_speed);
+    }
+
+    linear_velocity += delta_velocity;
 
     if (!angle_fixed) {
-        angular_velocity += cross(r, impulse) * inv_inertia;
+        float delta_spin = cross(r, impulse) * inv_inertia;
+
+        if (max_delta_spin > 0.f) {
+            delta_spin = std::clamp(delta_spin, -max_delta_spin, max_delta_spin);
+        }
+
+        angular_velocity += delta_spin;
     }
 }
 

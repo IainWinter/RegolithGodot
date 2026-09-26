@@ -17,7 +17,14 @@
 [ext_resource type="PackedScene" path="res://game/scenes/enemies/EnemyBase.tscn" id="20_base"]
 [ext_resource type="PackedScene" uid="uid://c0c8o2syq3o55" path="res://game/scenes/enemies/EnemyBossCompass.tscn" id="21_boss"]
 [ext_resource type="Script" uid="uid://cbueqdckalmu0" path="res://game/scripts/spawn/StableSpawner.gd" id="23_stable_spawner"]
+[ext_resource type="PackedScene" path="res://game/scenes/ai/AiMessage.tscn" id="25_ai_message"]
 [ext_resource type="PackedScene" path="res://game/scenes/enemies/EnemyBossStingray.tscn" id="24_final_phase"]
+[ext_resource type="PackedScene" path="res://game/scenes/effects/EffectSpawner.tscn" id="25_effects"]
+[ext_resource type="Script" path="res://game/scripts/ui/DebugSpawnPanel.gd" id="26_spawn_panel"]
+[ext_resource type="PackedScene" path="res://game/scenes/enemies/EnemyGun.tscn" id="27_gun"]
+[ext_resource type="PackedScene" path="res://game/scenes/enemies/EnemyTurret.tscn" id="28_turret"]
+[ext_resource type="Script" path="res://game/scripts/effects/HeatSmoke.gd" id="29_heat_smoke"]
+[ext_resource type="Resource" path="res://game/config/effects/heat_smoke.tres" id="30_heat_smoke_props"]
 
 [node name="Main" type="Node2D" unique_id=876947141]
 script = ExtResource("1")
@@ -46,8 +53,11 @@ fighter_scene = ExtResource("17_fighter")
 bomb_scene = ExtResource("18_bomb")
 station_scene = ExtResource("19_station")
 base_scene = ExtResource("20_base")
+message_scene = ExtResource("25_ai_message")
 boss_compass_scene = ExtResource("21_boss")
 boss_stingray_scene = ExtResource("24_final_phase")
+gun_scene = ExtResource("27_gun")
+turret_scene = ExtResource("28_turret")
 sprite_material = ExtResource("11_sprite_mat")
 rope_material = ExtResource("12_rope_mat")
 
@@ -81,3 +91,12 @@ scale = Vector2(0.99999994, 0.99999994)
 
 [node name="Player" parent="." unique_id=603043386 instance=ExtResource("4")]
 position = Vector2(150, 150)
+
+[node name="EffectSpawner" parent="." instance=ExtResource("25_effects")]
+
+[node name="HeatSmoke" type="Node" parent="."]
+script = ExtResource("29_heat_smoke")
+props = ExtResource("30_heat_smoke_props")
+
+[node name="DebugSpawnPanel" type="CanvasLayer" parent="."]
+script = ExtResource("26_spawn_panel")

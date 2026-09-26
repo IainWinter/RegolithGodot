@@ -1,0 +1,10 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://game/scripts/ai/AiMessage.gd" id="1"]
+[ext_resource type="Material" path="res://game/shaders/regolith_sprite_material.tres" id="2"]
+
+[node name="AiMessage" type="RegolithSprite" groups=["ai_message", "regolith"]]
+material = ExtResource("2")
+angle_fixed = true
+angular_damping = 1.0
+script = ExtResource("1")

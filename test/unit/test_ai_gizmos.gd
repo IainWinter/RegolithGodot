@@ -17,19 +17,19 @@ func before_each() -> void:
 	world = RegolithWorld.new()
 	world.pixels_per_cell = 2
 	arena.add_child(world)
-	draw = RegolithDebugDraw.new()
+	# the autoload drawer (with its GizmoWalker) owns the shared line list
+	# and clears it every frame, so a second drawer would always read zero
+	draw = get_tree().get_first_node_in_group("regolith_debug_draw") as RegolithDebugDraw
+	draw.visible = true
 	draw.set_all_names_enabled(false)
 	draw.set_name_enabled(RegolithDebugDraw.AI_THROWER, true)
 	draw.set_name_enabled(RegolithDebugDraw.AI_SHIELD, true)
 	draw.set_name_enabled(RegolithDebugDraw.AI_TRAP, true)
-	world.add_child(draw)
-	var walker := GizmoWalker.new()
-	walker.draw = draw
-	draw.add_child(walker)
 
 func after_each() -> void:
 	draw.set_all_names_enabled(false)
 	draw.set_name_enabled(RegolithDebugDraw.DEFAULT, true)
+	draw.visible = false
 	get_tree().current_scene = null
 	arena.free()
 
@@ -72,3 +72,11 @@ func test_hidden_drawer_draws_nothing() -> void:
 	draw.visible = false
 	await wait_physics_frames(2)
 	assert_eq(await peak_lines(), 0)
+
+func test_player_sensor_draws_under_ai() -> void:
+	draw.set_all_names_enabled(false)
+	spawn("res://game/scenes/enemies/EnemyFighter.tscn")
+	await wait_physics_frames(2)
+	assert_eq(await peak_lines(), 0, "AI off draws nothing")
+	draw.set_name_enabled(RegolithDebugDraw.AI, true)
+	assert_gt(await peak_lines(), 0, "sensor radius circle")

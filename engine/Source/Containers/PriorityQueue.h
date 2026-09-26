@@ -19,6 +19,11 @@ public:
         return m_data[0];
     }
 
+    // drops every item, keeps the storage for the next fill
+    void clear() {
+        m_data.clear();
+    }
+
     void pop() {
         godot::SortArray<T, Comparator> sorter;
         sorter.pop_heap(0, m_data.size(), m_data.ptr());

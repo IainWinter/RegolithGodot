@@ -1,11 +1,11 @@
-extends Enemy
+extends EnemyScripted
 class_name EnemyBomb
 
-# AiBomb + AiThrowable: drifts toward a thrower that has room, else at the
-# player, turning at a bounded rate. near the player it lights its fuse and
-# bursts: a blast of burns through everything close, a shove, and a ring of
-# shrapnel bullets flying out. a thrower that holds it moves it instead;
-# hold/thrown state lives on the Throwable child
+# the bomb's body: bounded turning, the fuse and the burst, a blast of
+# burns through everything close, a shove, and a ring of shrapnel bullets.
+# where to drift and when to light the fuse is res://game/lua/bomb.lua,
+# fed by the player sensor child. a thrower that holds it moves it
+# instead; hold/thrown state lives on the Throwable child
 
 @export var speed := 3.0
 @export var turn_strength := 4.0
@@ -28,6 +28,9 @@ var turn_bias := 0
 
 @onready var throwable: Throwable = Throwable.of(self)
 
+func _init() -> void:
+	ai_class = "bomb"
+
 func update_ai(delta: float) -> void:
 	if throwable.held_by != null:
 		if is_instance_valid(throwable.held_by) and not (throwable.held_by as Enemy).dead:
@@ -43,30 +46,30 @@ func update_ai(delta: float) -> void:
 
 		return
 
-	if player == null:
-		return
+	super(delta)
 
-	var target := player_pos
-	var set_fuse := true
+# the ring spot of the nearest thrower with room, null when there is none
+func thrower_goal(player_position: Vector2) -> Variant:
+	var thrower := nearest_thrower(pos, pos.distance_squared_to(player_position))
 
-	if seek_thrower and not throwable.thrown:
-		var thrower := nearest_thrower(pos, pos.distance_squared_to(player_pos))
+	if thrower == null:
+		return null
 
-		if thrower:
-			target = thrower.ring_goal(player_pos)
-			set_fuse = false
-
-	var to_goal := target - pos
-
-	if set_fuse and to_goal.length() < start_exploding_radius and has_line_of_sight(pos, target):
-		start_fuse(fuse_time)
-		return
-
-	steer(to_goal, delta)
+	return thrower.ring_goal(player_position)
 
 func start_fuse(time: float) -> void:
 	exploding = true
 	fuse = time
+
+# the fuse puffs each drawn frame while it burns
+func _process(_delta: float) -> void:
+	if not exploding or dead:
+		return
+
+	var effects := EffectSpawner.active()
+
+	if effects:
+		effects.emit(effects.bomb_fuse_puff, EffectSpawner.effect_origin(self))
 
 func steer(to_goal: Vector2, delta: float) -> void:
 	var velocity := linear_velocity
@@ -97,14 +100,16 @@ func steer(to_goal: Vector2, delta: float) -> void:
 
 	linear_velocity = velocity
 
+# the blast, its shrapnel and the burst all come from the core, where the
+# fuse puffed
 func explode() -> void:
 	var world := RegolithWorld.active()
-	var center := global_position
+	var center := EffectSpawner.effect_origin(self)
 
 	if world:
 		var r := blast_radius * Steering.ppu()
 
-		for sprite in Steering.sprites_near(world, pos, blast_radius):
+		for sprite in Steering.sprites_near(world, center / Steering.ppu(), blast_radius):
 			if sprite == self:
 				continue
 
@@ -113,6 +118,11 @@ func explode() -> void:
 				sprite.apply_impulse(away * blast_impulse * sprite.get_mass(), sprite.global_position)
 
 		Explosion.spawn_shrapnel(shrapnel_props, shrapnel_count, center, self)
+
+	var effects := EffectSpawner.active()
+
+	if effects:
+		effects.explosion(center)
 
 	exploded.emit(center)
 	die()

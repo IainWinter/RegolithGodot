@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="RegionProps" format=3 uid="uid://cuptpyxko35dx"]
+
+[ext_resource type="Script" uid="uid://ci7tm8rmnsogu" path="res://game/scripts/spawn/RegionProps.gd" id="1"]
+[ext_resource type="Script" uid="uid://bk42s8ywgfk4c" path="res://game/scripts/spawn/RegionAsteroidBelt.gd" id="1_c8mw7"]
+[ext_resource type="Script" uid="uid://5lsw6ys4yilq" path="res://game/scripts/spawn/RegionSpawn.gd" id="2"]
+[ext_resource type="Script" uid="uid://clvfhovccusx1" path="res://game/scripts/spawn/RegionRockField.gd" id="3_aucgh"]
+[ext_resource type="Script" uid="uid://cvtgpf2dbef46" path="res://game/scripts/spawn/RegionSpawnZone.gd" id="5_u1enh"]
+
+[sub_resource type="Resource" id="RegionSpawn_boss"]
+script = ExtResource("2")
+kind = 4
+position = Vector2(0.3274, 5.34023)
+
+[resource]
+script = ExtResource("1")
+one_time_spawns = Array[ExtResource("2")]([SubResource("RegionSpawn_boss")])

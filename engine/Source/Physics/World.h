@@ -143,6 +143,9 @@ struct PhysicsWorldJoint {
     godot::Vector2 local_1;
     int type;
     float distance = 0.f;
+    // false drops contacts between the two bodies (Box2D collideConnected),
+    // for parts that overlap by design like a barrel sitting on its mount
+    bool collide_connected = true;
 };
 
 // internal scratch held by PhysicsWorld, opaque to public callers

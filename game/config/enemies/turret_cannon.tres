@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="WeaponProps" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://game/scripts/weapons/WeaponProps.gd" id="1"]
+[ext_resource type="PackedScene" path="res://game/scenes/weapons/Bullet.tscn" id="2"]
+
+[resource]
+script = ExtResource("1")
+projectile_scene = ExtResource("2")
+ammo = -1
+shots_per_ammo = 1
+delay_charge = 1.0
+delay_cooldown = 4.0
+inaccuracy_angle = 0.01
+inaccuracy_tangent = 0.01
+speed = 3.5
+mass = 0.05
+max_hit_speed = 4.0
+max_hit_spin = 3.0
+lifetime = 15.0
+cell_life = 200
+trail_length = 6.0
+rotation_factor = 4.0
+speed_loss_per_cell = 0.0
+spit_odds = 0.3
+color_front = Color(1, 0.65, 0.25, 1)
+color_back = Color(0.8, 0.25, 0.05, 0.1)
+texture_scale = 3.0
+burn_strength = 255
+scorch_strength = 160
+damage_ratio = 0.9
+damage = 3

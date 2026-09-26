@@ -196,3 +196,55 @@ func test_two_requests_on_one_spot_spawn_one_after_the_other() -> void:
 	first["node"].linear_velocity = Vector2(500.0, 500.0)
 	await wait_physics_frames(5)
 	assert_not_null(second["node"], "the second got the spot once it was free")
+
+func test_turret_kind_spawns_the_turret_scene() -> void:
+	spawner.turret_scene = load("res://game/scenes/enemies/EnemyTurret.tscn")
+	assert_eq(spawner.scene_for(SpawnRequest.Kind.TURRET), spawner.turret_scene)
+
+	var request := SpawnRequest.enemy(SpawnRequest.Kind.TURRET, Vector2(4.0, 4.0))
+	request.wait_for_room = false
+	var seen := watch(request)
+	SpawnBus.send(request)
+	await wait_physics_frames(2)
+
+	var node: RegolithSprite = seen["node"]
+	assert_not_null(node, "spawned")
+	if node == null:
+		return
+
+	assert_true(node is EnemyGun)
+	assert_eq(node.ai_class, "turret")
+	assert_true(node.is_in_group("regolith"))
+
+func test_request_meta_is_copied_onto_the_node_before_it_enters_the_tree() -> void:
+	var request := SpawnRequest.enemy(SpawnRequest.Kind.FIGHTER, Vector2(4.0, -3.0))
+	request.set_meta(&"placement", &"North")
+	request.set_meta(&"scale_cells", 12)
+	var seen := watch(request)
+	SpawnBus.send(request)
+	await wait_physics_frames(2)
+
+	var node: RegolithSprite = seen["node"]
+	assert_not_null(node)
+	if node == null:
+		return
+
+	assert_eq(node.get_meta(&"placement"), &"North")
+	assert_eq(node.get_meta(&"scale_cells"), 12)
+
+	# a turret reads the hint in _ready, so it must be on the node by then
+	spawner.turret_scene = load("res://game/scenes/enemies/EnemyTurret.tscn")
+	var turret_request := SpawnRequest.enemy(SpawnRequest.Kind.TURRET, Vector2(-8.0, -8.0))
+	turret_request.wait_for_room = false
+	turret_request.set_meta(&"scale_cells", 64)
+	var turret_seen := watch(turret_request)
+	SpawnBus.send(turret_request)
+	await wait_physics_frames(2)
+
+	var turret: EnemyGun = turret_seen["node"]
+	assert_not_null(turret)
+	if turret == null:
+		return
+
+	assert_eq(turret.art_cells, 64, "the hint reached _ready")
+	assert_eq(turret.get_cell_count().x, 64)

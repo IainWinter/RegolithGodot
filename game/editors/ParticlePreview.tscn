@@ -1,0 +1,17 @@
+[gd_scene format=3 uid="uid://dmpyi4flglq05"]
+
+[ext_resource type="Script" uid="uid://rsrs2e78x3bu" path="res://game/scripts/effects/ParticlePreview.gd" id="1"]
+[ext_resource type="Resource" path="res://game/config/effects/bomb_fuse_puff.tres" id="2_vr4jn"]
+
+[node name="ParticlePreview" type="Node2D" unique_id=1569064511]
+
+[node name="Backdrop" type="Polygon2D" parent="." unique_id=827952]
+z_index = -1
+color = Color(0.02, 0.02, 0.03, 1)
+polygon = PackedVector2Array(-480, -270, 480, -270, 480, 270, -480, 270)
+
+[node name="Preview" type="Node2D" parent="." unique_id=321878770]
+script = ExtResource("1")
+props = ExtResource("2_vr4jn")
+playing = false
+interval = 0.05

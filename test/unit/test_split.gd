@@ -62,6 +62,29 @@ func test_impulse_moves_and_spins() -> void:
 	assert_ne(sprite.global_rotation, 0.0, "off center impulse spins it")
 	assert_ne(sprite.linear_velocity, Vector2.ZERO)
 
+func test_impulse_cap_limits_speed_and_spin() -> void:
+	# a hit far too big for this sprite, capped so it only nudges it
+	sprite.apply_impulse(Vector2(0, -50), sprite.global_position + Vector2(-60, 0), 2.0, 1.5)
+	assert_almost_eq(sprite.linear_velocity.length(), 2.0, 0.01, "speed change capped")
+	assert_almost_eq(absf(sprite.angular_velocity), 1.5, 0.01, "spin change capped on its own")
+
+func test_impulse_cap_leaves_small_hits_alone() -> void:
+	sprite.apply_impulse(Vector2(0, -0.01), sprite.global_position + Vector2(-10, 0), 2.0, 1.5)
+	var uncapped := RegolithSprite.new()
+	uncapped.texture = make_texture()
+	uncapped.position = Vector2(200, 400)
+	add_child_autofree(uncapped)
+	await wait_physics_frames(2)
+	uncapped.apply_impulse(Vector2(0, -0.01), uncapped.global_position + Vector2(-10, 0))
+	assert_almost_eq(sprite.angular_velocity, uncapped.angular_velocity, 0.0001, "cap does nothing under the limit")
+
+func test_world_clamps_runaway_spin_and_speed() -> void:
+	sprite.angular_velocity = 200.0
+	sprite.linear_velocity = Vector2(500, 0)
+	await wait_physics_frames(1)
+	assert_lt(absf(sprite.angular_velocity), 8.0 + 0.01, "spin clamped to the world limit")
+	assert_lt(sprite.linear_velocity.length(), 64.0 + 0.01, "speed clamped to the world limit")
+
 func test_burn_cell_with_damage_removes_it() -> void:
 	var before := sprite.get_active_cell_count()
 	sprite.burn_cell(Vector2i(10, 10), 255, 1)

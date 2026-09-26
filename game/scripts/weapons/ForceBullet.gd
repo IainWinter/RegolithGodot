@@ -54,6 +54,7 @@ func set_target(sprite: RegolithSprite, local_position: Vector2) -> void:
 	homing_locked = false
 
 func _ready() -> void:
+	add_to_group("projectile")
 	trail = Trail.new()
 	trail.setup(props, width_px, global_position)
 	add_child(trail)

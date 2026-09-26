@@ -9,6 +9,11 @@
 #include <cassert>
 #include <cmath>
 
+// nothing moves or spins faster than this, a tiny piece that took a hit sized
+// for a big one settles at a speed the sim can still track
+constexpr float k_max_linear_speed = 64.f;
+constexpr float k_max_angular_speed = 8.f;
+
 PhysicsWorld::PhysicsWorld()
     : m_state(memnew(PhysicsSolverState)) {}
 
@@ -203,6 +208,7 @@ void PhysicsWorld::solve(float delta_time) {
 
     m_solver_joints_scratch.clear();
     m_solver_joints_scratch.reserve(m_joints.size());
+    m_state->excluded_pairs.clear();
 
     for (const PhysicsWorldJoint& joint : m_joints) {
         auto it_0 = m_proxy_lookup_scratch.find(joint.body_0);
@@ -213,6 +219,10 @@ void PhysicsWorld::solve(float delta_time) {
         }
 
         m_solver_joints_scratch.push_back({it_0->value, it_1->value, joint.local_0, joint.local_1, joint.type, joint.distance});
+
+        if (!joint.collide_connected) {
+            m_state->excluded_pairs.insert(proxy_pair_key(it_0->value, it_1->value));
+        }
     }
 
     m_joints.clear();
@@ -243,9 +253,10 @@ void PhysicsWorld::solve(float delta_time) {
     }
 
     for (PhysicsRope& rope : ropes) {
-        vector_fill(rope.velocities, rope.positions.size(),  godot::Vector2(0.f, 0.f));
-        vector_fill(rope.prev_positions, rope.positions.size(),  godot::Vector2(0.f, 0.f));
-        vector_fill(rope.bias, rope.positions.size(),  godot::Vector2(0.f, 0.f));
+        // velocities carry over between ticks, only new nodes start at rest
+        vector_grow(rope.velocities, rope.positions.size(), godot::Vector2(0.f, 0.f));
+        vector_grow(rope.prev_positions, rope.positions.size(), godot::Vector2(0.f, 0.f));
+        vector_grow(rope.bias, rope.positions.size(), godot::Vector2(0.f, 0.f));
     }
 
     find_pairs(proxies, bodies, state);
@@ -491,8 +502,8 @@ void PhysicsWorld::solve(float delta_time) {
 
         body.position = b.com - rotate_local_point(b.com_scaled, b.angle);
         body.angle = b.angle;
-        body.linear_velocity = b.linear_velocity * linear_decay;
-        body.angular_velocity = b.angular_velocity * angular_decay;
+        body.linear_velocity = (b.linear_velocity * linear_decay).limit_length(k_max_linear_speed);
+        body.angular_velocity = std::clamp(b.angular_velocity * angular_decay, -k_max_angular_speed, k_max_angular_speed);
     }
 
 

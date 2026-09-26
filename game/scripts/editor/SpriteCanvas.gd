@@ -1,3 +1,4 @@
+@tool
 extends Control
 class_name SpriteCanvas
 
@@ -53,7 +54,16 @@ func _ready() -> void:
 	mouse_entered.connect(func(): mouse_inside = true)
 
 func _process(_delta: float) -> void:
-	queue_redraw()
+	if is_visible_in_tree():
+		queue_redraw()
+
+# drops go to the editor, which hands them to its host
+func _can_drop_data(at: Vector2, data: Variant) -> bool:
+	return editor != null and editor._can_drop_data(at, data)
+
+func _drop_data(at: Vector2, data: Variant) -> void:
+	if editor:
+		editor._drop_data(at, data)
 
 func center() -> Vector2:
 	return size * 0.5
@@ -109,29 +119,28 @@ func _gui_input(event: InputEvent) -> void:
 		mouse_local = event.position
 		var cell := hovered_cell()
 
-		match event.button_index:
-			MOUSE_BUTTON_WHEEL_UP:
-				if event.pressed:
-					zoom_at(event.position, 1.15)
-			MOUSE_BUTTON_WHEEL_DOWN:
-				if event.pressed:
-					zoom_at(event.position, 1.0 / 1.15)
-			MOUSE_BUTTON_MIDDLE:
-				if event.pressed:
-					mid_down = true
-					mid_dragged = false
-				else:
-					mid_down = false
-					if not mid_dragged:
-						cell_picked.emit(cell.x, cell.y)
-			MOUSE_BUTTON_LEFT:
-				grab_focus()
-				left_down = event.pressed
-				cell_input.emit(true, cell.x, cell.y, event.pressed, false, left_down, right_down)
-			MOUSE_BUTTON_RIGHT:
-				grab_focus()
-				right_down = event.pressed
-				cell_input.emit(true, cell.x, cell.y, false, event.pressed, left_down, right_down)
+		if Controls.matches(event, Controls.CANVAS_ZOOM_IN):
+			if event.pressed:
+				zoom_at(event.position, 1.15)
+		elif Controls.matches(event, Controls.CANVAS_ZOOM_OUT):
+			if event.pressed:
+				zoom_at(event.position, 1.0 / 1.15)
+		elif Controls.matches(event, Controls.CANVAS_PAN):
+			if event.pressed:
+				mid_down = true
+				mid_dragged = false
+			else:
+				mid_down = false
+				if not mid_dragged:
+					cell_picked.emit(cell.x, cell.y)
+		elif Controls.matches(event, Controls.CANVAS_PRIMARY):
+			grab_focus()
+			left_down = event.pressed
+			cell_input.emit(true, cell.x, cell.y, event.pressed, false, left_down, right_down)
+		elif Controls.matches(event, Controls.CANVAS_SECONDARY):
+			grab_focus()
+			right_down = event.pressed
+			cell_input.emit(true, cell.x, cell.y, false, event.pressed, left_down, right_down)
 
 		accept_event()
 

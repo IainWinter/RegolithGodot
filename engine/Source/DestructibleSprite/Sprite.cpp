@@ -8,6 +8,7 @@
 
 
 #include <algorithm>
+#include <climits>
 #include <bitset>
 #include <godot_cpp/templates/pair.hpp>
 
@@ -39,8 +40,14 @@ Sprite::Sprite(SpriteChunkPool& chunk_pool, Grid grid, const godot::LocalVector<
                 m_cells_dim = m_cells_dim.max(godot::Vector2i(grid_pos.x + 1, grid_pos.y + 1));
             }
 
-            if (!chunk_hot && chunk->mask[i].get_heat() > 0) {
+            uint8_t heat = chunk->mask[i].get_heat();
+
+            if (heat > 0) {
                 chunk_hot = true;
+            }
+
+            if (heat >= k_hot_cell_heat) {
+                m_hot_cells.push_back(grid_pos);
             }
         }
 
@@ -82,11 +89,20 @@ Sprite::Sprite(SpriteChunkPool& chunk_pool, const SpriteAsset& asset, bool repai
         m_dirty.insert(chunk);
 
         for (int i = 0; i < m_grid.total_cells_in_chunk(); i++) {
-            if (chunk->mask[i].get_heat() > 0) {
+            uint8_t heat = chunk->mask[i].get_heat();
+
+            if (heat > 0) {
                 m_hot_chunks.insert(chunk->index);
-                break;
+            }
+
+            if (heat >= k_hot_cell_heat) {
+                m_hot_cells.push_back(m_grid.to_grid_index_position(chunk->index, i));
             }
         }
+    }
+
+    for (const SpriteAssetCore& core_asset : asset.cores) {
+        m_cores.add_core({core_asset.type, core_asset.gridPointOffset, core_asset.initialCellCount});
     }
 
     m_mass = sprite_mass_init(m_grid, m_chunks);
@@ -105,20 +121,24 @@ Sprite::Sprite(Sprite&& move)
     , m_chunks(std::move(move.m_chunks))
     , m_dirty(std::move(move.m_dirty))
     , m_hot_chunks(std::move(move.m_hot_chunks))
+    , m_hot_cells(std::move(move.m_hot_cells))
     , m_active_cell_count(std::move(move.m_active_cell_count))
     , m_cells_dim(std::move(move.m_cells_dim))
     , m_is_m_repairable(std::move(move.m_is_m_repairable))
-    , m_damageable_classes(std::move(move.m_damageable_classes)) {
+    , m_damageable_classes(std::move(move.m_damageable_classes))
+    , m_cores(std::move(move.m_cores)) {
     for (int i = 0; i < SpriteCellMaskType_Count; i++) {
         m_groups[i] = std::move(move.m_groups[i]);
         move.m_groups[i] = {};
     }
+    move.m_cores = {};
     move.m_chunk_pool = {};
     move.m_grid = {};
     move.m_mass = {};
     move.m_chunks = {};
     move.m_dirty = {};
     move.m_hot_chunks = {};
+    move.m_hot_cells.clear();
     move.m_active_cell_count = {};
     move.m_cells_dim = {};
     move.m_is_m_repairable = {};
@@ -136,6 +156,7 @@ Sprite& Sprite::operator=(Sprite&& move) {
     m_chunks = std::move(move.m_chunks);
     m_dirty = std::move(move.m_dirty);
     m_hot_chunks = std::move(move.m_hot_chunks);
+    m_hot_cells = std::move(move.m_hot_cells);
     for (int i = 0; i < SpriteCellMaskType_Count; i++) {
         m_groups[i] = std::move(move.m_groups[i]);
         move.m_groups[i] = {};
@@ -144,6 +165,8 @@ Sprite& Sprite::operator=(Sprite&& move) {
     m_cells_dim = std::move(move.m_cells_dim);
     m_is_m_repairable = std::move(move.m_is_m_repairable);
     m_damageable_classes = std::move(move.m_damageable_classes);
+    m_cores = std::move(move.m_cores);
+    move.m_cores = {};
 
     move.m_chunk_pool = {};
     move.m_grid = {};
@@ -151,6 +174,7 @@ Sprite& Sprite::operator=(Sprite&& move) {
     move.m_chunks = {};
     move.m_dirty = {};
     move.m_hot_chunks = {};
+    move.m_hot_cells.clear();
     move.m_active_cell_count = {};
     move.m_cells_dim = {};
     move.m_is_m_repairable = {};
@@ -199,6 +223,14 @@ uint16_t Sprite::damageable_classes() const {
     return m_damageable_classes;
 }
 
+const SpriteCoreSet& Sprite::cores() const {
+    return m_cores;
+}
+
+SpriteCoreSet& Sprite::cores() {
+    return m_cores;
+}
+
 void Sprite::set_damageable_classes(uint16_t mask) {
     m_damageable_classes = mask;
 }
@@ -242,6 +274,11 @@ void Sprite::write_display_cell(int chunkIndex, int cellIndex, Color4 color, Spr
 
     SpriteChunk* chunk = m_chunks[chunkIndex];
 
+    // a cell already at the floor is already listed
+    if (mask.get_heat() >= k_hot_cell_heat && chunk->mask[cellIndex].get_heat() < k_hot_cell_heat) {
+        m_hot_cells.push_back(m_grid.to_grid_index_position(chunkIndex, cellIndex));
+    }
+
     chunk->color[cellIndex] = color;
     chunk->mask[cellIndex] = mask;
 
@@ -256,7 +293,35 @@ bool Sprite::has_hot_chunks() const {
     return !m_hot_chunks.is_empty();
 }
 
+bool Sprite::has_hot_cells() const {
+    return !m_hot_cells.is_empty();
+}
+
+void Sprite::hot_cells(uint8_t min_heat, godot::LocalVector<godot::Pair<godot::Vector2i, uint8_t>>& out) const {
+    if (min_heat < k_hot_cell_heat) {
+        min_heat = k_hot_cell_heat;
+    }
+
+    for (godot::Vector2i grid_pos : m_hot_cells) {
+        auto [chunk_index, cell_index] = m_grid.to_chunk_cell_index(grid_pos);
+        SpriteChunk* chunk = nullptr;
+
+        if (!m_chunks.try_get(chunk_index, &chunk)) {
+            continue;
+        }
+
+        SpriteCellMask mask = chunk->mask[cell_index];
+        uint8_t heat = mask.get_heat();
+
+        if (mask.is_filled() && heat >= min_heat) {
+            out.push_back({grid_pos, heat});
+        }
+    }
+}
+
 void Sprite::decay_heat(uint16_t levels) {
+    m_hot_cells.clear();
+
     if (m_hot_chunks.is_empty()) {
         return;
     }
@@ -291,6 +356,10 @@ void Sprite::decay_heat(uint16_t levels) {
 
             if (heat > 0) {
                 still_hot = true;
+            }
+
+            if (heat >= k_hot_cell_heat && mask.is_filled()) {
+                m_hot_cells.push_back(m_grid.to_grid_index_position(chunk_index, i));
             }
         }
 
@@ -439,12 +508,6 @@ void Sprite::mark_chunk_dirty(int chunkIndex) {
 void Sprite::repair_cell(SpriteCellMaskType type) {
     SpriteCellGroup& group = m_groups[type];
 
-    // The entire group is empty, heal the entire thing at once?
-    // there is going to be no candidate
-    if (group.activeCount == 0) {
-        return;
-    }
-
     const godot::Vector2i& root = group.root_grid_index_position;
     godot::LocalVector<godot::Vector2i>& candidates = group.removed;
 
@@ -452,39 +515,61 @@ void Sprite::repair_cell(SpriteCellMaskType type) {
         return;
     }
 
-    constexpr godot::Vector2i offsets[8] = {godot::Vector2i(-1, -1), godot::Vector2i(0, -1), godot::Vector2i(1, -1), godot::Vector2i(-1, 0), godot::Vector2i(1, 0), godot::Vector2i(-1, 1), godot::Vector2i(0, 1), godot::Vector2i(1, 1)};
-
-    float best_score = 0.f;
     size_t best_candidate_index = -1;
 
-    for (size_t i = 0; i < candidates.size(); i++) {
-        const godot::Vector2i& candidate = candidates[i];
+    if (group.activeCount == 0) {
+        // with the group gone there is no active neighbour to grow from, the
+        // cell nearest the root seeds the regrowth
+        int nearest_distance = INT_MAX;
 
-        int dist_to_root = std::abs(candidate.x - root.x) + std::abs(candidate.y - root.y); // Manhattan distance
-        int neighbor_count = 0;
+        for (size_t i = 0; i < candidates.size(); i++) {
+            int d = std::abs(candidates[i].x - root.x) + std::abs(candidates[i].y - root.y);
 
-        for (const godot::Vector2i& offset : offsets) {
-            godot::Vector2i candidate_offset = candidate + offset;
-
-            auto [chunk_index, cell_index] = m_grid.to_chunk_cell_index(candidate_offset);
-            if (is_cell_active(chunk_index, cell_index)) {
-                neighbor_count += 1;
+            if (d < nearest_distance) {
+                nearest_distance = d;
+                best_candidate_index = i;
             }
-        }
-
-        if (neighbor_count == 0) {
-            continue;
-        }
-
-        float score = neighbor_count / static_cast<float>(dist_to_root);
-
-        if (score > best_score) {
-            best_score = score;
-            best_candidate_index = i;
         }
     }
 
-    assert(best_candidate_index != -1ull && "fix me");
+    else {
+        constexpr godot::Vector2i offsets[8] = {godot::Vector2i(-1, -1), godot::Vector2i(0, -1), godot::Vector2i(1, -1), godot::Vector2i(-1, 0), godot::Vector2i(1, 0), godot::Vector2i(-1, 1), godot::Vector2i(0, 1), godot::Vector2i(1, 1)};
+
+        float best_score = 0.f;
+
+        for (size_t i = 0; i < candidates.size(); i++) {
+            const godot::Vector2i& candidate = candidates[i];
+
+            int dist_to_root = std::abs(candidate.x - root.x) + std::abs(candidate.y - root.y); // Manhattan distance
+            int neighbor_count = 0;
+
+            for (const godot::Vector2i& offset : offsets) {
+                godot::Vector2i candidate_offset = candidate + offset;
+
+                auto [chunk_index, cell_index] = m_grid.to_chunk_cell_index(candidate_offset);
+                if (is_cell_active(chunk_index, cell_index)) {
+                    neighbor_count += 1;
+                }
+            }
+
+            if (neighbor_count == 0) {
+                continue;
+            }
+
+            float score = neighbor_count / static_cast<float>(dist_to_root);
+
+            if (score > best_score) {
+                best_score = score;
+                best_candidate_index = i;
+            }
+        }
+    }
+
+    // nothing touches a live cell, leave the removed list alone rather than
+    // regrow an arbitrary cell
+    if (best_candidate_index == static_cast<size_t>(-1)) {
+        return;
+    }
 
     godot::Vector2i candidate = candidates[best_candidate_index];
     auto [chunk_index, cell_index] = m_grid.to_chunk_cell_index(candidate);
@@ -658,6 +743,22 @@ SpriteCommitResult Sprite::commit_dirty_chunks(const Transform& transform, const
         cutTransform.angle = transform.angle;
 
         cuts.push_back({std::move(cutTransform), std::move(cutSprite), cutGridMin});
+    }
+
+    // a core goes with the split holding the majority of its cells, its
+    // offset moved onto that split's grid. the split keeps the record so it
+    // can still explode over there
+    for (const godot::KeyValue<SpriteCellMaskType, size_t>& majority : split_index_with_majority_of_type) {
+        SpriteCore* core = m_cores.get_core_by_type(majority.key);
+
+        if (!core || majority.value >= cuts.size()) {
+            continue;
+        }
+
+        SpriteCore moved = *core;
+        moved.grid_point_offset -= cuts[majority.value].offset;
+        cuts[majority.value].sprite.m_cores.add_core(moved);
+        m_cores.remove_core_by_type(majority.key);
     }
 
     // 5. Hand the dirty chunks to the commit system. Their surfaces and

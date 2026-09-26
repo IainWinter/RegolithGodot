@@ -18,6 +18,20 @@ static func cell_pixels() -> float:
 static func gz_line(g: RegolithGizmos, to_local: Transform2D, ppu_: float, a: Vector2, b: Vector2, color: Color, name: int) -> void:
 	g.line(to_local * (a * ppu_), to_local * (b * ppu_), color, name)
 
+# a to b as dash-long segments with dash-long gaps, the last dash clipped at b
+static func gz_dashed(g: RegolithGizmos, to_local: Transform2D, ppu_: float, a: Vector2, b: Vector2, dash: float, color: Color, name: int) -> void:
+	var length := a.distance_to(b)
+
+	if length <= 0.0 or dash <= 0.0:
+		return
+
+	var dir := (b - a) / length
+	var at := 0.0
+
+	while at < length:
+		gz_line(g, to_local, ppu_, a + dir * at, a + dir * minf(at + dash, length), color, name)
+		at += dash * 2.0
+
 static func gz_cross(g: RegolithGizmos, to_local: Transform2D, ppu_: float, at: Vector2, half: float, color: Color, name: int) -> void:
 	gz_line(g, to_local, ppu_, at + Vector2(-half, 0), at + Vector2(half, 0), color, name)
 	gz_line(g, to_local, ppu_, at + Vector2(0, -half), at + Vector2(0, half), color, name)
@@ -54,14 +68,20 @@ static func seek(position: Vector2, velocity: Vector2, goal: Vector2, max_speed:
 	var wanted := to_goal.limit_length(max_speed)
 	return velocity + (wanted - velocity).limit_length(max_accel * delta)
 
+# a node that is still there to use: not freed, in the tree and not on its
+# way out. the one check for anything kept across frames. untyped on
+# purpose: a typed Node parameter rejects a freed reference before
+# is_instance_valid gets to look at it
+static func alive(node) -> bool:
+	return is_instance_valid(node) and node is Node and node.is_inside_tree() and not node.is_queued_for_deletion()
+
 static func find_player(tree: SceneTree) -> RegolithSprite:
 	var player := tree.get_first_node_in_group("player") as RegolithSprite
-	return player if player and is_instance_valid(player) and not player.is_queued_for_deletion() else null
+	return player if player and alive(player) else null
 
 static func prune_dead(list: Array) -> void:
 	for i in range(list.size() - 1, -1, -1):
-		var node = list[i]
-		if not is_instance_valid(node) or node.is_queued_for_deletion():
+		if not alive(list[i]):
 			list.remove_at(i)
 
 # cell size of a sprite, the texture stands in before it is loaded so the
@@ -77,6 +97,9 @@ static func half_extent_units(sprite: RegolithSprite) -> Vector2:
 
 # a point on the sprite's hull, -1..1 with y up, in world pixels or units
 static func hull_point_pixels(sprite: RegolithSprite, p: Vector2) -> Vector2:
+	if sprite.is_loaded():
+		return sprite.local_to_world(Vector2(p.x, -p.y))
+
 	return sprite.to_global(Vector2(p.x, -p.y) * cell_count(sprite) * 0.5 * cell_pixels())
 
 static func hull_point_units(sprite: RegolithSprite, p: Vector2) -> Vector2:
@@ -129,8 +152,15 @@ static func random_outside_box(extent: Vector2, padding: Vector2) -> Vector2:
 
 	return p
 
-static func random_in_box(center: Vector2, half_size: Vector2, angle: float) -> Vector2:
-	var local := Vector2(randf_range(-half_size.x, half_size.x), randf_range(-half_size.y, half_size.y))
+# a seeded rng makes the pick repeatable, none draws from the global one
+static func random_in_box(center: Vector2, half_size: Vector2, angle: float, rng: RandomNumberGenerator = null) -> Vector2:
+	var local: Vector2
+
+	if rng:
+		local = Vector2(rng.randf_range(-half_size.x, half_size.x), rng.randf_range(-half_size.y, half_size.y))
+	else:
+		local = Vector2(randf_range(-half_size.x, half_size.x), randf_range(-half_size.y, half_size.y))
+
 	return center + local.rotated(angle)
 
 static func random_in_circle(radius: float) -> Vector2:

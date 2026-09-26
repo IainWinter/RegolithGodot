@@ -19,3 +19,7 @@ speed = 9.0
 color_front = Color(0.705882, 0.784314, 1, 1)
 turn_speed = 2.0
 target_range = 3.0
+delay_charge = 1.5
+lifetime = 5.0
+cell_life = 8
+segment_length = 1.2

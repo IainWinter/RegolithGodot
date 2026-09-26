@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="LightningProps" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://game/scripts/effects/LightningProps.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+point_count = 16
+lifetime = 0.2
+color = Color(0.705882, 0.823529, 1, 0.862745)
+fade_color = Color(0.470588, 0.235294, 0.862745, 0)
+emission = 0.3
+emit_spark = false
+burn_strength = 0
+burn_damage = 0

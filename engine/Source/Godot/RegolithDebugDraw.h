@@ -76,6 +76,7 @@ public:
     void add_capsule(godot::Vector2 a, godot::Vector2 b, float radius, int name, int layer);
     void add_rect(godot::Rect2 rect, int name, int layer);
 
+    // world pixels, zero or less draws one screen pixel (the default)
     void set_line_width(float width);
     float get_line_width() const;
 
@@ -96,6 +97,9 @@ protected:
 private:
     void emit_world_lines(const RegolithWorld& world);
     void gather(float pixels_per_unit, DebugRendererLineList& list);
+
+    // m_line_width, or one screen pixel in world pixels when it is not positive
+    float draw_width() const;
 
     // copies m_map into the engine's global map
     void apply();

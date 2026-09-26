@@ -3,7 +3,11 @@ class_name MultiSprite
 
 # a group of RegolithSprites laid out and jointed by a MultiSpriteEditor json,
 # spawned as children so the whole thing drops into any scene. positions in
-# the file are sim units around this node
+# the file are sim units around this node. a joint entry with "collide":
+# false joins its sprites without contacts between them (parts built
+# overlapping), missing or true keeps them colliding. spawn_parts builds a
+# document around a sprite that already stands for one of its entries (an
+# EnemyGun is its own mount), the rest become children of that sprite
 
 @export_file("*.json") var file: String
 @export var sprite_material: Material
@@ -54,11 +58,104 @@ static func parse_joint(entry: Dictionary, ppu: float) -> Dictionary:
 
 static func spawn_joint(world: RegolithWorld, a: RegolithSprite, b: RegolithSprite, entry: Dictionary, ppu: float, origin := Transform2D.IDENTITY) -> int:
 	var joint := parse_joint(entry, ppu)
+	var collide := bool(entry.get("collide", true))
 
 	if joint["type"] != "distance":
-		return world.add_joint(a, b, origin * joint["point"])
+		return world.add_joint(a, b, origin * joint["point"], collide)
 
-	return world.add_distance_joint(a, b, origin * joint["point"], origin * joint["point_b"], joint["distance"])
+	return world.add_distance_joint(a, b, origin * joint["point"], origin * joint["point_b"], joint["distance"], collide)
+
+# an entry's placement in the document, pixels
+static func entry_transform(entry: Dictionary, ppu: float) -> Transform2D:
+	return Transform2D(float(entry.get("rotation", 0.0)), entry_vector(entry, "position", ppu))
+
+static func index_of(data: Dictionary, sprite_name: String) -> int:
+	var entries: Array = data.get("sprites", [])
+
+	for i in entries.size():
+		if entries[i].get("name", "") == sprite_name:
+			return i
+
+	return -1
+
+# the color and mask of an entry: the painted pair in images under the
+# entry's name when there is one, else its texture files
+static func entry_images(entry: Dictionary, images: Dictionary) -> Dictionary:
+	var named = images.get(entry.get("name", ""))
+
+	if named is Dictionary:
+		return named
+
+	if not entry.has("texture"):
+		return {"color": null, "mask": null}
+
+	var mask_path := mask_path_for(entry)
+	return {"color": load_image(entry["texture"]), "mask": load_image(mask_path) if mask_path != "" else null}
+
+# builds a document around root, which stands for the entry data.root (0
+# by default) and is loaded from it when it is not in the sim yet. every
+# other entry becomes a RegolithSprite child of root placed where the
+# document puts it relative to the root entry, sharing root's materials,
+# and the joints are made at the matching world points. images overrides
+# the texture files per sprite name. returns the sprites in document order
+# (root at its index), the joint ids and root_from_document, the document
+# pixels to root local pixels transform
+static func spawn_parts(data: Dictionary, root: RegolithSprite, images := {}) -> Dictionary:
+	var world := RegolithWorld.active()
+	var entries: Array = data.get("sprites", [])
+	var root_index := int(data.get("root", 0))
+	var result := {"sprites": [], "joints": [], "root_from_document": Transform2D.IDENTITY}
+
+	if world == null or root_index < 0 or root_index >= entries.size():
+		return result
+
+	var ppu := RegolithWorld.pixels_per_unit()
+	var root_from_document := entry_transform(entries[root_index], ppu).affine_inverse()
+	result["root_from_document"] = root_from_document
+	var sprites: Array = result["sprites"]
+
+	for i in entries.size():
+		var entry: Dictionary = entries[i]
+		var pair := entry_images(entry, images)
+
+		if i == root_index:
+			if not root.is_loaded() and pair["color"] != null:
+				root.load_from_images(pair["color"], pair["mask"])
+			sprites.append(root)
+			continue
+
+		var sprite := RegolithSprite.new()
+		sprite.name = String(entry.get("name", "part")).to_pascal_case()
+		sprite.material = root.material
+		sprite.rope_material = root.rope_material
+		sprite.dynamic = entry.get("dynamic", true)
+		sprite.transform = root_from_document * entry_transform(entry, ppu)
+		sprite.add_to_group("regolith")
+		root.add_child(sprite)
+
+		if pair["color"] != null:
+			sprite.load_from_images(pair["color"], pair["mask"])
+
+		sprites.append(sprite)
+
+	var origin := root.global_transform * root_from_document
+
+	for entry in data.get("joints", []):
+		var a: int = entry["a"]
+		var b: int = entry["b"]
+
+		if a < 0 or b < 0 or a >= sprites.size() or b >= sprites.size():
+			continue
+
+		if not sprites[a].is_loaded() or not sprites[b].is_loaded():
+			continue
+
+		var id := spawn_joint(world, sprites[a], sprites[b], entry, ppu, origin)
+
+		if id >= 0:
+			result["joints"].append(id)
+
+	return result
 
 func spawn(path: String) -> bool:
 	var data := read_file(path)

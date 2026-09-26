@@ -2,6 +2,8 @@
 #include "RegolithWorld.h"
 #include "RegolithDebugDraw.h"
 #include "RegolithRopeRender.h"
+#include "RegolithLineRender.h"
+#include "RegolithLua.h"
 
 #include <gdextension_interface.h>
 #include <godot_cpp/core/class_db.hpp>
@@ -19,6 +21,8 @@ static void initialize_regolith(ModuleInitializationLevel level) {
     GDREGISTER_CLASS(RegolithSprite);
     GDREGISTER_CLASS(RegolithDebugDraw);
     GDREGISTER_CLASS(RegolithRopeRender);
+    GDREGISTER_CLASS(RegolithLineRender);
+    GDREGISTER_CLASS(RegolithLua);
 }
 
 static void uninitialize_regolith(ModuleInitializationLevel level) {}

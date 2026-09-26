@@ -1,0 +1,144 @@
+[gd_scene format=4 uid="uid://c2634naaqptmb"]
+
+[ext_resource type="Script" uid="uid://dbjlrdm4s1ity" path="res://game/scripts/generation/PipeFrame.gd" id="1_pipeframe"]
+[ext_resource type="Script" uid="uid://dy0uo3tpi57ye" path="res://game/scripts/generation/PipeLayout.gd" id="2_pipelayout"]
+
+[sub_resource type="Resource" id="PipeLayout_manual"]
+script = ExtResource("2_pipelayout")
+width = 10
+height = 6
+grid = PackedByteArray("AAAAAAAAABQAAAAAAAAAAAAVAAAAAAAAAAAAFQAAAAAAAAAAABUAAAAQAAAAAAAVAAAAAAAAAAAAEQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEhoaHhoaGhgAAAAAABUAAAAAAAAAAAATGhgAAAAAAAAAAAAAAAAA")
+sizes = PackedFloat32Array()
+
+[sub_resource type="Resource" id="PipeLayout_mixed"]
+script = ExtResource("2_pipelayout")
+width = 14
+height = 6
+grid = PackedByteArray("AAAAAAAAAAAAAAAAFAAAAAAAAAAAAAAAAAAVAAAAAAAAAAAAAAAAABUAAAAAAAAAAAAAAAAAFQAAAAAAAAAAAAAAAAAVAAAAAAAAAAAAAAAAABEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAASGhoeGhoaGAAAAAAAAAAAABUAAAAAAAAAAAAAAAAAExoYAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+sizes = PackedFloat32Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+
+[node name="PipeFrameDemo" type="Control" unique_id=1379290398]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Background" type="ColorRect" parent="." unique_id=253098771]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.047, 0.039, 0.078, 1)
+
+[node name="Plate" type="TextureRect" parent="." unique_id=369259732]
+texture_filter = 1
+layout_mode = 0
+offset_left = 24.0
+offset_top = 24.0
+offset_right = 96.0
+offset_bottom = 294.0
+expand_mode = 1
+script = ExtResource("1_pipeframe")
+mode = 0
+seed = 3
+erosion = 0.25
+rust = 1.0
+radius_scale = 0.88
+empty_scale = 1.56
+run_scale = 1.194
+brass_scale = 3.2
+
+[node name="MenuBorder" type="TextureRect" parent="." unique_id=1708920477]
+texture_filter = 1
+layout_mode = 0
+offset_left = 128.0
+offset_top = 24.0
+offset_right = 451.0
+offset_bottom = 204.0
+expand_mode = 1
+script = ExtResource("1_pipeframe")
+thickness = 23
+seed = 1296387667
+
+[node name="Title" type="Label" parent="MenuBorder" unique_id=1445106890]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -60.0
+offset_top = -12.0
+offset_right = 60.0
+offset_bottom = 12.0
+grow_horizontal = 2
+grow_vertical = 2
+text = "menu frame"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="TopStrip" type="TextureRect" parent="." unique_id=421188139]
+texture_filter = 1
+layout_mode = 0
+offset_left = 128.0
+offset_top = 230.0
+offset_right = 448.0
+offset_bottom = 256.0
+expand_mode = 1
+script = ExtResource("1_pipeframe")
+mode = 1
+flow = 1
+seed = 7
+
+[node name="ManualZone" type="TextureRect" parent="." unique_id=1397636801]
+texture_filter = 1
+layout_mode = 0
+offset_left = 128.0
+offset_top = 280.0
+offset_right = 248.0
+offset_bottom = 352.0
+expand_mode = 1
+script = ExtResource("1_pipeframe")
+mode = 0
+placement = 1
+seed = 11
+layout = SubResource("PipeLayout_manual")
+erosion = 0.1
+rust = 0.6
+
+[node name="ManualLabel" type="Label" parent="ManualZone" unique_id=1332531897]
+layout_mode = 0
+offset_top = 74.0
+offset_right = 120.0
+offset_bottom = 90.0
+text = "manual layout"
+horizontal_alignment = 1
+
+[node name="MixedZone" type="TextureRect" parent="." unique_id=2013774460]
+texture_filter = 1
+layout_mode = 0
+offset_left = 264.0
+offset_top = 280.0
+offset_right = 422.0
+offset_bottom = 352.0
+expand_mode = 1
+script = ExtResource("1_pipeframe")
+mode = 0
+flow = 1
+placement = 2
+seed = 5
+layout = SubResource("PipeLayout_mixed")
+erosion = 0.1
+rust = 0.6
+
+[node name="MixedLabel" type="Label" parent="MixedZone" unique_id=1180864910]
+layout_mode = 0
+offset_top = 74.0
+offset_right = 184.0
+offset_bottom = 90.0
+text = "mixed, horizontal flow"
+horizontal_alignment = 1

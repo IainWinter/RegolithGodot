@@ -1,5 +1,6 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=9 format=3]
 
+[ext_resource type="Script" path="res://game/scripts/ai/PlayerSensor.gd" id="sensor"]
 [ext_resource type="Script" path="res://game/scripts/enemies/EnemyBomb.gd" id="1"]
 [ext_resource type="Texture2D" path="res://game/images/sprites/bomb.png" id="2"]
 [ext_resource type="Texture2D" path="res://game/images/sprites/bomb_mask.png" id="3"]
@@ -19,3 +20,7 @@ shrapnel_props = ExtResource("6")
 
 [node name="Throwable" type="Node" parent="."]
 script = ExtResource("7")
+
+[node name="PlayerSensor" type="Node" parent="."]
+script = ExtResource("sensor")
+radius = 30.0

@@ -1,0 +1,51 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="PackedScene" uid="uid://d2ota27v2jon5" path="res://game/scenes/Main.tscn" id="1_main"]
+[ext_resource type="Script" path="res://game/scripts/scenario/Scenario.gd" id="2_scenario"]
+[ext_resource type="Script" path="res://game/scripts/scenario/PlayerStart.gd" id="3_start"]
+[ext_resource type="Script" path="res://game/scripts/scenario/EnemyPlacement.gd" id="4_placement"]
+[ext_resource type="Script" path="res://game/scripts/scenario/AsteroidBeltZone.gd" id="5_belt"]
+[ext_resource type="Script" path="res://game/scripts/scenario/SpawnZone.gd" id="6_spawn"]
+[ext_resource type="Resource" path="res://game/config/rocks/default_rock.tres" id="7_rock"]
+
+[node name="BeltTurret" instance=ExtResource("1_main")]
+
+[node name="Scenario" type="Node2D" parent="."]
+script = ExtResource("2_scenario")
+rock_props = ExtResource("7_rock")
+
+[node name="PlayerStart" type="Node2D" parent="Scenario"]
+position = Vector2(-1408, 0)
+script = ExtResource("3_start")
+
+[node name="Turret" type="Node2D" parent="Scenario"]
+script = ExtResource("4_placement")
+kind = 3
+kind_name = &"turret"
+scale_cells = 96
+label = "turret"
+
+[node name="Belt" type="Node2D" parent="Scenario"]
+script = ExtResource("5_belt")
+inner_radius = 8.0
+outer_radius = 14.0
+density = 0.08
+min_chunks = 1
+max_chunks = 3
+orbit_speed = 0.04
+clockwise = true
+seed = 4242
+
+[node name="SpawnNorth" type="Node2D" parent="Scenario"]
+position = Vector2(0, -704)
+script = ExtResource("6_spawn")
+size = Vector2(4, 4)
+max_alive = 2
+interval = 6.0
+
+[node name="SpawnSouth" type="Node2D" parent="Scenario"]
+position = Vector2(0, 704)
+script = ExtResource("6_spawn")
+size = Vector2(4, 4)
+max_alive = 2
+interval = 6.0

@@ -1,14 +1,19 @@
 extends Node2D
 class_name LightningBolt
 
-# port of the engine's LightningBullet. a point that flies from the muzzle,
-# homes on the first cell the muzzle ray found in range, eats the cells it
-# crosses like a bullet and keeps painting bolts from its tail to its head.
-# when it dies a wider burst bolt with sparks is left behind and the node
-# waits for its lightning to fade before freeing
+# port of the engine's LightningBullet, the boss's homing bolt. a point that
+# flies from the muzzle at its target: the player when an enemy fired it, as
+# the original weapon target was, else the first cell the muzzle ray found
+# in range. it turns toward the target only while the target is ahead, eats
+# the cells it crosses like a bullet and keeps painting bolts from its tail
+# to its head. it flies by velocity so a lightning ball or the shield can
+# shove it off course. when it dies a wider burst bolt with sparks is left
+# behind and the node waits for its lightning to fade before freeing
 
 var props: LightningWeaponProps
 var angle := 0.0
+# units per second, the homing turn rewrites it from the angle
+var velocity := Vector2.ZERO
 var lifetime := 0.0
 var cell_life := 0
 var distance_traveled := 0.0
@@ -17,6 +22,7 @@ var shooter: RegolithSprite
 
 var target: RegolithSprite
 var target_cell := Vector2i.ZERO
+var has_target_cell := false
 
 var lightning: Lightning
 var dead := false
@@ -27,6 +33,7 @@ func setup(weapon_props: WeaponProps, start: Vector2, direction: Vector2, _holde
 	props = weapon_props as LightningWeaponProps
 	global_position = start
 	angle = direction.angle()
+	velocity = Vector2.from_angle(angle) * weapon_props.speed
 	lifetime = weapon_props.lifetime
 	cell_life = weapon_props.cell_life
 	shooter = holder
@@ -39,11 +46,19 @@ func _ready() -> void:
 		queue_free()
 		return
 
+	add_to_group("projectile")
+
 	lightning = Lightning.attach(self, props.lightning, props.lightning_material)
 	lightning.finished.connect(_on_lightning_finished)
 	acquire_target()
 
 func acquire_target() -> void:
+	if shooter == null or not shooter.is_in_group("player"):
+		target = Steering.find_player(get_tree())
+
+		if target != null:
+			return
+
 	var world := RegolithWorld.active()
 
 	if world == null:
@@ -55,6 +70,15 @@ func acquire_target() -> void:
 	if not hit.is_empty():
 		target = hit["sprite"]
 		target_cell = hit["cell"]
+		has_target_cell = true
+
+# the cell the muzzle ray found while it stands, else the target's center
+# of mass as the original homed on
+func target_point() -> Vector2:
+	if has_target_cell and target.has_cell(target_cell):
+		return target.cell_to_world(target_cell)
+
+	return target.get_center_of_mass()
 
 func _physics_process(delta: float) -> void:
 	if dead:
@@ -72,17 +96,18 @@ func _physics_process(delta: float) -> void:
 	lifetime -= delta
 
 	if target != null and is_instance_valid(target) and target.is_inside_tree():
-		var to_target: Vector2 = target.cell_to_world(target_cell) - global_position
+		var to_target := target_point() - global_position
 
 		if Vector2.from_angle(angle).dot(to_target) > 0.0:
 			angle = Steering.turn_toward(angle, to_target.angle(), props.turn_speed * delta)
+			velocity = Vector2.from_angle(angle) * props.speed
 	else:
 		target = null
 
 	var pixels_per_unit := RegolithWorld.pixels_per_unit()
-	var direction := Vector2.from_angle(angle)
+	var direction := velocity.normalized() if velocity.length_squared() > 0.0 else Vector2.from_angle(angle)
 	var position := global_position
-	var next_position := position + direction * props.speed * pixels_per_unit * delta
+	var next_position := position + velocity * pixels_per_unit * delta
 	var dying := lifetime < 0.0
 
 	cell_life -= world.hit_ropes(position, next_position, shooter)

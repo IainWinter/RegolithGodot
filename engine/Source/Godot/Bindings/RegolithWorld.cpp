@@ -10,16 +10,24 @@ void RegolithWorld::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_sprite_count"), &RegolithWorld::get_sprite_count);
     ClassDB::bind_method(D_METHOD("query_rect", "rect"), &RegolithWorld::query_rect);
     ClassDB::bind_method(D_METHOD("query_segment", "from", "to"), &RegolithWorld::query_segment);
-    ClassDB::bind_method(D_METHOD("ray_cast", "from", "to", "exclude"), &RegolithWorld::ray_cast, DEFVAL(nullptr));
+    ClassDB::bind_method(D_METHOD("ray_cast", "from", "to", "exclude", "ignore_groups"), &RegolithWorld::ray_cast, DEFVAL(nullptr), DEFVAL(PackedStringArray()));
+    ClassDB::bind_method(D_METHOD("find_path", "from", "to", "cell_size", "exclude", "ignore_groups", "max_expansions"), &RegolithWorld::find_path, DEFVAL(nullptr), DEFVAL(PackedStringArray()), DEFVAL(400));
+    ClassDB::bind_method(D_METHOD("has_line_of_sight", "from", "to", "exclude", "ignore_groups"), &RegolithWorld::has_line_of_sight, DEFVAL(nullptr), DEFVAL(PackedStringArray()));
+    ClassDB::bind_method(D_METHOD("is_point_blocked", "point", "exclude", "ignore_groups"), &RegolithWorld::is_point_blocked, DEFVAL(nullptr), DEFVAL(PackedStringArray()));
+    ClassDB::bind_method(D_METHOD("is_path_clear", "from", "path", "goal", "exclude", "ignore_groups"), &RegolithWorld::is_path_clear, DEFVAL(nullptr), DEFVAL(PackedStringArray()));
+    ClassDB::bind_static_method("RegolithWorld", D_METHOD("advance_waypoints", "path", "position", "capture_radius"), &RegolithWorld::advance_waypoints);
+    ClassDB::bind_method(D_METHOD("draw_path", "from", "path", "goal"), &RegolithWorld::draw_path);
     ClassDB::bind_method(D_METHOD("hit_ropes", "from", "to", "exclude"), &RegolithWorld::hit_ropes, DEFVAL(nullptr));
-    ClassDB::bind_method(D_METHOD("add_joint", "a", "b", "world_point"), &RegolithWorld::add_joint);
-    ClassDB::bind_method(D_METHOD("add_distance_joint", "a", "b", "world_point_a", "world_point_b", "rest_distance"), &RegolithWorld::add_distance_joint, DEFVAL(-1.f));
+    ClassDB::bind_method(D_METHOD("add_joint", "a", "b", "world_point", "collide_connected"), &RegolithWorld::add_joint, DEFVAL(true));
+    ClassDB::bind_method(D_METHOD("add_distance_joint", "a", "b", "world_point_a", "world_point_b", "rest_distance", "collide_connected"), &RegolithWorld::add_distance_joint, DEFVAL(-1.f), DEFVAL(true));
     ClassDB::bind_method(D_METHOD("remove_joint", "joint_id"), &RegolithWorld::remove_joint);
     ClassDB::bind_method(D_METHOD("clear_joints"), &RegolithWorld::clear_joints);
     ClassDB::bind_method(D_METHOD("get_joint_count"), &RegolithWorld::get_joint_count);
+    ClassDB::bind_method(D_METHOD("get_joint_ids"), &RegolithWorld::get_joint_ids);
     ClassDB::bind_method(D_METHOD("get_joint_anchors", "joint_id"), &RegolithWorld::get_joint_anchors);
     ClassDB::bind_method(D_METHOD("get_joint_sprites", "joint_id"), &RegolithWorld::get_joint_sprites);
     ClassDB::bind_method(D_METHOD("get_joint_type", "joint_id"), &RegolithWorld::get_joint_type);
+    ClassDB::bind_method(D_METHOD("get_joint_collide_connected", "joint_id"), &RegolithWorld::get_joint_collide_connected);
     ClassDB::bind_method(D_METHOD("get_color_atlas"), &RegolithWorld::get_color_atlas);
     ClassDB::bind_method(D_METHOD("get_mask_atlas"), &RegolithWorld::get_mask_atlas);
     ClassDB::bind_method(D_METHOD("get_commit_time_ms"), &RegolithWorld::get_commit_time_ms);
@@ -28,6 +36,7 @@ void RegolithWorld::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_rope_count"), &RegolithWorld::get_rope_count);
     ClassDB::bind_method(D_METHOD("spawn_cell_particle", "position", "velocity", "color", "angle"), &RegolithWorld::spawn_cell_particle, DEFVAL(0.f));
     ClassDB::bind_method(D_METHOD("get_cell_particles"), &RegolithWorld::get_cell_particles);
+    ClassDB::bind_method(D_METHOD("get_hot_cells", "min_heat", "max_count"), &RegolithWorld::get_hot_cells, DEFVAL(12), DEFVAL(64));
 
     ClassDB::bind_static_method("RegolithWorld", D_METHOD("active"), &RegolithWorld::active);
     ClassDB::bind_static_method("RegolithWorld", D_METHOD("pixels_per_unit"), &RegolithWorld::active_pixels_per_unit);
@@ -56,5 +65,7 @@ void RegolithWorld::_bind_methods() {
 
     ADD_SIGNAL(MethodInfo("sprite_split", PropertyInfo(Variant::OBJECT, "source", PROPERTY_HINT_NODE_TYPE, "RegolithSprite"), PropertyInfo(Variant::OBJECT, "piece", PROPERTY_HINT_NODE_TYPE, "RegolithSprite")));
     ADD_SIGNAL(MethodInfo("sprite_destroyed", PropertyInfo(Variant::OBJECT, "sprite", PROPERTY_HINT_NODE_TYPE, "RegolithSprite")));
+    ADD_SIGNAL(MethodInfo("sprite_emptied", PropertyInfo(Variant::OBJECT, "sprite", PROPERTY_HINT_NODE_TYPE, "RegolithSprite")));
     ADD_SIGNAL(MethodInfo("cells_removed", PropertyInfo(Variant::OBJECT, "sprite", PROPERTY_HINT_NODE_TYPE, "RegolithSprite"), PropertyInfo(Variant::INT, "count")));
+    ADD_SIGNAL(MethodInfo("core_exploded", PropertyInfo(Variant::OBJECT, "sprite", PROPERTY_HINT_NODE_TYPE, "RegolithSprite"), PropertyInfo(Variant::VECTOR2, "position"), PropertyInfo(Variant::INT, "power"), PropertyInfo(Variant::INT, "type")));
 }

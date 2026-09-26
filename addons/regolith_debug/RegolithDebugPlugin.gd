@@ -92,4 +92,7 @@ func _is_tool_script(node: Node) -> bool:
 	var script := node.get_script() as Script
 	if script == null or not script.has_source_code():
 		return false
-	return script.get_source_code().strip_edges().begins_with("@tool")
+	# a script that just became @tool still leaves the nodes of an open scene
+	# as placeholders until that scene reloads: only a real instance may be
+	# called, and instance_has is false for placeholders
+	return script.get_source_code().strip_edges().begins_with("@tool") and script.instance_has(node)

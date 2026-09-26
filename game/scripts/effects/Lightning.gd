@@ -7,8 +7,14 @@ class_name Lightning
 # out over the lifetime. a strike at a node or a sprite cell tracks it and is
 # sustained with restrikes for as long as strike() keeps being called for
 # that target. the cells the channel crosses are burned when it lands.
-# drawn like the ropes: one multimesh instance per segment, endpoints in
-# world cell space, the shader fills whole cells. positions are world pixels
+# positions are world pixels. two draws, picked by the static pixelated flag
+# (the debug menu's raster lightning toggle, applied by RasterMode): on, it is
+# drawn like the ropes, one multimesh instance per segment with endpoints in
+# world cell space and the material's shader filling whole cells; off, every
+# bolt is one stroke of the engine's custom line render (RegolithLineRender,
+# the port of LineMesh / line_additive.hlsl): round capped quads of the
+# props line width in the bolt color, additive, with a soft glow under them
+# standing in for the radiance cascade emission of the original
 
 const TRACKING_KEEPALIVE := 0.25
 const FLASH_TIME := 0.07
@@ -18,6 +24,14 @@ const FLOATS_PER_INSTANCE := 16
 const MIN_CAPACITY := 16
 const SHRINK_FRAMES := 120
 const POOL_LIMIT := 256
+# the smooth draw, in world cells. the glow reaches this far past the core
+# on each side, its strength is the props emission times this (a faint hint
+# of the engine's radiance emission, 0.2 at the bolts' 0.3333), branches are
+# this fraction of the channel width like the engine's bolt lines
+const SMOOTH_GLOW_CELLS := 1.5
+const SMOOTH_GLOW_PER_EMISSION := 0.6
+const SMOOTH_FEATHER_PIXELS := 1.0
+const SMOOTH_BRANCH_WIDTH := 0.6
 
 class Bolt:
 	var path := PackedVector2Array()
@@ -64,6 +78,9 @@ class PathGen:
 	var head_takeover := 0.0
 	var bolts: Array[Bolt]
 
+# cell snapped shader draw on, smooth antialiased lines off. RasterMode sets it
+static var pixelated := false
+
 @export var props: LightningProps
 
 @export var auto_free := true
@@ -74,6 +91,7 @@ signal finished
 var strikes: Array[Strike] = []
 var multimesh: MultiMesh
 var instance: MultiMeshInstance2D
+var smooth: RegolithLineRender
 var buffer := PackedFloat32Array()
 var capacity := 0
 var segment_count := 0
@@ -106,6 +124,14 @@ func _ready() -> void:
 	instance.multimesh = multimesh
 	instance.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	add_child(instance)
+
+	smooth = RegolithLineRender.new()
+	smooth.name = "SmoothLines"
+	smooth.visible = false
+	var blend := CanvasItemMaterial.new()
+	blend.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	smooth.material = blend
+	add_child(smooth)
 
 static func attach(parent: Node, strike_props: LightningProps, draw_material: Material, free_when_done := false) -> Lightning:
 	var lightning := Lightning.new()
@@ -554,9 +580,32 @@ func emit_sparks(s: Strike, world: RegolithWorld, delta: float) -> void:
 	if delta > 0.0 and s.is_fading() and not s.bolts.is_empty() and randf() < 0.3:
 		spawn_spark(world, to_world(s, point_at_distance(s.bolts[0], randf() * s.channel_len)), p, pixels_per_unit)
 
+# one spark burst of the props at a point on a bolt: the props' spark
+# particles through the EffectSpawner (the original's particles.spawn_particles
+# with the LightningSpawn spark, angle 0), a cell particle when there is
+# no spark props or no spawner
 static func spawn_spark(world: RegolithWorld, position: Vector2, p: LightningProps, pixels_per_unit: float) -> void:
+	if p.spark != null:
+		var effects := EffectSpawner.active()
+
+		if effects != null:
+			# a bolt has no flight speed, its spark_speed is the source speed,
+			# and its spark_color the source color
+			effects.emit(p.spark, position, 0.0, -1, p.spark_speed, p.spark_color)
+			return
+
 	var velocity := Vector2.from_angle(randf() * TAU) * randf_range(0.0, p.spark_speed) * pixels_per_unit
 	world.spawn_cell_particle(position, velocity, p.spark_color, 0.0)
+
+func is_pixelated() -> bool:
+	return pixelated
+
+# the emission the smooth glow follows, the node props else the first strike's
+func smooth_emission() -> float:
+	if props != null:
+		return props.emission
+
+	return strikes[0].props.emission if not strikes.is_empty() else 0.0
 
 func draw_strikes() -> void:
 	if material == null:
@@ -565,15 +614,28 @@ func draw_strikes() -> void:
 			push_warning("Lightning: material is null, nothing is drawn")
 
 		instance.visible = false
+		smooth.visible = false
 		segment_count = 0
+		smooth.clear()
+		smooth.commit()
 		return
 
-	if instance.material != material:
-		instance.material = material
-
-	instance.visible = true
-
 	cell = RegolithWorld.pixels_per_cell()
+
+	if pixelated:
+		if instance.material != material:
+			instance.material = material
+
+		instance.visible = true
+		smooth.visible = false
+	else:
+		instance.visible = false
+		smooth.visible = true
+		smooth.clear()
+		smooth.glow_width = SMOOTH_GLOW_CELLS * cell
+		smooth.glow_strength = clampf(smooth_emission() * SMOOTH_GLOW_PER_EMISSION, 0.0, 1.0)
+		smooth.feather = SMOOTH_FEATHER_PIXELS
+
 	bounds_min = Vector2(INF, INF)
 	bounds_max = Vector2(-INF, -INF)
 	var count := 0
@@ -599,21 +661,36 @@ func write_bolt(s: Strike, bolt: Bolt, base_color: Color, fading: bool, index: i
 		while revealed < bolt.path.size() and bolt.cum[revealed] <= reach:
 			revealed += 1
 
-	var glow := bolt.brightness * (1.0 + s.props.emission)
-	var color := Color(base_color.r * glow, base_color.g * glow, base_color.b * glow, base_color.a * bolt.brightness)
-	var previous := to_world(s, bolt.path[0])
+	var points := PackedVector2Array()
+	points.append(to_world(s, bolt.path[0]))
 
 	for i in range(1, revealed):
-		var point := to_world(s, bolt.path[i])
-		write_segment(index, previous, point, color)
-		index += 1
-		previous = point
+		points.append(to_world(s, bolt.path[i]))
 
 	if not fading and revealed > 0 and revealed < bolt.path.size() and reach > bolt.cum[revealed - 1]:
-		write_segment(index, previous, to_world(s, point_at_distance(bolt, reach)), color)
-		index += 1
+		points.append(to_world(s, point_at_distance(bolt, reach)))
 
-	return index
+	if points.size() < 2:
+		return index
+
+	if pixelated:
+		var glow := bolt.brightness * (1.0 + s.props.emission)
+		var color := Color(base_color.r * glow, base_color.g * glow, base_color.b * glow, base_color.a * bolt.brightness)
+
+		for i in range(1, points.size()):
+			write_segment(index, points[i - 1], points[i], color)
+			index += 1
+
+		return index
+
+	# the engine's bolt line: the color scaled by the bolt brightness, one
+	# width for the channel and thinner branches
+	var brightness := bolt.brightness
+	var color := Color(base_color.r * brightness, base_color.g * brightness, base_color.b * brightness, base_color.a * brightness)
+	var width := s.props.line_width * cell * (1.0 if bolt.is_channel else SMOOTH_BRANCH_WIDTH)
+	smooth.add_polyline(points, PackedFloat32Array([width]), PackedColorArray([color]))
+
+	return index + points.size() - 1
 
 func upload(count: int) -> void:
 	segment_count = count
@@ -625,6 +702,13 @@ func upload(count: int) -> void:
 			set_capacity(maxi(count * 2, MIN_CAPACITY))
 	else:
 		idle_frames = 0
+
+	if not pixelated:
+		if multimesh.instance_count > 0:
+			multimesh.visible_instance_count = 0
+
+		smooth.commit()
+		return
 
 	if count == 0:
 		if multimesh.instance_count > 0:

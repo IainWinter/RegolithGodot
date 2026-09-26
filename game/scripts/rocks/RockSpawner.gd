@@ -16,6 +16,8 @@ class_name RockSpawner
 @export var view_margin_units := 1.0
 @export var spot_margin_units := 0.25
 @export var view_radius_units := 0.0
+# what a rock leaves behind when it is destroyed, none when unset
+@export var drop_table: ItemDropTable
 
 signal rock_spawned(sprite: RegolithSprite)
 
@@ -107,4 +109,8 @@ func request_rock(focus: Vector2) -> SpawnRequest:
 func on_spawned(rock: RegolithSprite) -> void:
 	pending -= 1
 	rocks.append(rock)
+
+	if drop_table:
+		rock.set_meta("drop_table", drop_table)
+
 	rock_spawned.emit(rock)

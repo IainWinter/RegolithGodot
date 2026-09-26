@@ -62,6 +62,7 @@ func set_target(sprite: RegolithSprite, local_position: Vector2) -> void:
 		target_world = sprite.to_global(local_position)
 
 func _ready() -> void:
+	add_to_group("projectile")
 	trail = Trail.new()
 	trail.setup(props, cell_px * 2.0, global_position)
 	add_child(trail)
@@ -91,6 +92,21 @@ func _process(delta: float) -> void:
 
 	queue_redraw()
 	trail.trim(trail_px)
+
+	if coast_remaining <= 0.0:
+		emit_exhaust()
+
+# flame and smoke off the tail while the motor runs
+func emit_exhaust() -> void:
+	var effects := EffectSpawner.active()
+
+	if effects == null:
+		return
+
+	var back := angle + PI
+	var tail := global_position + Vector2.from_angle(back) * body_px * 0.5
+	effects.emit(effects.missile_flame, tail, back)
+	effects.emit(effects.missile_smoke, tail, back)
 
 func _physics_process(delta: float) -> void:
 	if dead:

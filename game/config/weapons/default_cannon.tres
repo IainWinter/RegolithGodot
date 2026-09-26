@@ -1,7 +1,11 @@
-[gd_resource type="Resource" script_class="WeaponProps" load_steps=3 format=3]
+[gd_resource type="Resource" script_class="WeaponProps" load_steps=7 format=3]
 
 [ext_resource type="Script" path="res://game/scripts/weapons/WeaponProps.gd" id="1"]
 [ext_resource type="PackedScene" path="res://game/scenes/weapons/Bullet.tscn" id="2"]
+[ext_resource type="Script" path="res://game/scripts/effects/ParticleProps.gd" id="3"]
+[ext_resource type="Resource" path="res://game/config/effects/cannon_muzzle_spark.tres" id="4"]
+[ext_resource type="Resource" path="res://game/config/effects/cannon_muzzle_smoke.tres" id="5"]
+[ext_resource type="Resource" path="res://game/config/effects/cannon_casing.tres" id="6"]
 
 [resource]
 script = ExtResource("1")
@@ -11,14 +15,18 @@ shots_per_ammo = 1
 delay_cooldown = 0.4
 inaccuracy_angle = 0.01
 inaccuracy_tangent = 0.01
-speed = 16.0
+aim_assist_degrees = 6.0
+speed = 11.5
+mass = 0.003
 lifetime = 5.0
 cell_life = 8
 trail_length = 0.8
 rotation_factor = 100.0
 speed_loss_per_cell = 0.0
+spit_odds = 0.1
 color_front = Color(0.9, 0.9, 0.9, 1)
 color_back = Color(0.4, 0.4, 0.4, 0)
+muzzle_effects = Array[ExtResource("3")]([ExtResource("4"), ExtResource("5"), ExtResource("6")])
 burn_strength = 255
 scorch_strength = 110
 damage_ratio = 0.65

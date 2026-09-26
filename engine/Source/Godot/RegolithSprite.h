@@ -59,6 +59,12 @@ public:
     void set_angle_fixed(bool fixed);
     bool is_angle_fixed() const;
 
+    // how hard the ropes pull back to their rest shape, 0.02 hangs limp
+    // and 0.3 holds shape (the original SpriteRopeSet::angle_stiffness).
+    // negative means the asset's value stays
+    void set_rope_angle_stiffness(float stiffness);
+    float get_rope_angle_stiffness() const;
+
     void set_linear_damping(float damping);
     float get_linear_damping() const;
 
@@ -82,6 +88,18 @@ public:
 
     godot::Vector2i world_to_cell(godot::Vector2 world_position) const;
     godot::Vector2 cell_to_world(godot::Vector2i cell) const;
+
+    // the coordinate frames of the original (Frames.h, Transform, Grid):
+    // world pixels <-> local point (-1..1 spanning the whole grid, y down)
+    // <-> grid point (0..cells, floating) <-> cell (integer grid index)
+    godot::Vector2 world_to_local(godot::Vector2 world_position) const;
+    godot::Vector2 local_to_world(godot::Vector2 local_point) const;
+    godot::Vector2 world_to_grid_point(godot::Vector2 world_position) const;
+    godot::Vector2 grid_point_to_world(godot::Vector2 grid_point) const;
+    godot::Vector2 local_to_grid_point(godot::Vector2 local_point) const;
+    godot::Vector2 grid_point_to_local(godot::Vector2 grid_point) const;
+    godot::Vector2 cell_to_local(godot::Vector2i cell) const;
+    godot::Vector2 cell_to_grid_point(godot::Vector2i cell) const;
     bool has_cell(godot::Vector2i cell) const;
     CellType get_cell_type(godot::Vector2i cell) const;
     int get_cell_class(godot::Vector2i cell) const;
@@ -91,6 +109,8 @@ public:
     int count_cells_of_type(CellType type) const;
 
     void repair_cells_of_type(CellType type);
+    void repair_all_cells();
+    void remove_all_cells();
 
     void remove_cell(godot::Vector2i cell);
     void burn_cell(godot::Vector2i cell, int strength, int damage);
@@ -105,13 +125,34 @@ public:
     void set_linear_velocity(godot::Vector2 velocity);
     float get_angular_velocity() const;
     void set_angular_velocity(float velocity);
-    void apply_impulse(godot::Vector2 impulse, godot::Vector2 world_position);
+    void apply_impulse(godot::Vector2 impulse, godot::Vector2 world_position, float max_delta_speed = 0.f, float max_delta_spin = 0.f);
 
     int get_rope_count() const;
     godot::PackedVector2Array get_rope_points(int rope_index) const;
 
     godot::Dictionary hit_rope(godot::Vector2 from, godot::Vector2 to);
     bool cut_rope(int rope_index, int node_index);
+
+    // cores: the Core, Weakpoint and Joint cell groups found in the mask.
+    // the world checks them after every commit that touched the sprite, once
+    // after load and when set_cores_unstable is called, and the sprite emits
+    // core_exploded(position, power, type) for any that went unstable, right
+    // before the world's core_exploded(sprite, position, power, type).
+    // positions in world pixels
+    int get_core_count() const;
+    CellType get_core_type(int index) const;
+    godot::Vector2 get_core_position(int index) const;
+    int get_core_initial_cells(int index) const;
+    int get_core_remaining_cells(int index) const;
+    float get_core_damage(int index) const;
+    void set_core_explode_damage(float damage);
+    float get_core_explode_damage() const;
+    void set_cores_unstable();
+    void repair_cores();
+    void update_cores();
+
+    // true for the Core and Weakpoint1-4 cell types, the ones that make a core
+    static bool is_core_type(int type);
 
     RegolithWorld* world() const;
     bool is_loaded() const;
@@ -152,6 +193,13 @@ private:
     void after_rope_cut(const godot::LocalVector<godot::Vector2i>& anchor_cells);
     void spawn_loose_pixels(const godot::LocalVector<godot::Pair<godot::Vector2, Color4>>& pixels);
 
+    // null when not loaded or index is out of range
+    const SpriteCore* core_at(int index) const;
+
+    // a grid point of this node's grid (the rope grid for a rope only piece)
+    // in sim units and in world pixels
+    godot::Vector2 grid_point_to_units(godot::Vector2 grid_point) const;
+
 private:
     godot::Ref<godot::Texture2D> m_texture;
     godot::Ref<godot::Texture2D> m_mask_texture;
@@ -161,8 +209,10 @@ private:
     bool m_dynamic = true;
     bool m_repairable = false;
     bool m_angle_fixed = false;
+    float m_rope_angle_stiffness = -1.f;
     float m_linear_damping = 0.01f;
     float m_angular_damping = 0.01f;
+    float m_core_explode_damage = k_core_explode_damage;
 
     RegolithWorld* m_world = nullptr;
     Sprite m_sprite;

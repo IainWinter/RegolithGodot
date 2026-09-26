@@ -4,6 +4,7 @@
 #include "RegolithSprite.h"
 #include "RopeFeed.h"
 #include "ScopeMs.h"
+#include "SpritePathfinding.h"
 
 #include "DestructibleSprite/Algorithm/SpriteBurn.h"
 #include "DestructibleSprite/Algorithm/SpriteCommit.h"
@@ -111,7 +112,7 @@ void RegolithWorld::find_cell_particles() {
     }
 
     if (!m_cell_particles) {
-        UtilityFunctions::push_error("RegolithWorld failed to find particle emitter");
+        UtilityFunctions::print("RegolithWorld: no GPUParticles2D child, cell particles are off: ", get_path());
         return;
     }
 
@@ -185,8 +186,46 @@ void RegolithWorld::step_physics(float delta_time) {
         }
     }
 
+    reset_collision_priority();
+
     m_time += delta_time;
     m_tree.build(m_sprites);
+}
+
+// port of PhysicsResetPrioritySystem: a body lowering its priority skips
+// contacts, so its overlaps are tracked apart. once it touches nothing it
+// drops back to priority zero
+void RegolithWorld::reset_collision_priority() {
+    bool any_lowered = false;
+
+    for (RegolithSprite* node : m_sprites) {
+        any_lowered |= node->body().attempt_lower_priority;
+    }
+
+    if (!any_lowered) {
+        return;
+    }
+
+    m_touching.clear();
+
+    for (const PhysicsContact& contact : m_physics.contacts()) {
+        m_touching.insert(contact.entity_0);
+        m_touching.insert(contact.entity_1);
+    }
+
+    for (const godot::Pair<ObjectID, ObjectID>& pair : m_physics.overlaps()) {
+        m_touching.insert(pair.first);
+        m_touching.insert(pair.second);
+    }
+
+    for (RegolithSprite* node : m_sprites) {
+        PhysicsBody& body = node->body();
+
+        if (body.attempt_lower_priority && !m_touching.has(node->get_instance_id())) {
+            body.attempt_lower_priority = false;
+            body.collision_priority = 0;
+        }
+    }
 }
 
 void RegolithWorld::decay_heat(float delta_time) {
@@ -210,6 +249,48 @@ void RegolithWorld::decay_heat(float delta_time) {
             node->sprite().decay_heat(levels);
         }
     }
+}
+
+godot::PackedVector3Array RegolithWorld::get_hot_cells(int min_heat, int max_count) const {
+    godot::PackedVector3Array result;
+
+    if (max_count <= 0) {
+        return result;
+    }
+
+    uint8_t heat_floor = static_cast<uint8_t>(std::clamp(min_heat, 0, 15));
+    godot::LocalVector<godot::Pair<godot::Vector2i, uint8_t>> cells;
+    int seen = 0;
+
+    for (RegolithSprite* node : m_sprites) {
+        if (!node->is_loaded() || !node->sprite().has_hot_cells()) {
+            continue;
+        }
+
+        cells.clear();
+        node->sprite().hot_cells(heat_floor, cells);
+
+        // reservoir sample so a big burn still gives an even spread
+        for (const godot::Pair<godot::Vector2i, uint8_t>& cell : cells) {
+            int slot = seen < max_count ? seen : random_int_max(seen + 1);
+            seen++;
+
+            if (slot >= max_count) {
+                continue;
+            }
+
+            godot::Vector2 position = node->cell_to_world(cell.first);
+            godot::Vector3 entry(position.x, position.y, float(cell.second));
+
+            if (slot == result.size()) {
+                result.push_back(entry);
+            } else {
+                result.set(slot, entry);
+            }
+        }
+    }
+
+    return result;
 }
 
 void RegolithWorld::commit_sprites() {
@@ -258,7 +339,9 @@ void RegolithWorld::commit_sprites() {
         RegolithSprite* node = dirty[i];
         SpriteCommitResult& result = results[i];
 
-        node->apply_mass();
+        if (node->sprite().active_cell_count() > 0) {
+            node->apply_mass();
+        }
 
         godot::LocalVector<godot::Pair<godot::Vector2i, Color4>> loose;
         node->sprite().take_loose_pixels(loose);
@@ -284,10 +367,19 @@ void RegolithWorld::commit_sprites() {
 
         godot::LocalVector<SpriteRopeSplitTarget> rope_targets;
 
+        // a rotator driven body that lost cells stops colliding with its
+        // joint partners until it has moved clear of everything
+        bool lower_priority = sprite_commit_has_rotator(node->body()) && (!result.removedPixelColors.is_empty() || !result.splits.is_empty());
+
+        if (lower_priority) {
+            node->body().attempt_lower_priority = true;
+        }
+
         for (SpriteCut& cut : result.splits) {
             auto& [split_transform, split_sprite, grid_min] = cut;
 
             PhysicsBody body = sprite_commit_split_body(split_transform, node->body());
+            body.attempt_lower_priority = lower_priority;
             RegolithSprite* piece = spawn_piece(node, std::move(split_sprite), split_transform, body);
 
             pieces.push_back({node, piece, godot::Vector2i((int)grid_min.x, (int)grid_min.y)});
@@ -303,7 +395,21 @@ void RegolithWorld::commit_sprites() {
             }
         }
 
-        if (result.selfIsEmpty) {
+        if (result.selfIsEmpty && node->is_repairable()) {
+            // a repairable sprite keeps its node with every cell on the
+            // removed list, ready for repair_cells_of_type. the cells already
+            // flew off as particles above. the body keeps its last mass so
+            // the solver never sees an empty sprite
+            if (node->sprite().active_cell_count() > 0) {
+                node->sprite().remove_all_cells();
+
+                godot::LocalVector<godot::Pair<godot::Vector2i, Color4>> discard;
+                node->sprite().take_loose_pixels(discard);
+                emit_signal("sprite_emptied", node);
+            }
+        }
+
+        else if (result.selfIsEmpty) {
             dead.push_back(node);
         }
 
@@ -346,6 +452,17 @@ void RegolithWorld::commit_sprites() {
         work.piece->sync_node_from_body();
         work.piece->reset_physics_interpolation();
         emit_signal("sprite_split", work.source, work.piece);
+    }
+
+    // core state only moves with the cells, so the check runs here for the
+    // sprites this commit touched and the pieces it made. freed sources are
+    // unloaded by now and skip themselves
+    for (RegolithSprite* node : dirty) {
+        node->update_cores();
+    }
+
+    for (PieceWork& work : pieces) {
+        work.piece->update_cores();
     }
 
     m_pool.commit_chunks();
@@ -445,13 +562,13 @@ void RegolithWorld::free_sprite(RegolithSprite* node) {
     node->queue_free();
 }
 
-int RegolithWorld::add_joint(RegolithSprite* a, RegolithSprite* b, Vector2 world_point) {
-    return m_joints.add(a, b, to_units(world_point));
+int RegolithWorld::add_joint(RegolithSprite* a, RegolithSprite* b, Vector2 world_point, bool collide_connected) {
+    return m_joints.add(a, b, to_units(world_point), collide_connected);
 }
 
-int RegolithWorld::add_distance_joint(RegolithSprite* a, RegolithSprite* b, Vector2 world_point_a, Vector2 world_point_b, float rest_distance) {
+int RegolithWorld::add_distance_joint(RegolithSprite* a, RegolithSprite* b, Vector2 world_point_a, Vector2 world_point_b, float rest_distance, bool collide_connected) {
     float rest = rest_distance < 0.f ? -1.f : rest_distance / pixels_per_unit();
-    return m_joints.add_distance(a, b, to_units(world_point_a), to_units(world_point_b), rest);
+    return m_joints.add_distance(a, b, to_units(world_point_a), to_units(world_point_b), rest, collide_connected);
 }
 
 PackedVector2Array RegolithWorld::get_joint_anchors(int joint_id) const {
@@ -481,6 +598,10 @@ int RegolithWorld::get_joint_type(int joint_id) const {
     return type ? static_cast<int>(*type) : -1;
 }
 
+bool RegolithWorld::get_joint_collide_connected(int joint_id) const {
+    return m_joints.collide_connected(joint_id);
+}
+
 void RegolithWorld::remove_joint(int joint_id) {
     m_joints.remove(joint_id);
 }
@@ -493,11 +614,43 @@ int RegolithWorld::get_joint_count() const {
     return m_joints.count();
 }
 
+PackedInt32Array RegolithWorld::get_joint_ids() const {
+    PackedInt32Array out;
+
+    for (const RegolithJoints::Joint& joint : m_joints.items()) {
+        out.push_back(joint.id);
+    }
+
+    return out;
+}
+
 static TypedArray<RegolithSprite> to_array(const godot::LocalVector<RegolithSprite*>& sprites) {
     TypedArray<RegolithSprite> out;
 
     for (RegolithSprite* sprite : sprites) {
         out.push_back(sprite);
+    }
+
+    return out;
+}
+
+static godot::LocalVector<Vector2> to_units_vector(const RegolithWorld& world, const PackedVector2Array& pixels) {
+    godot::LocalVector<Vector2> out;
+    out.reserve(pixels.size());
+
+    for (int i = 0; i < pixels.size(); i++) {
+        out.push_back(world.to_units(pixels[i]));
+    }
+
+    return out;
+}
+
+static PackedVector2Array to_pixels_array(const RegolithWorld& world, const godot::LocalVector<Vector2>& units) {
+    PackedVector2Array out;
+    out.resize(units.size());
+
+    for (size_t i = 0; i < units.size(); i++) {
+        out[i] = world.to_pixels(units[i]);
     }
 
     return out;
@@ -517,17 +670,72 @@ TypedArray<RegolithSprite> RegolithWorld::query_segment(Vector2 from, Vector2 to
     return to_array(hits);
 }
 
-Dictionary RegolithWorld::ray_cast(Vector2 from, Vector2 to, RegolithSprite* exclude) const {
+// sprites in any of the groups pass rays and never block paths
+static SpriteIgnoreFn group_ignore(const PackedStringArray& groups) {
+    if (groups.is_empty()) {
+        return {};
+    }
+
+    godot::LocalVector<StringName> names;
+
+    for (int i = 0; i < groups.size(); i++) {
+        names.push_back(StringName(groups[i]));
+    }
+
+    return [names](RegolithSprite* sprite) {
+        for (const StringName& name : names) {
+            if (sprite->is_in_group(name)) {
+                return true;
+            }
+        }
+
+        return false;
+    };
+}
+
+PathfindWorld RegolithWorld::make_pathfind_world(RegolithSprite* exclude, const PackedStringArray& ignore_groups, float cell_size) const {
+    return PathfindWorld{m_tree, exclude, cell_size, group_ignore(ignore_groups)};
+}
+
+Dictionary RegolithWorld::ray_cast(Vector2 from, Vector2 to, RegolithSprite* exclude, const PackedStringArray& ignore_groups) const {
     Dictionary result;
 
-    if (Optional<SpriteTree::Hit> hit = m_tree.ray_cast(to_units(from), to_units(to), exclude)) {
+    if (Optional<SpriteTree::Hit> hit = m_tree.ray_cast(to_units(from), to_units(to), exclude, group_ignore(ignore_groups))) {
         result["sprite"] = hit->sprite;
         result["cell"] = Vector2i(hit->cell.x, hit->cell.y);
         result["position"] = to_pixels(hit->position);
+        result["local_position"] = hit->local_position * pixels_per_unit();
         result["distance"] = hit->distance * pixels_per_unit();
     }
 
     return result;
+}
+
+PackedVector2Array RegolithWorld::find_path(Vector2 from, Vector2 to, float cell_size, RegolithSprite* exclude, const PackedStringArray& ignore_groups, int max_expansions) const {
+    PathfindWorld world = make_pathfind_world(exclude, ignore_groups, std::max(cell_size, 1.f) / pixels_per_unit());
+    return to_pixels_array(*this, pathfind(world, to_units(from), to_units(to), max_expansions, DebugName_Ai_Pathfinding));
+}
+
+bool RegolithWorld::has_line_of_sight(Vector2 from, Vector2 to, RegolithSprite* exclude, const PackedStringArray& ignore_groups) const {
+    return pathfind_has_los(make_pathfind_world(exclude, ignore_groups), to_units(from), to_units(to));
+}
+
+bool RegolithWorld::is_point_blocked(Vector2 point, RegolithSprite* exclude, const PackedStringArray& ignore_groups) const {
+    return pathfind_blocked_point(make_pathfind_world(exclude, ignore_groups), to_units(point));
+}
+
+bool RegolithWorld::is_path_clear(Vector2 from, const PackedVector2Array& path, Vector2 goal, RegolithSprite* exclude, const PackedStringArray& ignore_groups) const {
+    return pathfind_path_clear(make_pathfind_world(exclude, ignore_groups), to_units(from), to_units_vector(*this, path), to_units(goal));
+}
+
+void RegolithWorld::draw_path(Vector2 from, const PackedVector2Array& path, Vector2 goal) const {
+    pathfind_draw_path(make_pathfind_world(nullptr, PackedStringArray()), to_units(from), to_units_vector(*this, path), to_units(goal), DebugName_Ai_Path);
+}
+
+PackedVector2Array RegolithWorld::advance_waypoints(const PackedVector2Array& path, Vector2 position, float capture_radius) {
+    PackedVector2Array out = path;
+    pathfind_advance_waypoints(out, position, capture_radius);
+    return out;
 }
 
 static AxisAlignedBox rope_bounds(const godot::LocalVector<SpriteRope>& ropes, float padding) {
@@ -558,15 +766,19 @@ int RegolithWorld::hit_ropes(Vector2 from, Vector2 to, RegolithSprite* exclude) 
     AxisAlignedBox sweep(to_units(from), to_units(to));
     int hits = 0;
 
+    // the tree covers loaded sprites out to their rope nodes, rope only
+    // pieces have no cells so they are swept by hand
     godot::LocalVector<RegolithSprite*> nodes;
-    for (RegolithSprite* n : m_sprites) nodes.push_back(n);
+    m_tree.query(sweep, nodes);
+
+    for (RegolithSprite* n : m_sprites) {
+        if (!n->is_loaded() && n->has_ropes()) {
+            nodes.push_back(n);
+        }
+    }
 
     for (RegolithSprite* node : nodes) {
         if (node == exclude || !node->has_ropes()) {
-            continue;
-        }
-
-        if (std::find(m_sprites.begin(), m_sprites.end(), node) == m_sprites.end()) {
             continue;
         }
 

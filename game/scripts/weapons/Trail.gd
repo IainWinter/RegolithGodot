@@ -2,24 +2,48 @@ extends Line2D
 class_name Trail
 
 # the streak behind a projectile, a gradient line whose last point is the
-# tip. the points live script side and go to the line once per frame, a
-# remove_point loop would shift the whole line each time. pixels in
+# tip, tapered from nothing at the tail to full width there like the
+# engine's length scaled lines. the points live script side and go to the
+# line once per frame, a remove_point loop would shift the whole line each
+# time. pixels in
 
 var path := PackedVector2Array()
 
+# the extended Reinhard of the original's rc_composite.hlsl, exposure 1 and
+# white point 2, that its RGBA16F scene went through on the way to the
+# screen: the cannon's 0.9 gray trail showed as 0.58. the particle shader
+# runs the same curve, the world here is not tonemapped
+static func tonemapped(color: Color) -> Color:
+	var out := color
+
+	for i in 3:
+		var hdr: float = color[i]
+		out[i] = hdr * (1.0 + hdr / 4.0) / (1.0 + hdr)
+
+	return out
+
+# width_px is the original's line width in pixels as the callers reckon it,
+# one cell for C.cell_local_scale. that constant is 1 / 64 unit, half a
+# cell, and the original's line quad spans -0.5..0.5 of the width, so the
+# cannon's trail was half a cell across and the missile's one cell
 func setup(props: WeaponProps, width_px: float, start: Vector2) -> void:
 	top_level = true
 	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
-	width = width_px
+	width = width_px * 0.5
 	joint_mode = Line2D.LINE_JOINT_ROUND
 	begin_cap_mode = Line2D.LINE_CAP_ROUND
 	end_cap_mode = Line2D.LINE_CAP_ROUND
 	antialiased = false
 
 	var fade_gradient := Gradient.new()
-	fade_gradient.set_color(0, props.color_back)
-	fade_gradient.set_color(1, props.color_front)
+	fade_gradient.set_color(0, tonemapped(props.color_back))
+	fade_gradient.set_color(1, tonemapped(props.color_front))
 	gradient = fade_gradient
+
+	var taper := Curve.new()
+	taper.add_point(Vector2(0.0, 0.0))
+	taper.add_point(Vector2(1.0, 1.0))
+	width_curve = taper
 
 	path.append(start)
 	points = path

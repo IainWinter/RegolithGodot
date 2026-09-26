@@ -77,8 +77,11 @@ public:
     /*
      * Apply an impulse at the vector r
      * r must be rotated and relative to the center of mass
+     * max_delta_speed and max_delta_spin cap how much one impulse may change
+     * the linear and angular velocity, each on its own, so a light body is
+     * not launched or spun up by a hit sized for a heavy one. zero means no cap
      */
-    void apply_impulse_r(godot::Vector2 impulse, godot::Vector2 r);
+    void apply_impulse_r(godot::Vector2 impulse, godot::Vector2 r, float max_delta_speed = 0.f, float max_delta_spin = 0.f);
 
     /*
      * Velocity of the point at local_point, including spin

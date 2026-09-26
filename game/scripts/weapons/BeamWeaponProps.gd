@@ -1,11 +1,10 @@
 extends WeaponProps
 class_name BeamWeaponProps
 
-# a beam weapon spawns one projectile that lives while the trigger is held
-# and drains the charge instead of the ammo. sim units
+# the super laser: a dense stream of fast bullets with full length trails
+# that drains a charge for as long as it fires instead of spending ammo, the
+# way the original's special ability fed its weapon. sim units
 
-@export_group("Beam")
+@export_group("Charge")
 @export var charge := 0.0
 @export var charge_drain := 0.0
-@export var width := 0.0625
-@export var range := 40.0

@@ -1,4 +1,4 @@
-[gd_scene load_steps=13 format=3]
+[gd_scene load_steps=14 format=3]
 
 [ext_resource type="Script" path="res://game/scripts/enemies/EnemyBossStingray.gd" id="1"]
 [ext_resource type="Texture2D" path="res://game/images/sprites/boss1phase3.png" id="2"]
@@ -12,6 +12,7 @@
 [ext_resource type="Script" path="res://game/scripts/enemies/EnemyBossShield.gd" id="11"]
 [ext_resource type="Resource" path="res://game/config/effects/default_lightning.tres" id="12"]
 [ext_resource type="Material" path="res://game/shaders/regolith_lightning_material.tres" id="13"]
+[ext_resource type="Script" path="res://game/scripts/ai/PlayerSensor.gd" id="15"]
 
 [node name="EnemyBossStingray" type="RegolithSprite" node_paths=PackedStringArray("trap", "shield") groups=["enemy", "regolith"]]
 material = ExtResource("6")
@@ -42,3 +43,8 @@ max_rock_cells = 250
 max_holding = 20
 stiffness = 0.5
 held_angular_damping = 1.0
+
+[node name="PlayerSensor" type="Node" parent="."]
+script = ExtResource("15")
+radius = 200.0
+update_interval = 0.0

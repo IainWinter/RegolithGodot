@@ -7,6 +7,7 @@
 #include "Containers/UnionFindFixed.h"
 
 #include <godot_cpp/templates/local_vector.hpp>
+#include <godot_cpp/templates/hash_set.hpp>
 
 // solver bodies live at their center of mass, proxy position written back at the end
 
@@ -99,7 +100,17 @@ struct PhysicsSolverState {
     godot::LocalVector<int> broadphase_overlapping;
 
     godot::LocalVector<godot::Pair<godot::ObjectID, godot::ObjectID>> lowering_overlaps;
+
+    // proxy pairs held by a joint that does not collide connected, rebuilt
+    // from the joints every solve, keyed by proxy_pair_key
+    godot::HashSet<uint64_t> excluded_pairs;
 };
+
+inline uint64_t proxy_pair_key(int a, int b) {
+    uint32_t lo = static_cast<uint32_t>(a < b ? a : b);
+    uint32_t hi = static_cast<uint32_t>(a < b ? b : a);
+    return (static_cast<uint64_t>(hi) << 32) | lo;
+}
 
 // ---------------------------------------------------------------------------
 // pose math

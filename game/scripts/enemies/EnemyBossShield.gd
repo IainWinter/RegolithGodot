@@ -54,16 +54,27 @@ func update(host: Enemy, delta: float) -> void:
 
 	var target := slot_point(host, host.player_pos)
 	var scale := Steering.ppu()
+	var centroid_px := world_centroid(host) * scale
 
 	for rock in holding:
-		var rock_pos: Vector2 = rock.global_position / scale
+		var com_px: Vector2 = rock.get_center_of_mass()
+		var rock_pos := com_px / scale
 		var to_slot := target - rock_pos
 		var distance := to_slot.length()
 		var speed := max_speed * (distance / arrive_radius) if distance < arrive_radius else max_speed
 		var desired := to_slot.normalized() * speed
 		var steering: Vector2 = ((desired - rock.linear_velocity) * stiffness).limit_length(max_accel)
+		var impulse: Vector2 = steering * delta * rock.get_mass()
 
-		rock.linear_velocity += steering * delta
+		# a rock still on its way is pulled by the cell facing the hull so it
+		# turns into place, one at its slot is pulled through its center
+		var facing: Array = rock.trace_cells(centroid_px, com_px, 1)
+
+		if not facing.is_empty() and distance > arrive_radius:
+			rock.apply_impulse(impulse, rock.cell_to_world(facing[0]))
+		else:
+			rock.apply_impulse(impulse, com_px)
+
 		rock.angular_velocity *= 1.0 / (1.0 + delta * held_angular_damping)
 
 # the hull polygon and its centroid in world units, built on first use

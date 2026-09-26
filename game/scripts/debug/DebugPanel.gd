@@ -1,19 +1,70 @@
 extends CanvasLayer
 class_name DebugPanel
 
-# f3 panel over the game: the world's monitors, pause and single step, and
-# the debug line switches. every debug name gets a check and a color, layers
-# tint whatever is drawn on them. the panel shows the scene's
-# RegolithDebugDraw while it is open, making one next to the world when the
-# scene has none
+# f3 panel over the game (Controls.DEBUG_PANEL): the world's monitors,
+# pause and single step, the ai inspector and a folded list of every
+# control. the debug line names, layers, colors and width are set
+# from the editor's Debug Draw dock over the debugger, not from here. the
+# ai section lists every scripted enemy with its state
+# machine (state, time in state), the transition log of the one nearest
+# the player, and floats a state label over each enemy in the world
+
+const AI_REFRESH := 0.1
+const AI_LOG_LINES := 6
+const CONTROLS_HEIGHT := 320
 
 var world: RegolithWorld
-var draw: RegolithDebugDraw
 
 var stats: Label
 var pause_check: CheckBox
-var name_checks: Array[CheckBox] = []
-var layer_checks: Array[CheckBox] = []
+
+var controls_fold: FoldableContainer
+var controls_list: ControlsList
+
+var ai_label: Label
+var ai_labels: AiStateLabels
+var ai_timer := 0.0
+
+# draws the state and time in state over every scripted enemy, in the
+# world's canvas so the camera carries it, at a fixed screen size
+class AiStateLabels:
+	extends Node2D
+
+	const FONT_SIZE := 12
+	const LIFT_PIXELS := 6.0
+
+	func _ready() -> void:
+		z_index = 4000
+
+	func _process(_delta: float) -> void:
+		queue_redraw()
+
+	func _draw() -> void:
+		var font := PixelTheme.font()
+		var scale := get_viewport().get_canvas_transform().get_scale().x
+
+		if scale <= 0.0:
+			scale = 1.0
+
+		for enemy in DebugPanel.scripted_enemies(get_tree()):
+			var machine: AiStateMachine = enemy.state_machine
+			var text := "%s %.1fs" % [machine.get_state(), machine.get_time_in_state()]
+			var lift := Steering.sprite_radius_units(enemy) * Steering.ppu() + LIFT_PIXELS
+			var at := to_local(enemy.global_position) + Vector2(0, -lift)
+
+			draw_set_transform(at, 0.0, Vector2.ONE / scale)
+			draw_string(font, Vector2(0, 0), text, HORIZONTAL_ALIGNMENT_CENTER, -1, FONT_SIZE, Color.WHITE)
+
+		draw_set_transform(Vector2.ZERO)
+
+static func scripted_enemies(tree: SceneTree) -> Array:
+	var out := []
+
+	for enemy in tree.get_nodes_in_group("enemy"):
+		if enemy is EnemyScripted and Steering.alive(enemy) and not enemy.dead and enemy.state_machine != null:
+			out.append(enemy)
+
+	return out
 
 func _init(target: RegolithWorld) -> void:
 	world = target
@@ -21,26 +72,13 @@ func _init(target: RegolithWorld) -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 
 func _ready() -> void:
-	draw = find_draw()
-	draw.visible = true
 	build()
 
 func _exit_tree() -> void:
-	if is_instance_valid(draw):
-		draw.visible = false
+	if is_instance_valid(ai_labels):
+		ai_labels.queue_free()
 
-func find_draw() -> RegolithDebugDraw:
-	var found := get_tree().get_first_node_in_group("regolith_debug_draw") as RegolithDebugDraw
-
-	if found:
-		return found
-
-	found = RegolithDebugDraw.new()
-	found.name = "DebugDraw"
-	world.add_child(found)
-	return found
-
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	stats.text = "fps %d   sprites %d   joints %d   contacts %d   ropes %d\ncommit %.2f ms   physics %.2f ms" % [
 		Engine.get_frames_per_second(),
 		world.get_sprite_count(),
@@ -53,9 +91,16 @@ func _process(_delta: float) -> void:
 
 	pause_check.set_pressed_no_signal(get_tree().paused)
 
+	ai_timer -= delta
+
+	if ai_timer <= 0.0:
+		ai_timer = AI_REFRESH
+		ai_label.text = ai_report()
+
 func build() -> void:
 	var panel := PanelContainer.new()
 	panel.position = Vector2(8, 8)
+	panel.theme = PixelTheme.theme()
 	add_child(panel)
 
 	var scroll := ScrollContainer.new()
@@ -84,75 +129,91 @@ func build() -> void:
 	tick.add_child(step)
 
 	box.add_child(HSeparator.new())
-
-	var lines := HBoxContainer.new()
-	box.add_child(lines)
-
-	var all_on := Button.new()
-	all_on.text = "All on"
-	all_on.pressed.connect(func(): set_all_names(true))
-	lines.add_child(all_on)
-
-	var all_off := Button.new()
-	all_off.text = "All off"
-	all_off.pressed.connect(func(): set_all_names(false))
-	lines.add_child(all_off)
-
-	var width := SpinBox.new()
-	width.min_value = -1
-	width.max_value = 8
-	width.step = 0.5
-	width.value = draw.line_width
-	width.prefix = "width"
-	width.value_changed.connect(func(value: float): draw.line_width = value)
-	lines.add_child(width)
-
-	var layers := HBoxContainer.new()
-	box.add_child(layers)
-
-	var layer_names := ["Default", "A", "B"]
-
-	for i in draw.get_layer_count():
-		var check := CheckBox.new()
-		check.text = layer_names[i] if i < layer_names.size() else str(i)
-		check.button_pressed = draw.is_layer_enabled(i)
-		check.toggled.connect(func(on: bool): draw.set_layer_enabled(i, on))
-		layers.add_child(check)
-		layer_checks.append(check)
-
-		var tint := ColorPickerButton.new()
-		tint.color = draw.get_layer_tint(i)
-		tint.edit_alpha = false
-		tint.custom_minimum_size = Vector2(24, 0)
-		tint.color_changed.connect(func(color: Color): draw.set_layer_tint(i, color))
-		layers.add_child(tint)
-
+	build_ai_section(box)
 	box.add_child(HSeparator.new())
+	build_controls_section(box)
 
-	for i in draw.get_name_count():
-		var row := HBoxContainer.new()
-		box.add_child(row)
+func build_ai_section(box: VBoxContainer) -> void:
+	var row := HBoxContainer.new()
+	box.add_child(row)
 
-		var check := CheckBox.new()
-		check.text = draw.get_name_label(i).to_lower().replace("_", " ")
-		check.button_pressed = draw.is_name_enabled(i)
-		check.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		check.toggled.connect(func(on: bool): draw.set_name_enabled(i, on))
-		row.add_child(check)
-		name_checks.append(check)
+	var title := Label.new()
+	title.text = "AI"
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(title)
 
-		var color := ColorPickerButton.new()
-		color.color = draw.get_name_color(i)
-		color.edit_alpha = false
-		color.custom_minimum_size = Vector2(24, 0)
-		color.color_changed.connect(func(value: Color): draw.set_name_color(i, value))
-		row.add_child(color)
+	ai_labels = AiStateLabels.new()
+	ai_labels.name = "AiStateLabels"
+	world.add_child(ai_labels)
 
-func set_all_names(on: bool) -> void:
-	draw.set_all_names_enabled(on)
+	var labels_check := CheckBox.new()
+	labels_check.text = "State labels"
+	labels_check.button_pressed = true
+	labels_check.toggled.connect(func(on: bool): ai_labels.visible = on)
+	row.add_child(labels_check)
 
-	for check in name_checks:
-		check.set_pressed_no_signal(on)
+	ai_label = Label.new()
+	ai_label.text = ai_report()
+	box.add_child(ai_label)
+
+# every binding of the game and its tools (Controls.describe()), folded
+# away until asked for
+func build_controls_section(box: VBoxContainer) -> void:
+	controls_fold = FoldableContainer.new()
+	controls_fold.name = "ControlsFold"
+	controls_fold.title = "Controls"
+	controls_fold.folded = true
+	box.add_child(controls_fold)
+
+	controls_list = ControlsList.new()
+	controls_list.custom_minimum_size = Vector2(0, CONTROLS_HEIGHT)
+	controls_fold.add_child(controls_list)
+
+# every scripted enemy with its state, then the nearest one's transitions
+func ai_report() -> String:
+	var enemies := scripted_enemies(get_tree())
+	var lines := PackedStringArray()
+	var runtime := get_node_or_null("/root/Ai")
+
+	if runtime and runtime.lua:
+		lines.append("scripted %d   lua instances %d   lua memory %d KB" % [enemies.size(), runtime.lua.get_instance_count(), runtime.lua.get_memory_used() / 1024])
+	else:
+		lines.append("scripted %d" % enemies.size())
+
+	var player := Steering.find_player(get_tree())
+	var nearest: EnemyScripted = null
+	var nearest_distance := INF
+
+	for enemy in enemies:
+		var machine: AiStateMachine = enemy.state_machine
+		var pending := machine.get_pending_state()
+		lines.append("%s  %s  %s %.1fs%s" % [enemy.name, enemy.ai_class, machine.get_state(), machine.get_time_in_state(), "  -> " + pending if pending != "" else ""])
+
+		if player:
+			var distance: float = enemy.global_position.distance_squared_to(player.global_position)
+
+			if distance < nearest_distance:
+				nearest_distance = distance
+				nearest = enemy
+
+	if nearest == null and not enemies.is_empty():
+		nearest = enemies[0]
+
+	if nearest:
+		var machine: AiStateMachine = nearest.state_machine
+		lines.append("")
+		lines.append("%s transitions (states: %s)" % [nearest.name, ", ".join(machine.get_states())])
+		var entries := machine.get_transition_log()
+
+		for i in range(maxi(entries.size() - AI_LOG_LINES, 0), entries.size()):
+			var entry: Dictionary = entries[i]
+			lines.append("  %6.1fs  %s -> %s" % [entry["at"], entry["from"] if entry["from"] != "" else "(none)", entry["to"]])
+
+		if machine.get_last_error() != "":
+			lines.append("  error: %s" % machine.get_last_error())
+
+	return "
+".join(lines)
 
 func step_once() -> void:
 	get_tree().paused = false

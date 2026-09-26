@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="ShieldProps" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://game/scripts/player/ShieldProps.gd" id="1"]
+[ext_resource type="Resource" path="res://game/config/effects/default_lightning.tres" id="2"]
+[ext_resource type="Material" path="res://game/shaders/regolith_lightning_material.tres" id="3"]
+
+[resource]
+script = ExtResource("1")
+local_center = Vector2(0, 0)
+radius = 2.5
+arc_min = -3.14159
+arc_max = 3.14159
+max_penetration = 1.0
+max_rock_penetration = 1.0
+rock_force = 20.0
+buffer_distance = 1.0
+lightning = ExtResource("2")
+lightning_material = ExtResource("3")
+strikes_per_second = 24.0
+segment_arc_min = 0.3
+segment_arc_max = 0.8

@@ -1,19 +1,23 @@
-extends CanvasLayer
+@tool
+extends Control
 class_name SpriteEditor
 
-# in game pixel editor, a port of the old imgui SpriteEditorTool built from
-# Control nodes. edits a SpriteDocument backed by a png plus _mask.png pair on
-# disk, the source files sprites are made from. it never touches a live
+# pixel editor, a port of the old imgui SpriteEditorTool built from Control
+# nodes. edits a SpriteDocument backed by a png plus _mask.png pair on disk,
+# the source files sprites are made from. it never touches a live
 # RegolithSprite, sprites pick the change up when they next load the texture.
-# runs with the tree paused, as a window floating over the dimmed game so it
-# reads as part of the game and not a separate tool. looks come from PixelTheme
+#
+# this Control is the whole editor (title, sidebar, tools, canvas, status) and
+# knows nothing about where it is hosted. SpriteEditorWindow floats it over
+# the paused game (F2), the regolith_sprite_editor addon puts it in a main
+# screen of the Godot editor. a host that owns the file dialogs sets
+# host_files and answers load_requested / save_requested. looks come from
+# PixelTheme. paths may be res:// or absolute, disk io goes through disk_path
 
 enum Tool { PENCIL, ERASER, FILL, PICKER, SELECT, MOVE, RECT, LINE }
 
 const TOOL_LABELS := [["Pen", "B"], ["Erase", "E"], ["Fill", "G"], ["Pick", "I"], ["Select", "M"], ["Move", "V"], ["Rect", "R"], ["Line", "L"]]
 const MODE_LABELS := ["Paint", "Mask", "Class", "Glow"]
-const WINDOW_SIZE := Vector2(816, 512)
-const WINDOW_MARGIN := 24
 const SIDEBAR_WIDTH := 208
 const PALETTE_COLUMNS := 8
 const PALETTE_ROWS := 4
@@ -32,6 +36,10 @@ static var clipboard := {}
 
 # png to open on ready, empty starts a blank document
 @export var path := ""
+# the host pops its own file dialogs and answers the *_requested signals
+@export var host_files := false
+# the title bar close button, hosts that embed the editor for good hide it
+@export var show_close := true
 
 var doc := SpriteDocument.new(32, 32)
 var canvas: SpriteCanvas
@@ -64,7 +72,6 @@ var float_src := Vector2i.ZERO
 var float_grab := Vector2i.ZERO
 
 var root: Control
-var window: PanelContainer
 var mode_buttons: Array[Button] = []
 var tool_buttons: Array[Button] = []
 var type_buttons: Array[Button] = []
@@ -89,13 +96,19 @@ var undo_button: Button
 var redo_button: Button
 var paste_all_check: CheckBox
 var file_dialog: FileDialog
+var close_button: Button
 var message := ""
+# the file the document came from or was last saved to, "" for a new one
+var file_path := ""
 
 signal closed
+signal load_requested
+signal save_requested
+# a png pair was written or read, path as given to save_to / load_from
+signal saved(path: String)
+signal loaded(path: String)
 
 func _ready() -> void:
-	layer = 10
-	process_mode = Node.PROCESS_MODE_ALWAYS
 	build_ui()
 
 	if path == "" or not load_from(path):
@@ -103,30 +116,28 @@ func _ready() -> void:
 
 func close() -> void:
 	closed.emit()
-	queue_free()
+
+# drops (files from the FileSystem dock in the Godot editor) belong to the
+# host. the drop walk stops at the first mouse-stopping Control, so the editor
+# and its canvas hand them up by hand
+var drop_target: Control
+
+func _can_drop_data(at: Vector2, data: Variant) -> bool:
+	return drop_target != null and drop_target._can_drop_data(at, data)
+
+func _drop_data(at: Vector2, data: Variant) -> void:
+	if drop_target:
+		drop_target._drop_data(at, data)
 
 func build_ui() -> void:
-	root = Control.new()
-	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	root.mouse_filter = Control.MOUSE_FILTER_STOP
-	root.theme = PixelTheme.theme()
-	add_child(root)
-
-	var dim := ColorRect.new()
-	dim.color = Color(0, 0, 0, 0.55)
-	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	root.add_child(dim)
-
-	window = PanelContainer.new()
-	window.add_theme_stylebox_override("panel", PixelTheme.box(PixelTheme.PAPER, PixelTheme.LINE, PixelTheme.BORDER, PixelTheme.BORDER, PixelTheme.BORDER, PixelTheme.BORDER, 0, 0))
-	root.add_child(window)
-	root.resized.connect(layout_window)
-	layout_window()
+	root = self
+	mouse_filter = Control.MOUSE_FILTER_STOP
+	theme = PixelTheme.theme()
 
 	var column := VBoxContainer.new()
+	column.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	column.add_theme_constant_override("separation", 0)
-	window.add_child(column)
+	add_child(column)
 
 	column.add_child(build_title())
 
@@ -161,24 +172,17 @@ func build_ui() -> void:
 	for slider in root.find_children("*", "Slider", true, false):
 		slider.focus_mode = Control.FOCUS_NONE
 
-	file_dialog = FileDialog.new()
-	file_dialog.access = FileDialog.ACCESS_FILESYSTEM
-	file_dialog.filters = PackedStringArray(["*.png ; PNG"])
-	file_dialog.size = Vector2i(640, 420)
-	file_dialog.current_dir = ProjectSettings.globalize_path("res://game/images/sprites")
-	file_dialog.file_selected.connect(on_file_selected)
-	root.add_child(file_dialog)
+	if not host_files:
+		file_dialog = FileDialog.new()
+		file_dialog.access = FileDialog.ACCESS_FILESYSTEM
+		file_dialog.filters = PackedStringArray(["*.png ; PNG"])
+		file_dialog.size = Vector2i(640, 420)
+		file_dialog.current_dir = ProjectSettings.globalize_path("res://game/images/sprites")
+		file_dialog.file_selected.connect(on_file_selected)
+		add_child(file_dialog)
 
 	set_mode(doc.mode)
 	sync_ui()
-
-# the window sits centered, shrinking when the viewport is smaller than it
-func layout_window() -> void:
-	var view := root.size
-	var wanted := WINDOW_SIZE.min(view - Vector2.ONE * (WINDOW_MARGIN * 2))
-	wanted = wanted.max(Vector2(480, 320)).floor()
-	window.size = wanted
-	window.position = ((view - wanted) * 0.5).floor()
 
 func build_title() -> Control:
 	var bar := PanelContainer.new()
@@ -201,15 +205,16 @@ func build_title() -> Control:
 	name_edit.text_changed.connect(func(t): filename = t)
 	row.add_child(name_edit)
 
-	row.add_child(action("Load", func(): show_dialog(FileDialog.FILE_MODE_OPEN_FILE), false))
-	row.add_child(action("Save", func(): show_dialog(FileDialog.FILE_MODE_SAVE_FILE), false))
+	row.add_child(action("Load", request_load, false))
+	row.add_child(action("Save", request_save, false))
 
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(spacer)
 
-	var close_button := action("X", close, false)
+	close_button = action("X", close, false)
 	close_button.tooltip_text = "Close (F2)"
+	close_button.visible = show_close
 	row.add_child(close_button)
 
 	return bar
@@ -572,7 +577,8 @@ func swatch_button(text: String, color: Color, group: ButtonGroup) -> Button:
 	return button
 
 func _process(_delta: float) -> void:
-	sync_ui()
+	if is_visible_in_tree():
+		sync_ui()
 
 func sync_ui() -> void:
 	if root == null:
@@ -652,7 +658,7 @@ func status_text() -> String:
 	return "   ".join(parts)
 
 func typing() -> bool:
-	var owner := root.get_viewport().gui_get_focus_owner()
+	var owner := get_viewport().gui_get_focus_owner()
 	return owner is LineEdit or owner is TextEdit
 
 func set_mode(mode: int) -> void:
@@ -720,7 +726,7 @@ func canvas_input(hovered: bool, gx: int, gy: int, left_click: bool, right_click
 			if left_click:
 				sel_dragging = true
 				sel_anchor = Vector2i(gx, gy)
-				sel_start_active = Input.is_key_pressed(KEY_SHIFT) and doc.selection_active
+				sel_start_active = Controls.held(Controls.SPRITE_SELECT_ADD) and doc.selection_active
 				sel_start = doc.selection
 
 			if sel_dragging:
@@ -914,63 +920,75 @@ func nudge(dx: int, dy: int) -> void:
 		var s := doc.selection
 		doc.set_selection(s.position.x + dx, s.position.y + dy, s.end.x - 1 + dx, s.end.y - 1 + dy)
 
+# the key bindings in match order, redo ahead of undo so Ctrl+Shift+Z is
+# a redo. Controls.pressed keeps Ctrl combos apart from the bare keys
+func key_bindings() -> Array:
+	return [
+		[Controls.SPRITE_REDO, redo],
+		[Controls.SPRITE_UNDO, undo],
+		[Controls.SPRITE_SELECT_ALL, select_all],
+		[Controls.SPRITE_COPY, copy_selection],
+		[Controls.SPRITE_CUT, cut_selection],
+		[Controls.SPRITE_PASTE, paste_clipboard],
+		[Controls.SPRITE_DUPLICATE, duplicate_selection],
+		[Controls.SPRITE_FIT, canvas.fit_to_view],
+		[Controls.SPRITE_PENCIL, set_tool.bind(Tool.PENCIL)],
+		[Controls.SPRITE_ERASER, set_tool.bind(Tool.ERASER)],
+		[Controls.SPRITE_FILL, set_tool.bind(Tool.FILL)],
+		[Controls.SPRITE_PICKER, set_tool.bind(Tool.PICKER)],
+		[Controls.SPRITE_SELECT, set_tool.bind(Tool.SELECT)],
+		[Controls.SPRITE_MOVE, set_tool.bind(Tool.MOVE)],
+		[Controls.SPRITE_RECT, set_tool.bind(Tool.RECT)],
+		[Controls.SPRITE_LINE, set_tool.bind(Tool.LINE)],
+		[Controls.SPRITE_DESELECT, drop_float_or_deselect],
+		[Controls.SPRITE_DELETE, drop_float_or_clear],
+		[Controls.SPRITE_COMMIT, commit_float],
+		[Controls.SPRITE_ZOOM_IN, canvas.zoom_by.bind(1.25)],
+		[Controls.SPRITE_ZOOM_OUT, canvas.zoom_by.bind(1.0 / 1.25)],
+		[Controls.SPRITE_BRUSH_SMALLER, resize_brush.bind(-1)],
+		[Controls.SPRITE_BRUSH_BIGGER, resize_brush.bind(1)],
+		[Controls.SPRITE_NUDGE_LEFT, nudge.bind(-1, 0)],
+		[Controls.SPRITE_NUDGE_RIGHT, nudge.bind(1, 0)],
+		[Controls.SPRITE_NUDGE_UP, nudge.bind(0, -1)],
+		[Controls.SPRITE_NUDGE_DOWN, nudge.bind(0, 1)],
+	]
+
+func drop_float_or_deselect() -> void:
+	if has_float():
+		cancel_float()
+	else:
+		deselect()
+
+func drop_float_or_clear() -> void:
+	if has_float():
+		cancel_float()
+	else:
+		clear_selected_region()
+
+func resize_brush(step: int) -> void:
+	brush_size = maxi(1, brush_size - 1) if step < 0 else mini(16, brush_size + 1)
+
 func _unhandled_key_input(event: InputEvent) -> void:
-	if not event.pressed or typing():
+	if not event.pressed or not is_visible_in_tree() or typing():
 		return
 
-	var key: Key = event.keycode
-	var ctrl: bool = event.ctrl_pressed or event.meta_pressed
-	var handled := true
+	for binding in key_bindings():
+		if Controls.pressed(event, binding[0], true):
+			binding[1].call()
+			get_viewport().set_input_as_handled()
+			return
 
-	if ctrl:
-		match key:
-			KEY_Z:
-				if event.shift_pressed:
-					redo()
-				else:
-					undo()
-			KEY_Y: redo()
-			KEY_A: select_all()
-			KEY_C: copy_selection()
-			KEY_X: cut_selection()
-			KEY_V: paste_clipboard()
-			KEY_D: duplicate_selection()
-			KEY_0: canvas.fit_to_view()
-			_: handled = false
+func request_load() -> void:
+	if host_files:
+		load_requested.emit()
 	else:
-		match key:
-			KEY_B: set_tool(Tool.PENCIL)
-			KEY_E: set_tool(Tool.ERASER)
-			KEY_G: set_tool(Tool.FILL)
-			KEY_I: set_tool(Tool.PICKER)
-			KEY_M: set_tool(Tool.SELECT)
-			KEY_V: set_tool(Tool.MOVE)
-			KEY_R: set_tool(Tool.RECT)
-			KEY_L: set_tool(Tool.LINE)
-			KEY_F: canvas.fit_to_view()
-			KEY_ESCAPE:
-				if has_float():
-					cancel_float()
-				else:
-					deselect()
-			KEY_DELETE, KEY_BACKSPACE:
-				if has_float():
-					cancel_float()
-				else:
-					clear_selected_region()
-			KEY_ENTER, KEY_KP_ENTER: commit_float()
-			KEY_EQUAL, KEY_PLUS, KEY_KP_ADD: canvas.zoom_by(1.25)
-			KEY_MINUS, KEY_KP_SUBTRACT: canvas.zoom_by(1.0 / 1.25)
-			KEY_BRACKETLEFT: brush_size = maxi(1, brush_size - 1)
-			KEY_BRACKETRIGHT: brush_size = mini(16, brush_size + 1)
-			KEY_LEFT: nudge(-1, 0)
-			KEY_RIGHT: nudge(1, 0)
-			KEY_UP: nudge(0, -1)
-			KEY_DOWN: nudge(0, 1)
-			_: handled = false
+		show_dialog(FileDialog.FILE_MODE_OPEN_FILE)
 
-	if handled:
-		root.get_viewport().set_input_as_handled()
+func request_save() -> void:
+	if host_files:
+		save_requested.emit()
+	else:
+		show_dialog(FileDialog.FILE_MODE_SAVE_FILE)
 
 func show_dialog(mode: FileDialog.FileMode) -> void:
 	file_dialog.file_mode = mode
@@ -982,12 +1000,20 @@ func show_dialog(mode: FileDialog.FileMode) -> void:
 static func mask_path(path: String) -> String:
 	return path.get_basename() + "_mask.png"
 
+# where a res:// or user:// path lives on disk, other paths pass through
+static func disk_path(path: String) -> String:
+	if path.begins_with("res://") or path.begins_with("user://"):
+		return ProjectSettings.globalize_path(path)
+	return path
+
 func on_file_selected(path: String) -> void:
 	if file_dialog.file_mode == FileDialog.FILE_MODE_SAVE_FILE:
 		save_to(path)
 	else:
 		load_from(path)
 
+# writes the color png and, when the document has cells, the _mask.png next to
+# it, a stale mask file goes away. path is res:// or absolute
 func save_to(path: String) -> bool:
 	commit_float()
 
@@ -997,30 +1023,38 @@ func save_to(path: String) -> bool:
 	if path.get_extension().to_lower() != "png":
 		path += ".png"
 
-	var err := doc.to_color_image().save_png(path)
+	var on_disk := disk_path(path)
+	var err := doc.to_color_image().save_png(on_disk)
 	if err != OK:
 		message = "could not save " + path.get_file()
 		return false
 
 	if doc.has_mask():
-		err = doc.to_mask_image().save_png(mask_path(path))
-	elif FileAccess.file_exists(mask_path(path)):
-		DirAccess.remove_absolute(mask_path(path))
+		err = doc.to_mask_image().save_png(mask_path(on_disk))
+	elif FileAccess.file_exists(mask_path(on_disk)):
+		DirAccess.remove_absolute(mask_path(on_disk))
 
 	filename = path.get_file().get_basename()
 	name_edit.text = filename
+	file_path = path
 	message = "saved " + path.get_file()
+	saved.emit(path)
 	return err == OK
 
 func load_from(path: String) -> bool:
-	var color := Image.load_from_file(path)
+	var on_disk := disk_path(path)
+	if not FileAccess.file_exists(on_disk):
+		message = "could not load " + path.get_file()
+		return false
+
+	var color := Image.load_from_file(on_disk)
 	if color == null:
 		message = "could not load " + path.get_file()
 		return false
 
 	var mask: Image = null
-	if FileAccess.file_exists(mask_path(path)):
-		mask = Image.load_from_file(mask_path(path))
+	if FileAccess.file_exists(mask_path(on_disk)):
+		mask = Image.load_from_file(mask_path(on_disk))
 
 	reset_float()
 	doc.from_images(color, mask)
@@ -1030,5 +1064,7 @@ func load_from(path: String) -> bool:
 	size_x.value = doc.width
 	size_y.value = doc.height
 	canvas.fit_to_view()
+	file_path = path
 	message = "loaded " + path.get_file()
+	loaded.emit(path)
 	return true

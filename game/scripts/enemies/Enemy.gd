@@ -23,8 +23,7 @@ var player_pos := Vector2.ZERO
 var desired_speed := 0.0
 var desired_heading := 0.0
 
-var goal := Vector2.INF
-var goal_timer := 0.0
+var thrower_part: EnemyThrower
 
 func _ready() -> void:
 	add_to_group("regolith")
@@ -89,11 +88,13 @@ func die() -> void:
 	died.emit()
 	queue_free()
 
+# a prefab point on the hull, -1..1 spanning the grid with y up as the
+# original prefabs were authored, through Transform::ToWorldPoint
 func local_point(p: Vector2) -> Vector2:
 	if not is_loaded():
 		return global_position
 
-	return to_global(Vector2(p.x, -p.y) * Vector2(get_cell_count()) * 0.5 * Steering.cell_pixels())
+	return local_to_world(Vector2(p.x, -p.y))
 
 func local_point_units(p: Vector2) -> Vector2:
 	return local_point(p) / Steering.ppu()
@@ -169,14 +170,17 @@ func turn_forward_toward(target: Vector2, turn_speed: float, delta: float) -> vo
 	var diff := Steering.wrap_angle(want - global_rotation)
 	angular_velocity = clampf(diff / delta, -turn_speed, turn_speed)
 
-func roam_goal(delta: float, interval: float, ellipse := Vector2(16.0, 6.0), allow := true) -> Vector2:
-	goal_timer -= delta
+# the EnemyThrower child, when the enemy has one
+func get_thrower() -> EnemyThrower:
+	if thrower_part == null or not is_instance_valid(thrower_part):
+		thrower_part = null
 
-	if goal_timer <= 0.0 and allow:
-		goal_timer = interval
-		goal = player_pos + Vector2.from_angle(randf() * TAU) * ellipse
+		for child in get_children():
+			if child is EnemyThrower:
+				thrower_part = child
+				break
 
-	return goal
+	return thrower_part
 
 func has_line_of_sight(from: Vector2, to: Vector2) -> bool:
 	var world := RegolithWorld.active()
@@ -192,10 +196,11 @@ func nearest_thrower(from: Vector2, max_distance_squared: float) -> EnemyThrower
 	var best_distance := max_distance_squared
 
 	for host in get_tree().get_nodes_in_group("thrower"):
-		if host == self or host.dead:
+		# split pieces inherit the group without the script
+		if host == self or not host is Enemy or host.dead:
 			continue
 
-		var thrower: EnemyThrower = host.thrower
+		var thrower: EnemyThrower = host.get_thrower()
 
 		if thrower == null or not thrower.can_hold_more():
 			continue
@@ -217,6 +222,69 @@ func spawn_rock(props: RockProps, at: Vector2, velocity: Vector2, offscreen_only
 	var request := SpawnRequest.rock(props, at, velocity, offscreen_only, lifetime)
 	request.ignore = [self]
 	return SpawnBus.send(request)
+
+# pathfinding fallback of AiFlocker and AiBomb: a goal out of sight is
+# reached over an a* path on a grid one body wide, advanced as waypoints
+# fall behind, rechecked every half second and rebuilt when a leg is
+# blocked. other enemies and the player never block. units in and out,
+# returns the goal itself while it is in sight, path_blocked tells a
+# caller no path was found this step
+const PATH_CHECK_INTERVAL := 0.5
+const NO_PATH_INTERVAL := 0.5
+var path_ignore_groups := PackedStringArray(["enemy", "player"])
+
+var path := PackedVector2Array()
+var path_timer := 0.0
+var no_path_timer := 0.0
+var path_blocked := false
+
+func path_cell_size() -> float:
+	var cells := Steering.cell_count(self)
+	return maxf(maxf(cells.x, cells.y) * Steering.cell_pixels(), Steering.cell_pixels())
+
+func path_steer_target(goal: Vector2, delta: float) -> Vector2:
+	var world := RegolithWorld.active()
+	path_blocked = false
+
+	if world == null:
+		return goal
+
+	var ppu := Steering.ppu()
+	var from := pos * ppu
+	var to := goal * ppu
+
+	if world.has_line_of_sight(from, to, self, path_ignore_groups):
+		path = PackedVector2Array()
+		return goal
+
+	var cell := path_cell_size()
+	path = RegolithWorld.advance_waypoints(path, from, cell * 0.75)
+
+	var recompute := false
+
+	if path.is_empty():
+		no_path_timer -= delta
+
+		if no_path_timer <= 0.0:
+			no_path_timer = NO_PATH_INTERVAL
+			recompute = true
+	else:
+		path_timer -= delta
+
+		if path_timer <= 0.0:
+			path_timer = PATH_CHECK_INTERVAL
+			recompute = not world.is_path_clear(from, path, to, self, path_ignore_groups)
+
+	if recompute:
+		path = world.find_path(from, to, cell, self, path_ignore_groups)
+		path = RegolithWorld.advance_waypoints(path, from, cell * 0.75)
+
+	if path.is_empty():
+		path_blocked = true
+		return goal
+
+	world.draw_path(from, path, to)
+	return path[0] / ppu
 
 func make_weapon(props: WeaponProps, origin: Vector2) -> Weapon:
 	var weapon := Weapon.new()

@@ -14,6 +14,9 @@ class_name StableSpawner
 @export var base_scene: PackedScene
 @export var boss_compass_scene: PackedScene
 @export var boss_stingray_scene: PackedScene
+@export var message_scene: PackedScene
+@export var gun_scene: PackedScene
+@export var turret_scene: PackedScene
 @export var sprite_material: Material
 @export var rope_material: Material
 # spawned sprites go under this node, the world's parent when unset
@@ -83,6 +86,12 @@ func scene_for(kind: SpawnRequest.Kind) -> PackedScene:
 			return boss_compass_scene
 		SpawnRequest.Kind.BOSS_STINGRAY:
 			return boss_stingray_scene
+		SpawnRequest.Kind.MESSAGE:
+			return message_scene
+		SpawnRequest.Kind.GUN:
+			return gun_scene
+		SpawnRequest.Kind.TURRET:
+			return turret_scene
 
 	return null
 
@@ -90,6 +99,11 @@ func kind_name(kind: SpawnRequest.Kind) -> String:
 	return SpawnRequest.Kind.keys()[kind]
 
 func enqueue(request: SpawnRequest) -> void:
+	# items are not sprites, the Items autoload places them
+	# TODO(items): goes away with Kind.ITEM, item_props, item_spawned and SpawnRequest.item() once ItemRuntime.spawn no longer rides the bus
+	if request.is_item():
+		return
+
 	var entry := Entry.new()
 	entry.request = request
 
@@ -222,6 +236,12 @@ func place(world: RegolithWorld, entry: Entry) -> void:
 		var parent_2d := parent as Node2D
 		node.transform = parent_2d.global_transform.affine_inverse() * placement if parent_2d else placement
 		node.add_to_group("regolith")
+
+		# the request's meta rides along so a scenario's hints (scale_cells)
+		# are on the node when its _ready runs
+		for key in request.get_meta_list():
+			node.set_meta(key, request.get_meta(key))
+
 		parent.add_child(node)
 		node.reset_physics_interpolation()
 		node.linear_velocity = request.velocity

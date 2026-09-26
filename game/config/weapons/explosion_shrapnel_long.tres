@@ -1,16 +1,19 @@
-[gd_resource type="Resource" script_class="WeaponProps" load_steps=3 format=3]
+[gd_resource type="Resource" script_class="WeaponProps" format=3 uid="uid://c00i4t7lgl42t"]
 
-[ext_resource type="Script" path="res://game/scripts/weapons/WeaponProps.gd" id="1"]
+[ext_resource type="Script" uid="uid://bcn27vfysomc1" path="res://game/scripts/weapons/WeaponProps.gd" id="1"]
+[ext_resource type="Script" uid="uid://ieakcq03eqnb" path="res://game/scripts/effects/ParticleProps.gd" id="1_pg2vm"]
 [ext_resource type="PackedScene" path="res://game/scenes/weapons/Bullet.tscn" id="2"]
 
 [resource]
 script = ExtResource("1")
 projectile_scene = ExtResource("2")
-speed = 5.0
-speed_random = 2.0
+speed = 2.5
+speed_random = 1.0
 lifetime = 2.5
+lifetime_random = 2.0
 cell_life = 32
 trail_length = 1.2
 rotation_factor = 15.0
+spit_odds = 0.05
 color_front = Color(1, 0.784314, 0.784314, 1)
 color_back = Color(0.392157, 0.0392157, 0.0392157, 0)

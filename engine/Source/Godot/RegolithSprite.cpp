@@ -17,6 +17,7 @@
 #include <godot_cpp/classes/rendering_server.hpp>
 #include <godot_cpp/classes/scene_tree.hpp>
 #include <godot_cpp/classes/shader_material.hpp>
+#include <godot_cpp/core/object.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
 
 #include <algorithm>
@@ -122,6 +123,10 @@ void RegolithSprite::load_asset(RegolithWorld* world, SpriteAsset& asset) {
     m_sprite = Sprite(world->pool(), asset, m_repairable);
     m_ropes = sprite_rope_set_from_asset(m_sprite.grid(), asset);
 
+    if (m_rope_angle_stiffness >= 0.f) {
+        m_ropes.angle_stiffness = m_rope_angle_stiffness;
+    }
+
     m_transform.scale = k_chunk_local_size * godot::Vector2(m_sprite.grid().chunks);
     m_body = PhysicsBody();
     m_body.angle_fixed = m_angle_fixed;
@@ -133,6 +138,10 @@ void RegolithSprite::load_asset(RegolithWorld* world, SpriteAsset& asset) {
     m_sprite.build_distance_field();
 
     attach();
+
+    // the baseline core check, deferred so a script _ready has connected
+    // core_exploded before a sprite that starts unstable blows
+    call_deferred("update_cores");
 }
 
 void RegolithSprite::init_piece(RegolithWorld* world, Sprite&& sprite, const Transform& transform, const PhysicsBody& body, bool dynamic) {
@@ -401,6 +410,18 @@ bool RegolithSprite::is_repairable() const {
     return m_repairable;
 }
 
+void RegolithSprite::set_rope_angle_stiffness(float stiffness) {
+    m_rope_angle_stiffness = stiffness;
+
+    if (stiffness >= 0.f) {
+        m_ropes.angle_stiffness = stiffness;
+    }
+}
+
+float RegolithSprite::get_rope_angle_stiffness() const {
+    return m_ropes.angle_stiffness;
+}
+
 void RegolithSprite::set_angle_fixed(bool fixed) {
     m_angle_fixed = fixed;
     m_body.angle_fixed = fixed;
@@ -570,8 +591,55 @@ Vector2 RegolithSprite::cell_to_world(Vector2i cell) const {
         return get_global_position();
     }
 
-    godot::Vector2 local = m_sprite.grid().to_local_point_centered(godot::Vector2i(cell.x, cell.y));
-    return m_world->to_pixels(m_transform.to_world_point(local));
+    return grid_point_to_world(godot::Vector2(cell) + godot::Vector2(0.5f, 0.5f));
+}
+
+godot::Vector2 RegolithSprite::grid_point_to_units(godot::Vector2 grid_point) const {
+    return m_transform.to_world_point(rope_grid().to_local_point(grid_point));
+}
+
+godot::Vector2 RegolithSprite::grid_point_to_world(godot::Vector2 grid_point) const {
+    if (!m_world) {
+        return get_global_position();
+    }
+
+    return m_world->to_pixels(grid_point_to_units(grid_point));
+}
+
+godot::Vector2 RegolithSprite::world_to_local(godot::Vector2 world_position) const {
+    if (!m_world) {
+        return godot::Vector2();
+    }
+
+    return m_transform.to_local_point(m_world->to_units(world_position));
+}
+
+godot::Vector2 RegolithSprite::local_to_world(godot::Vector2 local_point) const {
+    if (!m_world) {
+        return get_global_position();
+    }
+
+    return m_world->to_pixels(m_transform.to_world_point(local_point));
+}
+
+godot::Vector2 RegolithSprite::world_to_grid_point(godot::Vector2 world_position) const {
+    return rope_grid().to_grid_point(world_to_local(world_position));
+}
+
+godot::Vector2 RegolithSprite::local_to_grid_point(godot::Vector2 local_point) const {
+    return rope_grid().to_grid_point(local_point);
+}
+
+godot::Vector2 RegolithSprite::grid_point_to_local(godot::Vector2 grid_point) const {
+    return rope_grid().to_local_point(grid_point);
+}
+
+godot::Vector2 RegolithSprite::cell_to_local(godot::Vector2i cell) const {
+    return rope_grid().to_local_point_centered(godot::Vector2i(cell.x, cell.y));
+}
+
+godot::Vector2 RegolithSprite::cell_to_grid_point(godot::Vector2i cell) const {
+    return godot::Vector2(cell) + godot::Vector2(0.5f, 0.5f);
 }
 
 bool RegolithSprite::has_cell(Vector2i cell) const {
@@ -620,6 +688,115 @@ int RegolithSprite::get_active_cell_count() const {
     return is_loaded() ? m_sprite.active_cell_count() : 0;
 }
 
+int RegolithSprite::get_core_count() const {
+    return is_loaded() ? static_cast<int>(m_sprite.cores().cores().size()) : 0;
+}
+
+const SpriteCore* RegolithSprite::core_at(int index) const {
+    if (!is_loaded()) {
+        return nullptr;
+    }
+
+    const godot::LocalVector<SpriteCore>& cores = m_sprite.cores().cores();
+
+    if (index < 0 || index >= static_cast<int>(cores.size())) {
+        return nullptr;
+    }
+
+    return &cores[index];
+}
+
+RegolithSprite::CellType RegolithSprite::get_core_type(int index) const {
+    const SpriteCore* core = core_at(index);
+    return core ? static_cast<CellType>(core->type) : CELL_EMPTY;
+}
+
+Vector2 RegolithSprite::get_core_position(int index) const {
+    const SpriteCore* core = core_at(index);
+    return core ? grid_point_to_world(core->grid_point_offset) : get_global_position();
+}
+
+int RegolithSprite::get_core_initial_cells(int index) const {
+    const SpriteCore* core = core_at(index);
+    return core ? core->initial_cell_count : 0;
+}
+
+int RegolithSprite::get_core_remaining_cells(int index) const {
+    const SpriteCore* core = core_at(index);
+    return core ? sprite_core_remaining(m_sprite, *core) : 0;
+}
+
+float RegolithSprite::get_core_damage(int index) const {
+    const SpriteCore* core = core_at(index);
+    return core ? sprite_core_damage(m_sprite, *core) : 0.f;
+}
+
+void RegolithSprite::set_core_explode_damage(float damage) {
+    m_core_explode_damage = std::clamp(damage, 0.f, 1.f);
+}
+
+float RegolithSprite::get_core_explode_damage() const {
+    return m_core_explode_damage;
+}
+
+void RegolithSprite::set_cores_unstable() {
+    if (!is_loaded()) {
+        return;
+    }
+
+    m_sprite.cores().set_unstable();
+    update_cores();
+}
+
+void RegolithSprite::repair_cores() {
+    if (!is_loaded()) {
+        return;
+    }
+
+    m_sprite.cores().repair_all_cores();
+}
+
+void RegolithSprite::update_cores() {
+    if (!is_loaded() || m_sprite.cores().is_empty()) {
+        return;
+    }
+
+    godot::LocalVector<SpriteCoreExploded> exploded;
+    sprite_core_update(m_sprite, m_sprite.cores(), m_core_explode_damage, exploded);
+
+    // positions are resolved up front and the node is checked before each
+    // touch, a handler may free or detach it
+    godot::LocalVector<Vector2> positions;
+
+    for (const SpriteCoreExploded& e : exploded) {
+        positions.push_back(grid_point_to_world(e.grid_point_offset));
+    }
+
+    RegolithWorld* world = m_world;
+    ObjectID self(get_instance_id());
+
+    for (size_t i = 0; i < exploded.size(); i++) {
+        const SpriteCoreExploded& e = exploded[i];
+        int type = static_cast<int>(e.type);
+
+        emit_signal("core_exploded", positions[i], e.power, type);
+
+        if (!ObjectDB::get_instance(self)) {
+            return;
+        }
+
+        world->emit_signal("core_exploded", this, positions[i], e.power, type);
+
+        if (!ObjectDB::get_instance(self)) {
+            return;
+        }
+    }
+}
+
+bool RegolithSprite::is_core_type(int type) {
+    return type >= 0 && type < SpriteCellMaskType_Count && sprite_cell_type_is_core(static_cast<SpriteCellMaskType>(type));
+}
+
 int RegolithSprite::count_cells_of_type(CellType type) const {
     if (!is_loaded() || type < 0 || static_cast<int>(type) >= SpriteCellMaskType_Count) {
         return 0;
@@ -634,6 +811,23 @@ void RegolithSprite::repair_cells_of_type(CellType type) {
     }
 
     m_sprite.repair_cell(static_cast<SpriteCellMaskType>(type));
+}
+
+void RegolithSprite::repair_all_cells() {
+    if (!is_loaded()) {
+        return;
+    }
+
+    m_sprite.repair_all_cells();
+    apply_mass();
+}
+
+void RegolithSprite::remove_all_cells() {
+    if (!is_loaded()) {
+        return;
+    }
+
+    m_sprite.remove_all_cells();
 }
 
 void RegolithSprite::remove_cell(Vector2i cell) {
@@ -742,14 +936,14 @@ void RegolithSprite::set_angular_velocity(float velocity) {
     m_body.angular_velocity = velocity;
 }
 
-void RegolithSprite::apply_impulse(Vector2 impulse, Vector2 world_position) {
+void RegolithSprite::apply_impulse(Vector2 impulse, Vector2 world_position, float max_delta_speed, float max_delta_spin) {
     if (!m_world) {
         return;
     }
 
     godot::Vector2 center = m_transform.to_world_point(m_body.center_of_mass);
     godot::Vector2 r = m_world->to_units(world_position) - center;
-    m_body.apply_impulse_r(godot::Vector2(impulse.x, impulse.y), r);
+    m_body.apply_impulse_r(godot::Vector2(impulse.x, impulse.y), r, max_delta_speed, max_delta_spin);
 }
 
 int RegolithSprite::get_rope_count() const {
@@ -813,8 +1007,7 @@ Dictionary RegolithSprite::hit_rope(Vector2 from, Vector2 to) {
     }
 
     godot::Vector2 grid_pos = grid.to_grid_point(m_transform.to_local_point(hit.position));
-    godot::Vector2 f = grid_pos.floor();
-    godot::Vector2 pixel_world = m_transform.to_world_point(grid.to_local_point_centered(godot::Vector2i((int)f.x, (int)f.y)));
+    godot::Vector2 pixel_world = grid_point_to_units(grid_pos.floor() + godot::Vector2(0.5f, 0.5f));
 
     godot::Vector2 a = rope.nodes[hit.segment_index].position;
     godot::Vector2 b = rope.nodes[hit.segment_index + 1].position;

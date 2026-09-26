@@ -33,7 +33,7 @@ enum SpriteCellMaskType {
 enum SpriteCellMaskBits : uint16_t {
 };
 
-inline constexpr godot::String sprite_cell_mask_type_name(SpriteCellMaskType type) {
+inline godot::String sprite_cell_mask_type_name(SpriteCellMaskType type) {
     constexpr const char* names[SpriteCellMaskType_Count] = {
         "Empty",
         "Filled",
@@ -50,6 +50,15 @@ inline constexpr godot::String sprite_cell_mask_type_name(SpriteCellMaskType typ
     };
 
     return names[type];
+}
+
+// Core and Weakpoint1-4, the types that make a SpriteCore
+inline bool sprite_cell_type_is_core(SpriteCellMaskType type) {
+    return type >= SpriteCellMaskType_Core && type <= SpriteCellMaskType_Weakpoint4;
+}
+
+inline bool sprite_cell_type_is_joint(SpriteCellMaskType type) {
+    return type >= SpriteCellMaskType_Joint1 && type <= SpriteCellMaskType_Joint4;
 }
 
 struct  SpriteCellMask {
@@ -158,8 +167,7 @@ struct  SpriteCellMask {
     }
 
     bool is_core_type() const {
-        SpriteCellMaskType type = get_type();
-        return type >= SpriteCellMaskType_Core && type <= SpriteCellMaskType_Weakpoint4;
+        return sprite_cell_type_is_core(get_type());
     }
 
     bool is_rope() const {

@@ -33,7 +33,10 @@ public:
 
     ~FreeListChunkAllocator() {
         for (Block& block : m_blocks) {
-            memfree(block.memory);
+            // free_block leaves a null hole behind
+            if (block.memory) {
+                memfree(block.memory);
+            }
         }
     }
 

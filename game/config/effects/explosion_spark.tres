@@ -1,0 +1,30 @@
+[gd_resource type="Resource" script_class="ParticleProps" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://game/scripts/effects/ParticleProps.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+count_min = 35
+count_max = 50
+angle_min = -0.2
+angle_max = 0.2
+angle_xy_min = Vector2(-5, 0)
+angle_xy_max = Vector2(-5, 0)
+velocity_min = Vector2(-10, -10)
+velocity_max = Vector2(10, 10)
+damping_min = 4.1
+damping_max = 13.85
+angular_velocity_min = -5.0
+angular_velocity_max = 5.0
+angular_velocity_xy_min = Vector2(-5, 5)
+angular_velocity_xy_max = Vector2(-5, 5)
+angular_damping = 5.95
+life_min = 0.01
+life_max = 0.47
+scale_begin_min = Vector2(0.06, 0.1)
+scale_begin_max = Vector2(0.1, 0)
+scale_end = Vector2(0.01, 0)
+scale_factor = 0.85
+color_begin = Color(1, 0.55, 0.25, 1)
+color_end = Color(0.2, 0.2, 0.2, 0.5)
+color_factor = 1.0

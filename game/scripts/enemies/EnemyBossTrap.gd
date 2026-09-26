@@ -122,7 +122,7 @@ func update(host: Enemy, delta: float) -> void:
 
 	if beam_timer >= beam_interval and lightning:
 		beam_timer = 0.0
-		lightning.strike(host.global_position, player, host)
+		lightning.strike(EffectSpawner.effect_origin(host), player, host)
 
 	delay_timer += delta
 

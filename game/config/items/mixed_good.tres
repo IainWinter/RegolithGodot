@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="ItemDropTable" format=3 uid="uid://femlwiidiqsh"]
+
+[ext_resource type="Script" uid="uid://b1sd4bcnpxfdy" path="res://game/scripts/items/ItemDropTable.gd" id="1"]
+[ext_resource type="Script" uid="uid://dfwk3yqoa7nc5" path="res://game/scripts/items/ItemDropEntry.gd" id="2"]
+[ext_resource type="Resource" path="res://game/config/items/health_large.tres" id="3"]
+[ext_resource type="Resource" path="res://game/config/items/health_medium.tres" id="4"]
+
+[sub_resource type="Resource" id="Resource_entry1"]
+script = ExtResource("2")
+item = ExtResource("3")
+chance = 1.0
+
+[sub_resource type="Resource" id="Resource_entry2"]
+script = ExtResource("2")
+item = ExtResource("4")
+chance = 0.5
+count = 2
+
+[resource]
+script = ExtResource("1")
+entries = Array[ExtResource("2")]([SubResource("Resource_entry1"), SubResource("Resource_entry2")])

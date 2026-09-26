@@ -10,6 +10,7 @@
 
 #include "SpriteAsset.h"
 #include "SpriteCell.h"
+#include "SpriteCore.h"
 #include "SpriteMass.h"
 
 #include "Containers/FlatMap.h"
@@ -66,6 +67,11 @@ class Sprite {
     uint16_t damageable_classes() const;
     void set_damageable_classes(uint16_t mask);
 
+    // the cores found in the mask on load. a split takes a core along when
+    // it holds the majority of that core's cells
+    const SpriteCoreSet& cores() const;
+    SpriteCoreSet& cores();
+
     bool is_chunk_active(int chunkIndex) const;
     bool is_cell_active(int chunkIndex, int cellIndex) const;
     SpriteCell get_cell(int chunkIndex, int cellIndex) const;
@@ -99,6 +105,20 @@ class Sprite {
     void decay_heat(uint16_t levels);
 
     bool has_hot_chunks() const;
+
+    // cells at k_hot_cell_heat or more, the glowing end of the heat ramp.
+    // the list is rebuilt by each decay pass over the hot chunks and grown
+    // when a write heats a cell past the floor, so reading it never scans
+    // the sprite. it may hold cells since removed or cooled, hot_cells
+    // checks each one against the mask
+    static constexpr uint8_t k_hot_cell_heat = 8;
+
+    bool has_hot_cells() const;
+
+    // appends the grid positions of the listed cells still filled and at
+    // min_heat or more (min_heat below the floor reads as the floor), with
+    // their heat
+    void hot_cells(uint8_t min_heat, godot::LocalVector<godot::Pair<godot::Vector2i, uint8_t>>& out) const;
 
     void remove_all_cells();
 
@@ -150,6 +170,7 @@ class Sprite {
     FlatMap<SpriteChunk*> m_chunks;
     godot::HashSet<SpriteChunk*> m_dirty;
     godot::HashSet<int> m_hot_chunks;
+    godot::LocalVector<godot::Vector2i> m_hot_cells;
 
     SpriteCellGroup m_groups[SpriteCellMaskType_Count] = {};
     int m_active_cell_count = 0;
@@ -160,6 +181,8 @@ class Sprite {
     uint16_t m_damageable_classes = 0xFFFF;
 
     godot::LocalVector<godot::Pair<godot::Vector2i, Color4>> m_loose_pixels;
+
+    SpriteCoreSet m_cores;
 };
 
 struct SpriteCut {

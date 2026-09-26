@@ -33,3 +33,28 @@ static func find(world: RegolithWorld, origin: Vector2, aim_point: Vector2, sear
 		return {}
 
 	return {"sprite": best, "local_position": best.to_local(aim_point)}
+
+# the live projectiles of anyone but exclude_shooter within radius_px of
+# center. the distance test comes first, it is the cheap one and most of
+# the group is far away
+static func projectiles_near(center: Vector2, radius_px: float, exclude_shooter) -> Array[Node2D]:
+	var out: Array[Node2D] = []
+	var tree := Engine.get_main_loop() as SceneTree
+
+	if tree == null:
+		return out
+
+	var radius_sq := radius_px * radius_px
+
+	for node in tree.get_nodes_in_group("projectile"):
+		var projectile := node as Node2D
+
+		if projectile == null or projectile.global_position.distance_squared_to(center) > radius_sq:
+			continue
+
+		if projectile.get("shooter") == exclude_shooter or projectile.get("dead") == true:
+			continue
+
+		out.append(projectile)
+
+	return out

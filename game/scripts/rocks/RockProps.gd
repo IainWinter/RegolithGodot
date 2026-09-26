@@ -45,3 +45,25 @@ var source_image_cache: Image
 @export var max_speed := 0.6
 @export var max_spin := 0.4
 @export var angular_damping := 1.0
+
+# names every saved setting by value, so two props that generate the same
+# rock for the same seed share it: a duplicate() of a .tres keys the same
+# as the .tres, an edited copy keys apart. the scenario preview caches rock
+# textures by this. resources count by path, the image cache not at all
+func pixel_key() -> String:
+	var parts := PackedStringArray()
+
+	for property in get_property_list():
+		var usage: int = property["usage"]
+
+		if usage & PROPERTY_USAGE_SCRIPT_VARIABLE == 0 or usage & PROPERTY_USAGE_STORAGE == 0:
+			continue
+
+		var value = get(property["name"])
+
+		if value is Resource:
+			value = value.resource_path
+
+		parts.append("%s=%s" % [property["name"], var_to_str(value)])
+
+	return str(hash(",".join(parts)))

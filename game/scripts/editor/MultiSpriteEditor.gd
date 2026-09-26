@@ -1,383 +1,515 @@
-extends CanvasLayer
+@tool
+extends Control
 class_name MultiSpriteEditor
 
-# in game tool to lay out several RegolithSprites and pin them together with
-# joints. arrange while static, press play to let the world solve them.
-# files are what MultiSprite spawns: sprites carry optional mask, dynamic,
-# joints an optional type (pin or distance with point_b and distance), and
-# head names the sprite that gets a SnakeHead
+# lays out several sprites and pins them together with joints, writing the
+# json a MultiSprite node spawns from. works on a MultiSpriteDocument, never a
+# live world, so the same Control sits in the Godot editor's Sprites screen
+# (regolith_sprite_editor addon) and in the game (MultiSpriteEditorWindow,
+# which adds Play to drop the document into the running world). a host that
+# owns the file dialogs sets host_files and answers the *_requested signals.
+# looks come from PixelTheme
 
 enum Mode { MOVE, JOINT }
 
-@export var world: RegolithWorld
-@export var root: Node2D
+const MODE_LABELS := [["Move", "V"], ["Joint", "J"]]
+const SIDEBAR_WIDTH := 208
+const ROTATE_STEP := PI / 16.0
+const ACCENT := PixelTheme.ACCENT
 
-@export var sprite_material: Material
-@export var rope_material: Material
+# json to open on ready, empty starts a blank document
+@export var path := ""
+# the host pops its own file dialogs and answers the *_requested signals
+@export var host_files := false
+# the title bar close button, hosts that embed the editor for good hide it
+@export var show_close := true
+
+var doc := MultiSpriteDocument.new()
+var canvas: MultiSpriteCanvas
 
 var mode := Mode.MOVE
-var playing := false
-
-var sprites: Array[RegolithSprite] = []
-var placed := {}
-var joints: Array[int] = []
-var head := -1
-
-var dragging: RegolithSprite
+var selected := -1
+var hover_sprite := -1
+var hover_point := Vector2.ZERO
+var joint_first := -1
+var dragging := false
 var drag_offset := Vector2.ZERO
-var joint_first: RegolithSprite
+var filename := "new_multisprite"
+var file_path := ""
+var message := ""
 
-var panel: PanelContainer
-var file_dialog: FileDialog
+var mode_buttons: Array[Button] = []
+var name_edit: LineEdit
 var status: Label
-var overlay: Node2D
-var play_button: Button
+var dynamic_check: CheckBox
+var head_button: Button
+var remove_button: Button
+var close_button: Button
+# hosts add their own buttons here (the game window's Play)
+var host_actions: VBoxContainer
+var file_dialog: FileDialog
 
 signal closed
+signal load_requested
+signal save_requested
+signal add_requested
+signal saved(path: String)
+signal loaded(path: String)
 
 func _ready() -> void:
-	layer = 10
-
-	if world == null:
-		world = RegolithWorld.active()
-
-	if root == null:
-		root = get_parent() as Node2D
-
 	build_ui()
+	doc.changed.connect(on_doc_changed)
 
-	overlay = JointOverlay.new()
-	overlay.editor = self
-	overlay.top_level = true
-	overlay.z_index = 100
-	root.add_child(overlay)
+	if path == "" or not load_from(path):
+		canvas.fit_to_view()
 
 func close() -> void:
-	if overlay:
-		overlay.queue_free()
-
 	closed.emit()
-	queue_free()
+
+# drops (files from the FileSystem dock in the Godot editor) belong to the
+# host. the drop walk stops at the first mouse-stopping Control, so the editor
+# and its canvas hand them up by hand
+var drop_target: Control
+
+func _can_drop_data(at: Vector2, data: Variant) -> bool:
+	return drop_target != null and drop_target._can_drop_data(at, data)
+
+func _drop_data(at: Vector2, data: Variant) -> void:
+	if drop_target:
+		drop_target._drop_data(at, data)
 
 func build_ui() -> void:
-	panel = PanelContainer.new()
-	panel.anchor_left = 1.0
-	panel.anchor_right = 1.0
-	panel.anchor_bottom = 1.0
-	panel.offset_left = -240
-	panel.offset_top = 16
-	panel.offset_right = -16
-	panel.offset_bottom = -16
-	add_child(panel)
+	mouse_filter = Control.MOUSE_FILTER_STOP
+	theme = PixelTheme.theme()
 
-	var margin := MarginContainer.new()
-	for side in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
-		margin.add_theme_constant_override(side, 12)
-	panel.add_child(margin)
+	var column := VBoxContainer.new()
+	column.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	column.add_theme_constant_override("separation", 0)
+	add_child(column)
 
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 8)
-	margin.add_child(box)
+	column.add_child(build_title())
+
+	var body := HBoxContainer.new()
+	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	body.add_theme_constant_override("separation", 0)
+	column.add_child(body)
+
+	body.add_child(build_sidebar())
+
+	var right := VBoxContainer.new()
+	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	right.add_theme_constant_override("separation", 0)
+	body.add_child(right)
+
+	canvas = MultiSpriteCanvas.new()
+	canvas.editor = self
+	canvas.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	canvas.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	canvas.pressed.connect(on_pressed)
+	canvas.dragged.connect(on_dragged)
+	canvas.released.connect(on_released)
+	canvas.hovered.connect(on_hovered)
+	right.add_child(canvas)
+
+	right.add_child(build_status())
+
+	for button in find_children("*", "BaseButton", true, false):
+		button.focus_mode = Control.FOCUS_NONE
+
+	if not host_files:
+		file_dialog = FileDialog.new()
+		file_dialog.access = FileDialog.ACCESS_FILESYSTEM
+		file_dialog.size = Vector2i(720, 480)
+		file_dialog.current_dir = ProjectSettings.globalize_path("res://game/images/multisprites")
+		file_dialog.file_selected.connect(on_file_selected)
+		add_child(file_dialog)
+
+	sync_ui()
+
+func build_title() -> Control:
+	var bar := PanelContainer.new()
+	bar.add_theme_stylebox_override("panel", PixelTheme.box(PixelTheme.INK, PixelTheme.LINE, 0, 0, 0, PixelTheme.BORDER, 8, 4))
+
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	bar.add_child(row)
 
 	var title := Label.new()
-	title.text = "Multi Sprite"
-	title.add_theme_font_size_override("font_size", 22)
-	box.add_child(title)
+	title.text = "MULTI SPRITE"
+	title.add_theme_font_size_override("font_size", PixelTheme.TITLE_FONT_SIZE)
+	title.add_theme_color_override("font_color", ACCENT)
+	row.add_child(title)
 
-	var group := ButtonGroup.new()
-	var modes := HBoxContainer.new()
-	box.add_child(modes)
-	for entry in [["Move", Mode.MOVE], ["Joint", Mode.JOINT]]:
-		var button := Button.new()
-		button.text = entry[0]
-		button.toggle_mode = true
-		button.button_group = group
-		button.button_pressed = entry[1] == mode
-		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		button.pressed.connect(func(): mode = entry[1]; joint_first = null)
-		modes.add_child(button)
+	name_edit = LineEdit.new()
+	name_edit.text = filename
+	name_edit.custom_minimum_size.x = 160
+	name_edit.placeholder_text = "name"
+	name_edit.text_changed.connect(func(t): filename = t)
+	row.add_child(name_edit)
 
-	box.add_child(action("Add Sprite", func(): show_dialog(FileDialog.FILE_MODE_OPEN_FILE, "add")))
-	box.add_child(action("Remove Last", remove_last))
-	box.add_child(action("Clear Joints", clear_joints))
-
-	box.add_child(HSeparator.new())
-
-	play_button = action("Play", toggle_play)
-	box.add_child(play_button)
-
-	box.add_child(HSeparator.new())
-
-	var files := HBoxContainer.new()
-	box.add_child(files)
-	files.add_child(action("Load", func(): show_dialog(FileDialog.FILE_MODE_OPEN_FILE, "load")))
-	files.add_child(action("Save", func(): show_dialog(FileDialog.FILE_MODE_SAVE_FILE, "save")))
-
-	status = Label.new()
-	status.autowrap_mode = TextServer.AUTOWRAP_WORD
-	box.add_child(status)
+	row.add_child(action("Load", request_load, false))
+	row.add_child(action("Save", request_save, false))
 
 	var spacer := Control.new()
-	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	box.add_child(spacer)
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(spacer)
 
-	box.add_child(action("Done", close))
+	close_button = action("X", close, false)
+	close_button.tooltip_text = "Close"
+	close_button.visible = show_close
+	row.add_child(close_button)
 
-	file_dialog = FileDialog.new()
-	file_dialog.access = FileDialog.ACCESS_FILESYSTEM
-	file_dialog.size = Vector2i(720, 480)
-	file_dialog.file_selected.connect(on_file_selected)
-	add_child(file_dialog)
+	return bar
 
-	update_status()
+func build_sidebar() -> Control:
+	var panel := PanelContainer.new()
+	panel.custom_minimum_size.x = SIDEBAR_WIDTH
+	panel.add_theme_stylebox_override("panel", PixelTheme.box(PixelTheme.PAPER, PixelTheme.LINE, 0, 0, PixelTheme.BORDER, 0, 0, 0))
 
-func action(text: String, on_press: Callable) -> Button:
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	panel.add_child(scroll)
+
+	var margin := MarginContainer.new()
+	margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	for side in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
+		margin.add_theme_constant_override(side, 8)
+	scroll.add_child(margin)
+
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 4)
+	margin.add_child(box)
+
+	box.add_child(section("Mode"))
+	var modes := HBoxContainer.new()
+	modes.add_theme_constant_override("separation", 2)
+	box.add_child(modes)
+	var group := ButtonGroup.new()
+	for i in MODE_LABELS.size():
+		var button := Button.new()
+		button.text = MODE_LABELS[i][0]
+		button.tooltip_text = "%s (%s)" % [MODE_LABELS[i][0], MODE_LABELS[i][1]]
+		button.toggle_mode = true
+		button.button_group = group
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		button.pressed.connect(func(): set_mode(i))
+		modes.add_child(button)
+		mode_buttons.append(button)
+
+	var hint := Label.new()
+	hint.text = "Move: drag a sprite, Q / E rotate, Delete removes. Joint: click two sprites to pin them where you click second."
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD
+	hint.add_theme_font_size_override("font_size", PixelTheme.SMALL_FONT_SIZE)
+	hint.add_theme_color_override("font_color", PixelTheme.TEXT_DIM)
+	box.add_child(hint)
+
+	box.add_child(section("Sprites"))
+	box.add_child(action("Add Sprite", request_add))
+	remove_button = action("Remove Selected", remove_selected)
+	box.add_child(remove_button)
+	head_button = action("Set Head", func(): doc.set_head(-1 if doc.head == selected else selected))
+	box.add_child(head_button)
+	dynamic_check = check("Dynamic", true, set_selected_dynamic)
+	box.add_child(dynamic_check)
+
+	box.add_child(section("Joints"))
+	box.add_child(action("Clear Joints", func(): joint_first = -1; doc.clear_joints()))
+
+	host_actions = VBoxContainer.new()
+	host_actions.add_theme_constant_override("separation", 4)
+	box.add_child(host_actions)
+
+	box.add_child(section("Canvas"))
+	box.add_child(action("Clear All", clear_all))
+
+	return panel
+
+func build_status() -> Control:
+	var panel := PanelContainer.new()
+	panel.add_theme_stylebox_override("panel", PixelTheme.box(PixelTheme.INK, PixelTheme.LINE, 0, PixelTheme.BORDER, 0, 0, 6, 2))
+	var row := HBoxContainer.new()
+	panel.add_child(row)
+
+	status = Label.new()
+	status.add_theme_font_size_override("font_size", PixelTheme.SMALL_FONT_SIZE)
+	status.add_theme_color_override("font_color", PixelTheme.TEXT_DIM)
+	status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	status.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	status.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	row.add_child(status)
+
+	for button in [action("-", func(): canvas.zoom_by(1.0 / 1.25), false), action("+", func(): canvas.zoom_by(1.25), false), action("Fit", func(): canvas.fit_to_view(), false)]:
+		button.add_theme_font_size_override("font_size", PixelTheme.SMALL_FONT_SIZE)
+		row.add_child(button)
+
+	return panel
+
+func section(text: String) -> Label:
+	var label := Label.new()
+	label.text = text.to_upper()
+	label.add_theme_font_size_override("font_size", PixelTheme.SMALL_FONT_SIZE)
+	label.add_theme_color_override("font_color", PixelTheme.TEXT_DIM)
+	return label
+
+func action(text: String, on_press: Callable, expand := true) -> Button:
 	var button := Button.new()
 	button.text = text
-	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	if expand:
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	button.pressed.connect(on_press)
 	return button
 
-func update_status() -> void:
-	status.text = "%d sprites, %d joints%s" % [sprites.size(), joints.size(), "\nplaying" if playing else ""]
+func check(text: String, value: bool, on_toggle: Callable) -> CheckBox:
+	var box := CheckBox.new()
+	box.text = text
+	box.button_pressed = value
+	box.toggled.connect(on_toggle)
+	return box
 
-func mouse_over_ui() -> bool:
-	var mouse := panel.get_viewport().get_mouse_position()
-	return panel.get_global_rect().has_point(mouse) or file_dialog.visible
+func _process(_delta: float) -> void:
+	if is_visible_in_tree():
+		sync_ui()
 
-func mouse_world() -> Vector2:
-	return root.get_global_mouse_position()
-
-func sprite_at(point: Vector2) -> RegolithSprite:
-	var fallback: RegolithSprite = null
-
-	for sprite in world.query_rect(Rect2(point, Vector2.ONE)):
-		if sprite not in sprites:
-			continue
-		if sprite.has_cell(sprite.world_to_cell(point)):
-			return sprite
-		if fallback == null:
-			fallback = sprite
-
-	return fallback
-
-func _unhandled_input(event: InputEvent) -> void:
-	if playing or mouse_over_ui():
+func sync_ui() -> void:
+	if status == null:
 		return
 
-	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
-		var point := mouse_world()
+	for i in mode_buttons.size():
+		mode_buttons[i].set_pressed_no_signal(i == mode)
 
-		if event.pressed:
-			var hit := sprite_at(point)
+	var has_selection := selected >= 0 and selected < doc.sprites.size()
+	remove_button.disabled = not has_selection
+	head_button.disabled = not has_selection
+	head_button.text = "Unset Head" if has_selection and doc.head == selected else "Set Head"
+	dynamic_check.disabled = not has_selection
+	if has_selection and dynamic_check.button_pressed != doc.sprites[selected]["dynamic"]:
+		dynamic_check.set_pressed_no_signal(doc.sprites[selected]["dynamic"])
 
-			if mode == Mode.MOVE and hit:
-				dragging = hit
-				drag_offset = hit.global_position - point
+	status.text = status_text()
 
-			elif mode == Mode.JOINT and hit:
-				if joint_first == null or joint_first == hit:
-					joint_first = hit
-				else:
-					add_joint(joint_first, hit, point)
-					joint_first = null
-		else:
-			dragging = null
+func status_text() -> String:
+	var parts: Array[String] = []
+	var units := doc.cells_to_units(hover_point)
+	parts.append("%.2f, %.2f" % [units.x, units.y])
+	parts.append("%d sprites" % doc.sprites.size())
+	parts.append("%d joints" % doc.joints.size())
 
-	elif event is InputEventMouseMotion and dragging:
-		dragging.global_position = mouse_world() + drag_offset
+	if selected >= 0 and selected < doc.sprites.size():
+		parts.append("#%d %s" % [selected, String(doc.sprites[selected]["texture"]).get_file()])
 
-	elif event is InputEventKey and event.pressed and dragging == null and mode == Mode.MOVE:
-		var hit := sprite_at(mouse_world())
-		if hit and (event.keycode == KEY_Q or event.keycode == KEY_E):
-			hit.global_rotation += (-1.0 if event.keycode == KEY_Q else 1.0) * PI / 16.0
+	if joint_first >= 0:
+		parts.append("joint from #%d" % joint_first)
 
-func add_sprite(texture_path: String, position: Vector2, rotation: float, extra := {}) -> RegolithSprite:
-	var color := MultiSprite.load_image(texture_path)
-	if color == null:
-		status.text = "could not load " + texture_path.get_file()
-		return null
+	if not message.is_empty():
+		parts.append(message)
 
-	var mask_path: String = extra["mask"] if extra.has("mask") else MultiSprite.mask_path_for({"texture": texture_path})
-	var mask: Image = MultiSprite.load_image(mask_path) if mask_path != "" else null
+	return "   ".join(parts)
 
-	var sprite := RegolithSprite.new()
-	sprite.material = sprite_material
-	sprite.rope_material = rope_material
-	sprite.dynamic = false
-	sprite.global_position = position
-	sprite.global_rotation = rotation
-	root.add_child(sprite)
-	sprite.load_from_images(color, mask)
+func on_doc_changed() -> void:
+	if selected >= doc.sprites.size():
+		selected = -1
+	if joint_first >= doc.sprites.size():
+		joint_first = -1
+	if canvas:
+		canvas.textures.clear()
 
-	sprites.append(sprite)
-	placed[sprite] = {"texture": texture_path, "dynamic": extra.get("dynamic", true)}
-	if extra.has("mask"):
-		placed[sprite]["mask"] = extra["mask"]
-	update_status()
-	return sprite
+func set_mode(next: int) -> void:
+	mode = next as Mode
+	joint_first = -1
+	dragging = false
 
-func remove_last() -> void:
-	if sprites.is_empty():
+func typing() -> bool:
+	var owner := get_viewport().gui_get_focus_owner()
+	return owner is LineEdit or owner is TextEdit
+
+# canvas input, points in cell space
+
+func on_hovered(point: Vector2) -> void:
+	hover_point = point
+	hover_sprite = doc.sprite_at(point)
+
+func on_pressed(point: Vector2, button: int) -> void:
+	message = ""
+	var hit := doc.sprite_at(point)
+
+	if Controls.has_mouse_button(Controls.CANVAS_SECONDARY, button):
+		joint_first = -1
+		dragging = false
+		if hit < 0:
+			selected = -1
 		return
 
-	if head == sprites.size() - 1:
-		head = -1
+	match mode:
+		Mode.MOVE:
+			selected = hit
+			if hit >= 0:
+				dragging = true
+				drag_offset = doc.transform_of(hit).origin - point
+		Mode.JOINT:
+			if hit < 0:
+				return
+			selected = hit
+			if joint_first < 0 or joint_first == hit:
+				joint_first = hit
+			else:
+				add_joint(joint_first, hit, doc.cells_to_units(point))
+				joint_first = -1
 
-	var sprite: RegolithSprite = sprites.pop_back()
-	placed.erase(sprite)
+func on_dragged(point: Vector2) -> void:
+	if not dragging or selected < 0 or selected >= doc.sprites.size():
+		return
 
-	for i in range(joints.size() - 1, -1, -1):
-		if sprite in world.get_joint_sprites(joints[i]):
-			world.remove_joint(joints[i])
-			joints.remove_at(i)
+	doc.sprites[selected]["position"] = doc.cells_to_units(point + drag_offset)
 
-	sprite.queue_free()
-	update_status()
+func on_released(_point: Vector2, button: int) -> void:
+	if Controls.has_mouse_button(Controls.CANVAS_PRIMARY, button) and dragging:
+		dragging = false
+		doc.touch()
 
-func add_joint(a: RegolithSprite, b: RegolithSprite, point: Vector2) -> void:
-	track_joint(world.add_joint(a, b, point))
+func set_selected_dynamic(on: bool) -> void:
+	if selected < 0 or selected >= doc.sprites.size():
+		return
 
-func track_joint(id: int) -> void:
-	if id >= 0:
-		joints.append(id)
-	update_status()
+	doc.sprites[selected]["dynamic"] = on
+	doc.touch()
 
-func clear_joints() -> void:
-	world.clear_joints()
-	joints.clear()
-	update_status()
+func rotate_selected(steps: int) -> void:
+	if selected < 0 or selected >= doc.sprites.size():
+		return
 
-func toggle_play() -> void:
-	playing = not playing
-	play_button.text = "Stop" if playing else "Play"
+	doc.sprites[selected]["rotation"] = wrapf(doc.sprites[selected]["rotation"] + steps * ROTATE_STEP, -PI, PI)
+	doc.touch()
 
-	if playing:
-		for sprite in sprites:
-			placed[sprite]["rest"] = sprite.global_transform
-			sprite.dynamic = placed[sprite]["dynamic"]
+func key_bindings() -> Array:
+	return [
+		[Controls.MULTI_MOVE_MODE, set_mode.bind(Mode.MOVE)],
+		[Controls.MULTI_JOINT_MODE, set_mode.bind(Mode.JOINT)],
+		[Controls.MULTI_ROTATE_LEFT, rotate_selected.bind(-1)],
+		[Controls.MULTI_ROTATE_RIGHT, rotate_selected.bind(1)],
+		[Controls.MULTI_SET_HEAD, toggle_head],
+		[Controls.MULTI_FIT, canvas.fit_to_view],
+		[Controls.MULTI_DELETE, remove_selected],
+		[Controls.MULTI_DESELECT, deselect],
+	]
+
+func toggle_head() -> void:
+	doc.set_head(-1 if doc.head == selected else selected)
+
+func deselect() -> void:
+	joint_first = -1
+	selected = -1
+
+func _unhandled_key_input(event: InputEvent) -> void:
+	if not event.pressed or not is_visible_in_tree() or typing():
+		return
+
+	for binding in key_bindings():
+		if Controls.pressed(event, binding[0], true):
+			binding[1].call()
+			get_viewport().set_input_as_handled()
+			return
+
+# document edits
+
+func add_sprite(texture: String, position := Vector2.ZERO, rotation := 0.0, extra := {}) -> int:
+	var i := doc.add_sprite(texture, position, rotation, extra)
+	if i < 0:
+		message = "could not load " + texture.get_file()
+		return -1
+
+	selected = i
+	message = "added " + texture.get_file()
+	if doc.sprites.size() == 1:
+		canvas.fit_to_view()
+	return i
+
+# a new sprite lands right of the last one, or at the view center
+func place_new_sprite(texture: String) -> int:
+	var at := doc.cells_to_units(canvas.view_offset)
+	if not doc.sprites.is_empty():
+		var last := doc.sprites.size() - 1
+		at = doc.sprites[last]["position"] + Vector2(doc.size_cells(last).x / float(MultiSpriteDocument.UNIT_CELLS), 0.0)
+	return add_sprite(texture, at)
+
+func remove_selected() -> void:
+	if selected < 0 or selected >= doc.sprites.size():
+		return
+
+	doc.remove_sprite(selected)
+	selected = -1
+	joint_first = -1
+
+func add_joint(a: int, b: int, point_units: Vector2) -> int:
+	return doc.add_pin_joint(a, b, point_units)
+
+func clear_all() -> void:
+	selected = -1
+	joint_first = -1
+	dragging = false
+	doc.clear()
+
+# files
+
+func request_load() -> void:
+	if host_files:
+		load_requested.emit()
 	else:
-		for sprite in sprites:
-			sprite.dynamic = false
-			sprite.linear_velocity = Vector2.ZERO
-			sprite.angular_velocity = 0.0
-			if placed[sprite].has("rest"):
-				sprite.global_transform = placed[sprite]["rest"]
+		show_dialog(FileDialog.FILE_MODE_OPEN_FILE, "load")
 
-	update_status()
+func request_save() -> void:
+	if host_files:
+		save_requested.emit()
+	else:
+		show_dialog(FileDialog.FILE_MODE_SAVE_FILE, "save")
+
+func request_add() -> void:
+	if host_files:
+		add_requested.emit()
+	else:
+		show_dialog(FileDialog.FILE_MODE_OPEN_FILE, "add")
 
 func show_dialog(file_mode: FileDialog.FileMode, purpose: String) -> void:
 	file_dialog.file_mode = file_mode
 	file_dialog.set_meta("purpose", purpose)
 	file_dialog.filters = PackedStringArray(["*.png ; PNG"] if purpose == "add" else ["*.json ; Multi sprite"])
+	file_dialog.title = {"add": "Add sprite", "save": "Save multi sprite", "load": "Load multi sprite"}[purpose]
+	if purpose == "save":
+		file_dialog.current_file = filename + ".json"
 	file_dialog.popup_centered()
 
-func on_file_selected(path: String) -> void:
+func on_file_selected(selected_path: String) -> void:
 	match file_dialog.get_meta("purpose"):
-		"add":
-			var sprite := add_sprite(path, root.get_viewport().get_camera_2d().get_screen_center_position() if root.get_viewport().get_camera_2d() else Vector2.ZERO, 0.0)
-			if sprite and sprites.size() > 1:
-				sprite.global_position += Vector2(sprites[-2].get_cell_count().x * RegolithWorld.pixels_per_unit() / RegolithWorld.CELLS_PER_CHUNK, 0)
-		"save":
-			save_to(path)
-		"load":
-			load_from(path)
+		"add": place_new_sprite(selected_path)
+		"save": save_to(selected_path)
+		"load": load_from(selected_path)
 
-func save_to(path: String) -> void:
-	var ppu := RegolithWorld.pixels_per_unit()
-	var to_units := func(v: Vector2) -> Array: return [v.x / ppu, v.y / ppu]
-	var data := {"sprites": [], "joints": []}
+func save_to(save_path: String) -> bool:
+	if save_path.get_extension().to_lower() != "json":
+		save_path += ".json"
 
-	for sprite in sprites:
-		var info: Dictionary = placed[sprite]
-		var entry := {
-			"texture": info["texture"],
-			"position": to_units.call(sprite.global_position),
-			"rotation": sprite.global_rotation,
-			"dynamic": info["dynamic"],
-		}
-		if info.has("mask"):
-			entry["mask"] = info["mask"]
-		data["sprites"].append(entry)
+	if not doc.save_to(save_path):
+		message = "could not save " + save_path.get_file()
+		return false
 
-	for id in joints:
-		var anchors := world.get_joint_anchors(id)
-		var pair := world.get_joint_sprites(id)
-		if anchors.size() != 2 or pair.size() != 2:
-			continue
+	filename = save_path.get_file().get_basename()
+	name_edit.text = filename
+	file_path = save_path
+	message = "saved " + save_path.get_file()
+	saved.emit(save_path)
+	return true
 
-		var is_distance := world.get_joint_type(id) == RegolithWorld.JOINT_DISTANCE
-		var entry := {
-			"a": sprites.find(pair[0]),
-			"b": sprites.find(pair[1]),
-			"point": to_units.call(anchors[0]),
-			"type": "distance" if is_distance else "pin",
-		}
-		if is_distance:
-			entry["point_b"] = to_units.call(anchors[1])
-			entry["distance"] = anchors[0].distance_to(anchors[1]) / ppu
-		data["joints"].append(entry)
+func load_from(load_path: String) -> bool:
+	if not doc.load_from(load_path):
+		message = "could not load " + load_path.get_file()
+		return false
 
-	if head >= 0 and head < sprites.size():
-		data["head"] = head
-
-	var file := FileAccess.open(path, FileAccess.WRITE)
-	if file:
-		file.store_string(JSON.stringify(data, "  "))
-		status.text = "saved " + path.get_file()
-
-func load_from(path: String) -> void:
-	var data := MultiSprite.read_file(path)
-	if data.is_empty():
-		status.text = "bad file " + path.get_file()
-		return
-
-	if playing:
-		toggle_play()
-
-	clear_joints()
-	while not sprites.is_empty():
-		remove_last()
-
-	var ppu := RegolithWorld.pixels_per_unit()
-
-	for entry in data.get("sprites", []):
-		add_sprite(entry["texture"], MultiSprite.entry_vector(entry, "position", ppu), entry["rotation"], entry)
-
-	for entry in data.get("joints", []):
-		var a: int = entry["a"]
-		var b: int = entry["b"]
-		if a < 0 or b < 0 or a >= sprites.size() or b >= sprites.size():
-			continue
-
-		track_joint(MultiSprite.spawn_joint(world, sprites[a], sprites[b], entry, ppu))
-
-	head = int(data.get("head", -1))
-	update_status()
-
-class JointOverlay extends Node2D:
-	var editor: MultiSpriteEditor
-
-	func _process(_delta: float) -> void:
-		queue_redraw()
-
-	func _draw() -> void:
-		if editor == null:
-			return
-
-		draw_set_transform(Vector2.ZERO)
-
-		var cell_px := RegolithWorld.pixels_per_unit() / RegolithWorld.CELLS_PER_CHUNK
-
-		for id in editor.joints:
-			var anchors: PackedVector2Array = editor.world.get_joint_anchors(id)
-			for point in anchors:
-				draw_circle(point, cell_px * 2.0, Color(1.0, 0.85, 0.2, 0.9))
-			if anchors.size() == 2 and editor.world.get_joint_type(id) == RegolithWorld.JOINT_DISTANCE:
-				draw_line(anchors[0], anchors[1], Color(1.0, 0.85, 0.2, 0.9), 1.0)
-
-		if editor.joint_first:
-			draw_arc(editor.joint_first.global_position, cell_px * 6.0, 0.0, TAU, 24, Color(1.0, 0.85, 0.2, 0.9), 1.0)
-
-		if editor.dragging:
-			draw_arc(editor.dragging.global_position, cell_px * 6.0, 0.0, TAU, 24, Color(0.4, 0.8, 1.0, 0.9), 1.0)
+	selected = -1
+	joint_first = -1
+	dragging = false
+	filename = load_path.get_file().get_basename()
+	name_edit.text = filename
+	file_path = load_path
+	canvas.fit_to_view()
+	message = "loaded " + load_path.get_file()
+	loaded.emit(load_path)
+	return true

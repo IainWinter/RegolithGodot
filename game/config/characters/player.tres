@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="Character" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://game/scripts/dialog/Character.gd" id="1"]
+[ext_resource type="Texture2D" path="res://game/images/characters/player.png" id="2"]
+
+[resource]
+script = ExtResource("1")
+id = &"player"
+display_name = "Pilot"
+icon = ExtResource("2")
+color = Color(1, 0.769, 0.251, 1)
+voice = &"ui_hover"
+text_speed = 40.0

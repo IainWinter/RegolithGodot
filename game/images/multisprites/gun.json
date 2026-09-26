@@ -1,0 +1,43 @@
+{
+  "joints": [
+    {
+      "a": 0,
+      "b": 1,
+      "collide": false,
+      "point": [
+        0.0,
+        0.0
+      ],
+      "type": "pin"
+    }
+  ],
+  "muzzle": [
+    0.83125,
+    0.0
+  ],
+  "root": 0,
+  "sprites": [
+    {
+      "dynamic": true,
+      "mask": "res://game/images/sprites/gun_mount_mask.png",
+      "name": "mount",
+      "position": [
+        0.0,
+        0.0
+      ],
+      "rotation": 0.0,
+      "texture": "res://game/images/sprites/gun_mount.png"
+    },
+    {
+      "dynamic": true,
+      "mask": "res://game/images/sprites/gun_barrel_mask.png",
+      "name": "barrel",
+      "position": [
+        0.75,
+        0.34375
+      ],
+      "rotation": 0.0,
+      "texture": "res://game/images/sprites/gun_barrel.png"
+    }
+  ]
+}

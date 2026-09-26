@@ -88,7 +88,7 @@ func test_missile_homes_toward_off_axis_target() -> void:
 	var spawned: Array = []
 	missiles.fired.connect(func(bullet: Node2D): spawned.append(bullet))
 
-	var direction := to_rock().normalized()
+	var direction := (rock.global_position - missiles.fire_origin()).normalized()
 	var across := Vector2(-direction.y, direction.x)
 	await hold_fire(missiles, 1, across)
 	assert_eq(spawned.size(), 1)
@@ -178,11 +178,14 @@ func test_force_bullet_curves_to_off_axis_target() -> void:
 	assert_lt(closest, 3.0, "swung in close to the rock")
 	assert_gt(closest_speed, bullet.props.speed, "sped up on the way")
 
-func test_super_laser_burns_while_held_and_stops_on_release() -> void:
+func test_super_laser_streams_bullets_while_held_and_stops_on_release() -> void:
 	var laser := weapon_named("SuperLaser")
 	var props: BeamWeaponProps = laser.props
 	var spawned: Array = []
-	laser.fired.connect(func(bullet: Node2D): spawned.append(bullet))
+	var kinds: Array = []
+	laser.fired.connect(func(bullet: Node2D):
+		spawned.append(bullet)
+		kinds.append(bullet is Bullet and bullet.props.speed == props.speed))
 	var rock_cells := rock.get_active_cell_count()
 	var charge := laser.charge
 	var ticks_start := Engine.get_physics_frames()
@@ -193,30 +196,26 @@ func test_super_laser_burns_while_held_and_stops_on_release() -> void:
 
 	var ticks := Engine.get_physics_frames() - ticks_start
 
-	assert_eq(spawned.size(), 1, "one beam for the whole hold")
-	if spawned.is_empty():
-		return
-	var beam: SuperLaser = spawned[0]
-	assert_gt(beam.cells_burned, 0, "burned cells")
-	assert_lt(rock.get_active_cell_count(), rock_cells, "rock lost cells")
+	assert_gt(spawned.size(), 15, "a stream of bullets over the hold")
+	assert_eq(laser.ammo, props.ammo, "the stream costs no ammo")
+	assert_false(false in kinds, "the laser fires plain bullets at the laser speed")
 	assert_lt(laser.charge, charge, "charge drained")
-	assert_almost_eq(laser.charge, charge - props.charge_drain * (ticks - 1) / 60.0, props.charge_drain * 2.0 / 60.0, "drains at the charge rate")
+	assert_almost_eq(laser.charge, charge - props.charge_drain * ticks / 60.0, props.charge_drain * 2.0 / 60.0, "drains at the charge rate")
 
 	laser.set_fire_state(false, to_rock())
 	await wait_physics_frames(2)
-	assert_true(not is_instance_valid(beam) or beam.dead, "beam released")
+	var fired_after := spawned.size()
 	var charge_after := laser.charge
 
-	await wait_physics_frames(30)
-	assert_false(is_instance_valid(beam), "beam faded out")
+	await wait_physics_frames(60)
+	assert_lt(rock.get_active_cell_count(), rock_cells, "rock lost cells")
 	assert_eq(laser.charge, charge_after, "no drain after release")
-	assert_eq(spawned.size(), 1, "no new beam while released")
+	assert_eq(spawned.size(), fired_after, "no new bullets while released")
 
 	laser.set_fire_state(true, to_rock())
 	await wait_physics_frames(3)
 	laser.set_fire_state(false, to_rock())
-	assert_eq(spawned.size(), 2, "new beam on the next hold")
-	assert_true(spawned.size() < 2 or is_instance_valid(spawned[1]), "the new beam is alive")
+	assert_gt(spawned.size(), fired_after, "fires again on the next hold")
 
 func test_super_laser_stops_when_charge_runs_out() -> void:
 	var laser := weapon_named("SuperLaser")
@@ -229,16 +228,82 @@ func test_super_laser_stops_when_charge_runs_out() -> void:
 		laser.set_fire_state(true, to_rock())
 		await wait_physics_frames(1)
 
-	assert_eq(spawned.size(), 1)
+	assert_gt(spawned.size(), 0, "fired while it had charge")
 	assert_eq(laser.charge, 0.0, "charge spent")
-	if not spawned.is_empty():
-		assert_true(not is_instance_valid(spawned[0]) or spawned[0].dead, "beam went out with the charge")
+	var fired_with_charge := spawned.size()
 
 	for i in 20:
 		laser.set_fire_state(true, to_rock())
 		await wait_physics_frames(1)
 	laser.set_fire_state(false, to_rock())
-	assert_eq(spawned.size(), 1, "no beam without charge")
+	assert_eq(spawned.size(), fired_with_charge, "no bullets without charge")
+
+func cannon_straight() -> Weapon:
+	var cannon := weapon_named("Cannon")
+	var props: WeaponProps = cannon.props.duplicate()
+	props.inaccuracy_angle = 0.0
+	props.inaccuracy_tangent = 0.0
+	props.rotation_factor = 0.0
+	cannon.props = props
+	return cannon
+
+func bullets_in_flight() -> Array:
+	return main.get_children().filter(func(child: Node) -> bool: return child is Bullet and not child.dead)
+
+func test_bullet_spits_a_second_bullet_on_hit() -> void:
+	var cannon := cannon_straight()
+	var props: WeaponProps = cannon.props
+	props.spit_odds = 1.0
+	props.speed = 4.0
+	props.cell_life = 40
+	var spawned: Array = []
+	var hits := {"count": 0}
+	cannon.fired.connect(func(bullet: Node2D):
+		spawned.append(bullet)
+		bullet.hit_cell.connect(func(_sprite, _cell, _position): hits["count"] += 1))
+
+	await hold_fire(cannon, 1, to_rock())
+	assert_eq(spawned.size(), 1)
+
+	for i in 240:
+		if hits["count"] > 0:
+			break
+		await wait_physics_frames(1)
+	await wait_physics_frames(1)
+
+	assert_gt(hits["count"], 0, "the bullet hit the rock")
+	var extra := bullets_in_flight().filter(func(bullet: Bullet) -> bool: return not bullet in spawned)
+	assert_gt(extra.size(), 0, "a hit spat off another bullet")
+	for bullet in extra:
+		assert_lt(bullet.initial_cell_life, props.cell_life, "the spit bullet has less cell life")
+		assert_lt(bullet.spit_odds, props.spit_odds, "and spits less often, halved per generation")
+
+	props.spit_odds = 0.0
+
+func test_bullet_hit_nudges_rock_by_its_momentum_within_the_cap() -> void:
+	var cannon := cannon_straight()
+	var props: WeaponProps = cannon.props
+	props.spit_odds = 0.0
+	var hits := {"count": 0}
+	cannon.fired.connect(func(bullet: Node2D):
+		bullet.hit_cell.connect(func(_sprite, _cell, _position): hits["count"] += 1))
+
+	var before := rock.linear_velocity
+	await hold_fire(cannon, 1, to_rock())
+
+	for i in 120:
+		if hits["count"] > 0:
+			break
+		await wait_physics_frames(1)
+	await wait_physics_frames(1)
+
+	assert_gt(hits["count"], 0, "the bullet hit the rock")
+	var kick := (rock.linear_velocity - before).length()
+	var expected := minf(props.speed * props.mass / rock.get_mass(), props.max_hit_speed)
+	assert_gt(kick, 0.0, "the rock was pushed")
+	assert_almost_eq(kick, expected, expected * 0.1 + 0.001, "pushed by the bullet momentum over the rock mass")
+	assert_lt(props.max_hit_speed, 2.0, "the hit cap stays small")
+	assert_lt(props.speed * props.mass, 0.1, "the cannon impulse stays small")
 
 func test_weapon_actions_switch_slots() -> void:
 	player.set_process(true)

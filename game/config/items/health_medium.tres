@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="ItemProps" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://game/scripts/items/ItemProps.gd" id="1"]
+[ext_resource type="Texture2D" path="res://game/images/items/item_medium.png" id="2"]
+
+[resource]
+script = ExtResource("1")
+type = 0
+size = 1
+texture = ExtResource("2")
+tint = Color(0.314, 0.863, 0.353, 1)
+heal_cells = 1
+radius = 1.0
+pickup_delay = 0.6
+collect_time = 1.0
+life = 15.0
+damping_min = 3.0
+damping_max = 10.0
+speed_min = 0.0
+speed_max = 0.0
+spin = 40.0

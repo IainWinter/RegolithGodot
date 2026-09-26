@@ -21,7 +21,7 @@ static bool can_join(RegolithSprite* a, RegolithSprite* b) {
     return a && b && a != b && a->is_loaded() && b->is_loaded();
 }
 
-int RegolithJoints::push(Type type, RegolithSprite* a, RegolithSprite* b, godot::Vector2 world_a, godot::Vector2 world_b, float rest) {
+int RegolithJoints::push(Type type, RegolithSprite* a, RegolithSprite* b, godot::Vector2 world_a, godot::Vector2 world_b, float rest, bool collide_connected) {
     if (!can_join(a, b)) {
         return -1;
     }
@@ -34,18 +34,19 @@ int RegolithJoints::push(Type type, RegolithSprite* a, RegolithSprite* b, godot:
     joint.local_a = a->transform().to_local_point(world_a);
     joint.local_b = b->transform().to_local_point(world_b);
     joint.distance = rest < 0.f ? (world_b - world_a).length() : rest;
+    joint.collide_connected = collide_connected;
 
     m_joints.push_back(joint);
 
     return joint.id;
 }
 
-int RegolithJoints::add(RegolithSprite* a, RegolithSprite* b, godot::Vector2 world_point) {
-    return push(Pin, a, b, world_point, world_point, 0.f);
+int RegolithJoints::add(RegolithSprite* a, RegolithSprite* b, godot::Vector2 world_point, bool collide_connected) {
+    return push(Pin, a, b, world_point, world_point, 0.f, collide_connected);
 }
 
-int RegolithJoints::add_distance(RegolithSprite* a, RegolithSprite* b, godot::Vector2 world_a, godot::Vector2 world_b, float rest) {
-    return push(Distance, a, b, world_a, world_b, rest);
+int RegolithJoints::add_distance(RegolithSprite* a, RegolithSprite* b, godot::Vector2 world_a, godot::Vector2 world_b, float rest, bool collide_connected) {
+    return push(Distance, a, b, world_a, world_b, rest, collide_connected);
 }
 
 void RegolithJoints::remove(int id) {
@@ -108,6 +109,11 @@ Optional<godot::Pair<RegolithSprite*, RegolithSprite*>> RegolithJoints::sprites(
 Optional<RegolithJoints::Type> RegolithJoints::type(int id) const {
     const Joint* joint = find(id);
     return joint ? Optional<Type>(joint->type) : Nothing{};
+}
+
+bool RegolithJoints::collide_connected(int id) const {
+    const Joint* joint = find(id);
+    return joint ? joint->collide_connected : true;
 }
 
 static bool holds_cell(RegolithSprite* sprite, godot::Vector2i cell) {
@@ -215,7 +221,7 @@ void RegolithJoints::feed(PhysicsWorld& physics) {
 
         int type = joint.type == Distance ? PhysicsWorldJointType_Distance : PhysicsWorldJointType_Pin;
 
-        physics.add_joint({&a->body(), &b->body(), joint.local_a, joint.local_b, type, joint.distance});
+        physics.add_joint({&a->body(), &b->body(), joint.local_a, joint.local_b, type, joint.distance, joint.collide_connected});
     }
 }
 

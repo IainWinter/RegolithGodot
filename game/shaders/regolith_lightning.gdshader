@@ -3,15 +3,17 @@
 // the instance transform scales cells to pixels (Lightning.gd sets it from
 // pixels_per_unit / CELLS_PER_CHUNK). the fragment fills whole cells within
 // half_width of the segment with the core color, and the ring of cells out
-// to glow_width with a dimmed glow. COLOR is the bolt color already faded by
-// age, so both the core and the glow go out with it
+// to glow_width with a dimmed glow. half_width 0.5 is the one cell core the
+// grid allows, the glow is kept to a faint half cell ring to match the thin
+// smooth draw. COLOR is the bolt color already faded by age, so both the core
+// and the glow go out with it
 
 shader_type canvas_item;
 render_mode blend_add, unshaded;
 
 uniform float half_width = 0.5;
-uniform float glow_width = 1.0;
-uniform float glow_strength = 0.35;
+uniform float glow_width = 0.5;
+uniform float glow_strength = 0.2;
 uniform vec4 core_color : source_color = vec4(1.0, 1.0, 1.0, 1.0);
 uniform float core_mix = 0.5;
 

@@ -158,3 +158,80 @@ func test_ball_drifts_and_removes_cells() -> void:
 	assert_gt(hits["count"], 0, "cells zapped")
 	assert_lt(rock.get_active_cell_count(), before, "rock lost cells")
 	assert_gt(ball.lightning.get_strike_count(), 0, "ring and zap bolts alive")
+
+func test_smooth_path_feeds_the_line_render() -> void:
+	var was := Lightning.pixelated
+	Lightning.pixelated = false
+	var lightning := make_lightning(DEFAULT_LIGHTNING)
+	lightning.strike(Vector2(40, 40), Vector2(160, 120))
+	await wait_process_frames(2)
+	Lightning.pixelated = was
+
+	assert_true(lightning.smooth is RegolithLineRender, "smooth draw is the engine line node")
+	assert_true(lightning.smooth.visible)
+	assert_false(lightning.instance.visible)
+	assert_gt(lightning.smooth.get_line_count(), 0, "one stroke per bolt")
+	assert_gt(lightning.smooth.get_vertex_count(), 0, "strokes built")
+	assert_gt(lightning.get_segment_count(), 0, "segments counted")
+	assert_gt(lightning.smooth.glow_width, 0.0, "glow stands in for the emission")
+	assert_eq(lightning.smooth.material.blend_mode, CanvasItemMaterial.BLEND_MODE_ADD, "additive like the engine's lightning lines")
+
+func test_smooth_strokes_are_thin() -> void:
+	# the core is half the engine's body width and the halo a faint hint, so
+	# the strokes stay close to the channel: the line render's widest row is
+	# half the core plus the glow (or the feather), doubled for the miter cap
+	# at sharp bends
+	var was := Lightning.pixelated
+	Lightning.pixelated = false
+	var lightning := make_lightning(DEFAULT_LIGHTNING)
+	lightning.strike(Vector2(40, 40), Vector2(160, 120))
+	await wait_process_frames(2)
+	Lightning.pixelated = was
+
+	var cell := RegolithWorld.pixels_per_cell()
+	assert_almost_eq(DEFAULT_LIGHTNING.line_width, 0.65, 0.001, "channel core is 0.65 cells wide")
+	assert_almost_eq(BALL_PROPS.lightning_hit.line_width, 0.35, 0.001, "zaps are thinner still")
+	assert_almost_eq(BOLT_PROPS.lightning_hit.line_width, 0.35, 0.001, "bolt hits are thinner still")
+	assert_almost_eq(lightning.smooth.glow_width, 1.5 * cell, 0.001, "glow reaches 1.5 cells past the core")
+	assert_almost_eq(lightning.smooth.glow_strength, DEFAULT_LIGHTNING.emission * 0.6, 0.001, "glow is a soft hint of the emission")
+	assert_almost_eq(lightning.smooth.feather, 1.0, 0.001, "one pixel feather")
+
+	var path_bounds := Rect2(Vector2(40, 40), Vector2.ZERO)
+	for s in lightning.strikes:
+		for bolt in s.bolts:
+			for p in bolt.path:
+				path_bounds = path_bounds.expand(p)
+
+	var reach := 2.0 * (0.5 * DEFAULT_LIGHTNING.line_width * cell + maxf(lightning.smooth.glow_width, lightning.smooth.feather))
+	var stroke_bounds: Rect2 = lightning.smooth.get_bounds()
+	assert_true(path_bounds.grow(reach + 0.01).encloses(stroke_bounds), "strokes stay within %.1f px of the bolt paths" % reach)
+
+func test_line_render_builds_strokes() -> void:
+	var lines := RegolithLineRender.new()
+	add_child_autofree(lines)
+	lines.glow_width = 4.0
+	lines.glow_strength = 0.5
+
+	lines.clear()
+	lines.add_line(Vector2(0, 0), Vector2(10, 0), 2.0, Color.WHITE)
+	var with_line := lines.get_vertex_count()
+	assert_eq(lines.get_line_count(), 1)
+	assert_gt(with_line, 0, "quad, caps and glow built")
+
+	lines.add_polyline(PackedVector2Array([Vector2(0, 0), Vector2(10, 0), Vector2(10, 10)]), PackedFloat32Array([2.0]), PackedColorArray([Color.RED]))
+	assert_eq(lines.get_line_count(), 2)
+	assert_gt(lines.get_vertex_count(), with_line, "a second segment and its join wedge")
+
+	var bounds: Rect2 = lines.get_bounds()
+	assert_true(bounds.has_point(Vector2(10, 10)), "bounds cover the stroke")
+	assert_lt(bounds.position.x, -1.0, "the cap reaches past the first point")
+
+	lines.add_polyline(PackedVector2Array([Vector2(0, 0)]), PackedFloat32Array([2.0]), PackedColorArray([Color.RED]))
+	assert_eq(lines.get_line_count(), 2, "a single point is no line")
+
+	lines.commit()
+	await wait_process_frames(1)
+
+	lines.clear()
+	assert_eq(lines.get_vertex_count(), 0)
+	assert_eq(lines.get_line_count(), 0)

@@ -12,7 +12,7 @@ func before_each() -> void:
 	world.pixels_per_cell = 3
 	add_child_autofree(world)
 
-	draw = get_node("/root/DebugDraw")
+	draw = get_tree().get_first_node_in_group("regolith_debug_draw") as RegolithDebugDraw
 	draw.visible = true
 
 func after_each() -> void:
@@ -40,7 +40,11 @@ func peak_lines(frames := 3) -> int:
 
 func test_drawer_joins_its_group_and_knows_every_name() -> void:
 	assert_true(draw.is_in_group("regolith_debug_draw"))
-	assert_true(draw.get_node_or_null("AiGizmos") != null, "the autoload carries the ai gizmos")
+	var has_walker := false
+	for child in draw.get_children():
+		if child.has_method("_walk"):
+			has_walker = true
+	assert_true(has_walker, "the autoload carries the gizmo walker")
 	assert_eq(draw.get_name_label(RegolithDebugDraw.PHYSICS_CONTACT_POINT), "PHYSICS_CONTACT_POINT")
 	assert_gt(draw.get_name_count(), RegolithDebugDraw.EXPLOSION_FORCE)
 
@@ -101,14 +105,15 @@ func test_monitors_report_the_world() -> void:
 	assert_true(Performance.has_custom_monitor("regolith/physics_ms"))
 	assert_gte(world.get_physics_time_ms(), 0.0)
 
-func test_panel_shows_the_scene_drawer_and_steps() -> void:
+# the F3 panel leaves the drawer alone (the editor dock owns the line
+# settings) and only steps the sim
+func test_panel_leaves_the_drawer_alone_and_steps() -> void:
 	draw.visible = false
 	var panel = load("res://game/scripts/debug/DebugPanel.gd").new(world)
 	add_child_autofree(panel)
 	await wait_process_frames(2)
-	assert_same(panel.draw, draw, "the autoload, not a new one")
-	assert_true(draw.visible, "opening the panel shows it")
-	assert_eq(panel.name_checks.size(), draw.get_name_count())
+	assert_false(draw.visible, "opening the panel does not touch the drawer")
+	assert_false("draw" in panel, "no drawer handle on the panel")
 
 	get_tree().paused = true
 	panel.step_once()
@@ -116,7 +121,6 @@ func test_panel_shows_the_scene_drawer_and_steps() -> void:
 	assert_true(get_tree().paused, "step holds again after one tick")
 
 	panel.free()
-	assert_false(draw.visible, "closing the panel hides it again")
 
 func test_script_lines_need_no_world() -> void:
 	world.free()
@@ -159,3 +163,58 @@ func test_drawer_keeps_drawing_while_paused() -> void:
 	draw.add_line(Vector2(0, 0), Vector2(10, 10))
 	assert_eq(await peak_lines(), 1, "script lines still collected under pause")
 	get_tree().paused = false
+
+# renderer only: a hairline (godot width -1) is a line list primitive and
+# the d3d12 rasterizer drops its axis aligned segments, which is most of the
+# debug geometry. the drawer must put its default width lines on screen
+# whatever their direction. the lines are re-added every frame so the
+# captured frame holds them
+func test_axis_aligned_lines_reach_the_screen() -> void:
+	if DisplayServer.get_name() == "headless":
+		pending("needs a renderer")
+		return
+
+	var segments := [
+		[Vector2(20, 100), Vector2(400, 100)],
+		[Vector2(60, 140), Vector2(60, 500)],
+		[Vector2(120, 140), Vector2(400, 500)],
+	]
+	var img: Image
+
+	for frame in 4:
+		await get_tree().process_frame
+
+		for segment: Array in segments:
+			draw.add_line(segment[0], segment[1])
+
+		await RenderingServer.frame_post_draw
+		img = get_viewport().get_texture().get_image()
+
+	assert_gt(draw.get_line_count(), 0)
+	var expected := draw.get_name_color(RegolithDebugDraw.DEFAULT).lerp(draw.get_layer_tint(RegolithDebugDraw.LAYER_DEFAULT), 0.5)
+
+	for segment: Array in segments:
+		var a: Vector2 = segment[0]
+		var b: Vector2 = segment[1]
+		var steps := int(a.distance_to(b))
+		var hits := 0
+
+		for i in steps:
+			var p := a.lerp(b, float(i) / steps)
+			var hit := false
+
+			for dx in range(-1, 2):
+				for dy in range(-1, 2):
+					var x := int(p.x) + dx
+					var y := int(p.y) + dy
+
+					if x >= 0 and y >= 0 and x < img.get_width() and y < img.get_height():
+						var c := img.get_pixel(x, y)
+
+						if absf(c.r - expected.r) < 0.15 and absf(c.g - expected.g) < 0.15 and absf(c.b - expected.b) < 0.15:
+							hit = true
+
+			if hit:
+				hits += 1
+
+		assert_gt(hits, steps * 3 / 4, "%s -> %s is on screen (%d of %d samples)" % [a, b, hits, steps])

@@ -4,7 +4,7 @@ set(GODOTCPP_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Thirdparty/godot-cpp" CACHE PATH "
 
 set(CMAKE_PROJECT_regolith_INCLUDE ${GODOTCPP_DIR}/cmake/emsdkHack.cmake)
 
-project(regolith CXX)
+project(regolith C CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -46,6 +46,17 @@ else()
     set(OUTPUT_SUFFIX "${CMAKE_SHARED_LIBRARY_SUFFIX}")
 endif()
 
+# lua 5.4 as plain c, longjmp errors stay inside lua frames, our c functions
+# never raise across c++ objects
+file(GLOB LUA_SOURCES CONFIGURE_DEPENDS Thirdparty/lua/*.c)
+add_library(lua STATIC ${LUA_SOURCES})
+target_include_directories(lua PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/Thirdparty/lua)
+set_target_properties(lua PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+if (MSVC)
+    target_compile_options(lua PRIVATE /wd4244 /wd4267 /wd4310 /wd4324 /wd4702)
+endif()
+
 file(GLOB_RECURSE REGOLITH_SOURCES CONFIGURE_DEPENDS Source/*.cpp)
 add_library(regolith SHARED ${REGOLITH_SOURCES})
 
@@ -54,7 +65,7 @@ target_include_directories(regolith PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/Source/Godot
 )
 
-target_link_libraries(regolith PRIVATE godot-cpp)
+target_link_libraries(regolith PRIVATE godot-cpp lua)
 
 get_target_property(GODOTCPP_SUFFIX godot-cpp GODOTCPP_SUFFIX)
 

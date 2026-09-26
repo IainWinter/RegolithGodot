@@ -79,7 +79,7 @@ private:
 
         int new_size = x + 1;
         parent.resize(new_size);
-        vector_fill(rank, new_size,  0);
+        vector_grow(rank, new_size, 0);
         for (int i = size; i < new_size; ++i) {
             parent[i] = i;
         }

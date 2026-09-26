@@ -1,0 +1,30 @@
+[gd_scene load_steps=10 format=3]
+
+[ext_resource type="Script" path="res://game/scripts/enemies/EnemyGun.gd" id="1"]
+[ext_resource type="Texture2D" path="res://game/images/sprites/gun_mount.png" id="2"]
+[ext_resource type="Texture2D" path="res://game/images/sprites/gun_mount_mask.png" id="3"]
+[ext_resource type="Script" path="res://game/scripts/multisprite/MultiSpritePreview.gd" id="5"]
+[ext_resource type="Resource" path="res://game/config/enemies/station_cannon.tres" id="6"]
+[ext_resource type="Material" path="res://game/shaders/regolith_sprite_material.tres" id="7"]
+[ext_resource type="Material" path="res://game/shaders/regolith_rope_material.tres" id="8"]
+[ext_resource type="Script" uid="uid://bqnl25ovoxk3b" path="res://game/scripts/ai/PlayerSensor.gd" id="9"]
+[ext_resource type="Resource" path="res://game/config/items/mixed_ok.tres" id="10"]
+
+[node name="EnemyGun" type="RegolithSprite" groups=["enemy", "gun", "regolith"]]
+material = ExtResource("7")
+rope_material = ExtResource("8")
+texture = ExtResource("2")
+mask_texture = ExtResource("3")
+angular_damping = 4.0
+script = ExtResource("1")
+multisprite = "res://game/images/multisprites/gun.json"
+ai_class = "gun"
+weapon_props = ExtResource("6")
+drop_table = ExtResource("10")
+
+[node name="PlayerSensor" type="Node" parent="."]
+script = ExtResource("9")
+radius = 30.0
+
+[node name="PartsPreview" type="Node2D" parent="."]
+script = ExtResource("5")

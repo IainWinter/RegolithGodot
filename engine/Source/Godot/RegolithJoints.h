@@ -29,6 +29,7 @@ public:
         godot::Vector2 local_a;
         godot::Vector2 local_b;
         float distance;
+        bool collide_connected = true;
     };
 
     struct Piece {
@@ -36,9 +37,10 @@ public:
         godot::Vector2i grid_min;
     };
 
-    int add(RegolithSprite* a, RegolithSprite* b, godot::Vector2 world_point);
+    // collide_connected false keeps the two sprites from touching each other
+    int add(RegolithSprite* a, RegolithSprite* b, godot::Vector2 world_point, bool collide_connected = true);
 
-    int add_distance(RegolithSprite* a, RegolithSprite* b, godot::Vector2 world_a, godot::Vector2 world_b, float rest);
+    int add_distance(RegolithSprite* a, RegolithSprite* b, godot::Vector2 world_a, godot::Vector2 world_b, float rest, bool collide_connected = true);
 
     void remove(int id);
     void clear();
@@ -47,6 +49,7 @@ public:
     Optional<godot::Pair<godot::Vector2, godot::Vector2>> anchors(int id) const;
     Optional<godot::Pair<RegolithSprite*, RegolithSprite*>> sprites(int id) const;
     Optional<Type> type(int id) const;
+    bool collide_connected(int id) const;
 
     void resolve_split(RegolithSprite* source, const godot::LocalVector<Piece>& pieces);
 
@@ -56,7 +59,7 @@ public:
     const godot::LocalVector<Joint>& items() const;
 
 private:
-    int push(Type type, RegolithSprite* a, RegolithSprite* b, godot::Vector2 world_a, godot::Vector2 world_b, float rest);
+    int push(Type type, RegolithSprite* a, RegolithSprite* b, godot::Vector2 world_a, godot::Vector2 world_b, float rest, bool collide_connected);
     const Joint* find(int id) const;
     Optional<godot::Pair<RegolithSprite*, RegolithSprite*>> resolve(const Joint* joint, bool loaded) const;
 

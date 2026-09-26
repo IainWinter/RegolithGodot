@@ -10,10 +10,10 @@
 
 [resource]
 script = ExtResource("1")
-ammo = -1
+ammo = 10
 shots_per_ammo = 1
-delay_cooldown = 1.0
-inaccuracy_angle = 0.0
+delay_cooldown = 1.2
+inaccuracy_angle = 0.1
 inaccuracy_tangent = 0.0
 speed = 8.0
 lifetime = 6.0

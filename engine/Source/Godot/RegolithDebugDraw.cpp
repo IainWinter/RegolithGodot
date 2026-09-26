@@ -304,11 +304,29 @@ void RegolithDebugDraw::gather(float pixels_per_unit, DebugRendererLineList& lis
     }
 }
 
+// the width handed to the canvas. a width of zero or less means one screen
+// pixel: the line width is in world pixels and the camera zooms the canvas,
+// so divide by the canvas scale. never a godot hairline (negative width):
+// that path draws a line-list primitive, and the d3d12 rasterizer drops
+// every axis aligned segment of it, which is most of the debug geometry
+// (aabbs, chunk boxes, unrotated sprite quads). quads draw everywhere
+float RegolithDebugDraw::draw_width() const {
+    if (m_line_width > 0.f) {
+        return m_line_width;
+    }
+
+    Vector2 scale = get_global_transform_with_canvas().get_scale();
+    float s = MIN(Math::abs(scale.x), Math::abs(scale.y));
+    return s > 1e-6f ? 1.f / s : 1.f;
+}
+
 void RegolithDebugDraw::_draw() {
     // in the editor the plugin draws the lines over the viewport itself
     if (m_points.size() < 2 || Engine::get_singleton()->is_editor_hint()) {
         return;
     }
+
+    const float width = draw_width();
 
     // fast path — no per-name texture assigned, one batched call
     bool any_textured = false;
@@ -320,12 +338,12 @@ void RegolithDebugDraw::_draw() {
     }
 
     if (!any_textured) {
-        draw_multiline_colors(m_points, m_colors, m_line_width);
+        draw_multiline_colors(m_points, m_colors, width);
         return;
     }
 
-    // textured segments need real geometry width — a hairline (-1) has no
-    // quad to stretch a texture across, so pick a sensible default there
+    // textured segments need real geometry width — a one pixel line has no
+    // room to stretch a texture across, so pick a sensible default there
     const float quad_width = m_line_width > 0.f ? m_line_width : 4.f;
     const int line_count = m_colors.size();
 

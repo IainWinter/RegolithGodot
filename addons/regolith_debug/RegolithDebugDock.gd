@@ -241,7 +241,7 @@ func switch_row(text: String, on_section: String, color_section: String, key: St
 	swatch.add_child(popup)
 
 	swatch.gui_input.connect(func(event: InputEvent):
-		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		if Controls.pressed(event, Controls.DEBUG_DOCK_SWATCH):
 			popup.popup(Rect2i(swatch.get_screen_position() + Vector2(0, swatch.size.y), Vector2i.ZERO)))
 
 	row.add_child(swatch)

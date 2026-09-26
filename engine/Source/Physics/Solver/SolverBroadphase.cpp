@@ -40,6 +40,11 @@ void find_pairs(const godot::LocalVector<PhysicsProxy>& proxies, const godot::Lo
 
             const PhysicsProxy& other = proxies[overlap_index];
 
+            // joined by a joint that asked not to collide connected
+            if (!state.excluded_pairs.is_empty() && state.excluded_pairs.has(proxy_pair_key(proxy_index, overlap_index))) {
+                continue;
+            }
+
             // a body trying to lower its priority phases through everything it
             // overlaps, but the overlap is recorded so it can settle once clear
             if (proxy.body->attempt_lower_priority || other.body->attempt_lower_priority) {

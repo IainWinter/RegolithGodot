@@ -1,6 +1,7 @@
-[gd_resource type="Resource" script_class="LightningProps" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="LightningProps" load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://game/scripts/effects/LightningProps.gd" id="1"]
+[ext_resource type="Resource" path="res://game/config/effects/lightning_hit_spark.tres" id="2"]
 
 [resource]
 script = ExtResource("1")
@@ -18,9 +19,11 @@ lifetime = 0.0
 color = Color(0.576471, 0.54902, 0.996078, 0.996078)
 fade_color = Color(0.352941, 0.156863, 0.705882, 0)
 emission = 0.3333
+line_width = 0.35
 emit_spark = true
 particle_density = 6.85
 spark_color = Color(0.6, 0.7, 1, 0.8)
 spark_speed = 3.0
+spark = ExtResource("2")
 burn_strength = 0
 burn_damage = 0

@@ -16,14 +16,21 @@ static func pick_chunks(rng: RandomNumberGenerator, props: RockProps) -> int:
 	var min_chunks := maxi(props.min_chunks, 1)
 	return rng.randi_range(min_chunks, maxi(props.max_chunks, min_chunks))
 
-static func make_rock(rng: RandomNumberGenerator, props: RockProps, chunks := 0) -> Dictionary:
+# every random draw a rock makes before its pixels exist, in the order the
+# spawner makes them: the chunk count when none is given, the shape variant,
+# the ore, then the seed the pixels generate from. the result is enough to
+# generate the images later or somewhere else (the scenario preview), so a
+# plan can be drawn without spawning: {chunks, variant, config, ore, seed}
+static func describe_rock(rng: RandomNumberGenerator, props: RockProps, chunks := 0) -> Dictionary:
 	if chunks <= 0:
 		chunks = pick_chunks(rng, props)
 
 	var config := props
+	var variant := 0
 	if props.shape_variants:
 		config = props.duplicate()
-		match rng.randi_range(0, 3):
+		variant = rng.randi_range(0, 3)
+		match variant:
 			1:
 				config.radius_scale = 0.48
 				config.noise_amplitude = 0.15
@@ -38,10 +45,41 @@ static func make_rock(rng: RandomNumberGenerator, props: RockProps, chunks := 0)
 	if not props.ore_colors.is_empty() and rng.randf() < props.ore_chance:
 		ore = props.ore_colors[rng.randi_range(0, props.ore_colors.size() - 1)]
 
-	var rock_seed := rng.randi()
-	var images := generate(rock_seed, Vector2i.ONE * chunks * CELLS, config, ore)
-	images["chunks"] = chunks
-	images["seed"] = rock_seed
+	return {
+		"chunks": chunks,
+		"variant": variant,
+		"config": config,
+		"ore": ore,
+		"seed": rng.randi(),
+	}
+
+# describe_rock plus the placement rotation spawn_rock draws right after
+# it, so a planned rock knows how it will sit. the drift velocity and spin
+# are drawn after and are not part of the plan
+static func plan_rock(rng: RandomNumberGenerator, props: RockProps, chunks := 0) -> Dictionary:
+	var described := describe_rock(rng, props, chunks)
+	described["rotation"] = rng.randf_range(0.0, TAU)
+	return described
+
+# the images of a described rock, the same for the same description
+static func generate_described(described: Dictionary) -> Dictionary:
+	return generate(described["seed"], Vector2i.ONE * described["chunks"] * CELLS, described["config"], described["ore"])
+
+# a cache key for a description's images: same key, same pixels. the
+# config counts by value (RockProps.pixel_key), so the copies the zones
+# hand out key the same as their source. a caller with many rocks on one
+# config passes its pixel_key once as config_key
+static func describe_key(described: Dictionary, config_key := "") -> String:
+	if config_key == "":
+		config_key = described["config"].pixel_key()
+
+	return "%s|%d|%d|%d|%s" % [config_key, described["seed"], described["chunks"], described["variant"], described["ore"].to_html()]
+
+static func make_rock(rng: RandomNumberGenerator, props: RockProps, chunks := 0) -> Dictionary:
+	var described := describe_rock(rng, props, chunks)
+	var images := generate_described(described)
+	images["chunks"] = described["chunks"]
+	images["seed"] = described["seed"]
 	return images
 
 static func generate(rock_seed: int, size: Vector2i, props: RockProps, ore := Color(0, 0, 0, 0)) -> Dictionary:
@@ -237,7 +275,9 @@ static func spawn_rock(parent: Node, world: RegolithWorld, position: Vector2, rn
 	if world == null or not world.is_inside_tree():
 		return null
 
-	var images := make_rock(rng, props, chunks)
+	# the same draws as plan_rock, so a planned rock and a spawned one agree
+	var described := plan_rock(rng, props, chunks)
+	var images := generate_described(described)
 
 	var rock := RegolithSprite.new()
 	rock.material = material
@@ -245,7 +285,7 @@ static func spawn_rock(parent: Node, world: RegolithWorld, position: Vector2, rn
 	rock.angular_damping = props.angular_damping
 	rock.add_to_group("regolith")
 
-	var placement := Transform2D(rng.randf_range(0.0, TAU), position)
+	var placement := Transform2D(described["rotation"], position)
 	var parent_2d := parent as Node2D
 	rock.transform = parent_2d.global_transform.affine_inverse() * placement if parent_2d else placement
 

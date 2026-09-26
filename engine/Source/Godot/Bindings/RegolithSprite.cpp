@@ -39,6 +39,10 @@ void RegolithSprite::_bind_methods() {
     ClassDB::bind_method(D_METHOD("is_angle_fixed"), &RegolithSprite::is_angle_fixed);
     ADD_PROPERTY(PropertyInfo(Variant::BOOL, "angle_fixed"), "set_angle_fixed", "is_angle_fixed");
 
+    ClassDB::bind_method(D_METHOD("set_rope_angle_stiffness", "stiffness"), &RegolithSprite::set_rope_angle_stiffness);
+    ClassDB::bind_method(D_METHOD("get_rope_angle_stiffness"), &RegolithSprite::get_rope_angle_stiffness);
+    ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "rope_angle_stiffness"), "set_rope_angle_stiffness", "get_rope_angle_stiffness");
+
     ClassDB::bind_method(D_METHOD("set_linear_damping", "damping"), &RegolithSprite::set_linear_damping);
     ClassDB::bind_method(D_METHOD("get_linear_damping"), &RegolithSprite::get_linear_damping);
     ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "linear_damping", PROPERTY_HINT_RANGE, "0,10,0.01,or_greater"), "set_linear_damping", "get_linear_damping");
@@ -49,12 +53,22 @@ void RegolithSprite::_bind_methods() {
 
     ClassDB::bind_method(D_METHOD("world_to_cell", "world_position"), &RegolithSprite::world_to_cell);
     ClassDB::bind_method(D_METHOD("cell_to_world", "cell"), &RegolithSprite::cell_to_world);
+    ClassDB::bind_method(D_METHOD("world_to_local", "world_position"), &RegolithSprite::world_to_local);
+    ClassDB::bind_method(D_METHOD("local_to_world", "local_point"), &RegolithSprite::local_to_world);
+    ClassDB::bind_method(D_METHOD("world_to_grid_point", "world_position"), &RegolithSprite::world_to_grid_point);
+    ClassDB::bind_method(D_METHOD("grid_point_to_world", "grid_point"), &RegolithSprite::grid_point_to_world);
+    ClassDB::bind_method(D_METHOD("local_to_grid_point", "local_point"), &RegolithSprite::local_to_grid_point);
+    ClassDB::bind_method(D_METHOD("grid_point_to_local", "grid_point"), &RegolithSprite::grid_point_to_local);
+    ClassDB::bind_method(D_METHOD("cell_to_local", "cell"), &RegolithSprite::cell_to_local);
+    ClassDB::bind_method(D_METHOD("cell_to_grid_point", "cell"), &RegolithSprite::cell_to_grid_point);
     ClassDB::bind_method(D_METHOD("has_cell", "cell"), &RegolithSprite::has_cell);
     ClassDB::bind_method(D_METHOD("get_cell_type", "cell"), &RegolithSprite::get_cell_type);
     ClassDB::bind_method(D_METHOD("get_cell_class", "cell"), &RegolithSprite::get_cell_class);
     ClassDB::bind_method(D_METHOD("get_cell_color", "cell"), &RegolithSprite::get_cell_color);
     ClassDB::bind_method(D_METHOD("count_cells_of_type", "type"), &RegolithSprite::count_cells_of_type);
     ClassDB::bind_method(D_METHOD("repair_cells_of_type", "type"), &RegolithSprite::repair_cells_of_type);
+    ClassDB::bind_method(D_METHOD("repair_all_cells"), &RegolithSprite::repair_all_cells);
+    ClassDB::bind_method(D_METHOD("remove_all_cells"), &RegolithSprite::remove_all_cells);
     ClassDB::bind_method(D_METHOD("remove_cell", "cell"), &RegolithSprite::remove_cell);
     ClassDB::bind_method(D_METHOD("burn_cell", "cell", "strength", "damage"), &RegolithSprite::burn_cell, DEFVAL(255), DEFVAL(1));
     ClassDB::bind_method(D_METHOD("burn_fracture", "cell", "strength", "scorch_strength", "damage_ratio", "damage"), &RegolithSprite::burn_fracture, DEFVAL(255), DEFVAL(110), DEFVAL(0.65f), DEFVAL(1));
@@ -78,8 +92,25 @@ void RegolithSprite::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_angular_velocity"), &RegolithSprite::get_angular_velocity);
     ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "angular_velocity", PROPERTY_HINT_NONE, "radians_as_degrees", PROPERTY_USAGE_EDITOR), "set_angular_velocity", "get_angular_velocity");
 
-    ClassDB::bind_method(D_METHOD("apply_impulse", "impulse", "world_position"), &RegolithSprite::apply_impulse);
+    ClassDB::bind_method(D_METHOD("apply_impulse", "impulse", "world_position", "max_delta_speed", "max_delta_spin"), &RegolithSprite::apply_impulse, DEFVAL(0.0f), DEFVAL(0.0f));
     ClassDB::bind_method(D_METHOD("_reload"), &RegolithSprite::_reload);
+
+    ClassDB::bind_method(D_METHOD("get_core_count"), &RegolithSprite::get_core_count);
+    ClassDB::bind_method(D_METHOD("get_core_type", "index"), &RegolithSprite::get_core_type);
+    ClassDB::bind_method(D_METHOD("get_core_position", "index"), &RegolithSprite::get_core_position);
+    ClassDB::bind_method(D_METHOD("get_core_initial_cells", "index"), &RegolithSprite::get_core_initial_cells);
+    ClassDB::bind_method(D_METHOD("get_core_remaining_cells", "index"), &RegolithSprite::get_core_remaining_cells);
+    ClassDB::bind_method(D_METHOD("get_core_damage", "index"), &RegolithSprite::get_core_damage);
+    ClassDB::bind_method(D_METHOD("set_cores_unstable"), &RegolithSprite::set_cores_unstable);
+    ClassDB::bind_method(D_METHOD("repair_cores"), &RegolithSprite::repair_cores);
+    ClassDB::bind_method(D_METHOD("update_cores"), &RegolithSprite::update_cores);
+    ClassDB::bind_static_method("RegolithSprite", D_METHOD("is_core_type", "type"), &RegolithSprite::is_core_type);
+
+    ClassDB::bind_method(D_METHOD("set_core_explode_damage", "damage"), &RegolithSprite::set_core_explode_damage);
+    ClassDB::bind_method(D_METHOD("get_core_explode_damage"), &RegolithSprite::get_core_explode_damage);
+    ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "core_explode_damage", PROPERTY_HINT_RANGE, "0,1,0.01"), "set_core_explode_damage", "get_core_explode_damage");
+
+    ADD_SIGNAL(MethodInfo("core_exploded", PropertyInfo(Variant::VECTOR2, "position"), PropertyInfo(Variant::INT, "power"), PropertyInfo(Variant::INT, "type")));
 
     BIND_ENUM_CONSTANT(CELL_EMPTY);
     BIND_ENUM_CONSTANT(CELL_FILLED);

@@ -1,4 +1,4 @@
-[gd_scene load_steps=13 format=3]
+[gd_scene load_steps=24 format=3]
 
 [ext_resource type="Script" path="res://game/scripts/player/Player.gd" id="1"]
 [ext_resource type="Texture2D" path="res://game/images/sprites/player.png" id="2"]
@@ -13,6 +13,17 @@
 [ext_resource type="Material" path="res://game/shaders/regolith_rope_material.tres" id="11"]
 [ext_resource type="Resource" path="res://game/config/weapons/lightning_bolt.tres" id="12"]
 [ext_resource type="Resource" path="res://game/config/weapons/lightning_ball.tres" id="13"]
+[ext_resource type="Script" path="res://game/scripts/player/PlayerCloud.gd" id="14"]
+[ext_resource type="Resource" path="res://game/config/effects/player_cloud.tres" id="15"]
+[ext_resource type="Resource" path="res://game/config/effects/player_cloud_fire.tres" id="16"]
+[ext_resource type="Resource" path="res://game/config/effects/player_cloud_burst.tres" id="17"]
+[ext_resource type="Resource" path="res://game/config/effects/player_cloud_lightning.tres" id="18"]
+[ext_resource type="Material" path="res://game/shaders/regolith_lightning_material.tres" id="19"]
+[ext_resource type="Script" path="res://game/scripts/player/PlayerShield.gd" id="20"]
+[ext_resource type="Resource" path="res://game/config/player/shield.tres" id="21"]
+[ext_resource type="Script" path="res://game/scripts/weapons/MissileTargeter.gd" id="22"]
+[ext_resource type="PackedScene" path="res://game/scenes/effects/ParticleEffect.tscn" id="23"]
+[ext_resource type="Material" path="res://game/config/effects/player_cloud_additive_material.tres" id="24"]
 
 [node name="Player" type="RegolithSprite" groups=["player", "regolith"]]
 material = ExtResource("10")
@@ -51,3 +62,21 @@ props = ExtResource("12")
 [node name="LightningBall" type="Node2D" parent="."]
 script = ExtResource("4")
 props = ExtResource("13")
+
+[node name="Cloud" type="Node2D" parent="."]
+script = ExtResource("14")
+cloud = ExtResource("15")
+fire = ExtResource("16")
+burst = ExtResource("17")
+lightning = ExtResource("18")
+lightning_material = ExtResource("19")
+particles_scene = ExtResource("23")
+additive_material = ExtResource("24")
+
+[node name="Shield" type="Node2D" parent="."]
+script = ExtResource("20")
+props = ExtResource("21")
+
+[node name="MissileTargeter" type="Node2D" parent="." node_paths=PackedStringArray("weapon")]
+script = ExtResource("22")
+weapon = NodePath("../Missiles")

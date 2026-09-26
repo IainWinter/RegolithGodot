@@ -6,6 +6,7 @@
 #include "DestructibleSprite/Algorithm/SpriteRopeSpawn.h"
 
 #include <godot_cpp/core/object.hpp>
+#include <godot_cpp/variant/string_name.hpp>
 
 #include <godot_cpp/templates/hash_map.hpp>
 

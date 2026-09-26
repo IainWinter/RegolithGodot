@@ -27,9 +27,22 @@ class_name LightningProps
 @export var fade_color := Color(90.0 / 255.0, 40.0 / 255.0, 180.0 / 255.0, 0.0)
 @export var emission := 0.25
 
+@export_group("Line")
+# full width of the channel stroke in world cells for the smooth draw,
+# branches are thinner. the engine's line max_radius (0.02 units = 1.3 cells)
+# was the full body width too, but its glow came from the radiance emission
+# pass, so with the halo drawn as a stroke under it the body is kept at half
+# that to read as a thin bright line
+@export var line_width := 0.65
+
 @export_group("Sparks")
 @export var emit_spark := false
 @export var particle_density := 50.0
+# the particle look of the sparks, the spark ParticleSpawn of the engine's
+# LightningSpawn: they draw through the EffectSpawner's ParticleEffect
+# like every other spark. spark_color and spark_speed are the cell
+# particle stand in when no spark props is set
+@export var spark: ParticleProps = preload("res://game/config/effects/lightning_spark.tres")
 @export var spark_color := Color(0.6, 0.7, 1.0, 0.9)
 @export var spark_speed := 3.0
 
