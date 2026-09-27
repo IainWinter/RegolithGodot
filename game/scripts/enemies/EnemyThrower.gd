@@ -42,7 +42,7 @@ class Held:
 		goal = held_goal
 
 var active := true
-var host: Enemy
+var host: AiScript
 var holding := {}
 
 var center := Vector2.ZERO
@@ -53,7 +53,7 @@ var target := Vector2.ZERO
 func _ready() -> void:
 	if Engine.is_editor_hint():
 		return
-	host = get_parent() as Enemy
+	host = get_parent() as AiScript
 
 func can_hold_more() -> bool:
 	return active and holding.size() < max_holding
@@ -78,7 +78,7 @@ func held() -> Array:
 
 func center_units() -> Vector2:
 	if host == null:
-		host = get_parent() as Enemy
+		host = get_parent() as AiScript
 	return host.local_point_units(origin) if host else Vector2.ZERO
 
 func arc_base_angle(player_pos: Vector2) -> float:
@@ -132,8 +132,11 @@ func is_throwable(sprite: Node) -> bool:
 	if throwable == null or throwable.thrown or throwable.held_by != null:
 		return false
 
-	if sprite is EnemyBomb and sprite.exploding:
-		return false
+	# a bomb whose BombBehavior has already lit the fuse is off-limits
+	if sprite is AiScript and (sprite as AiScript).ai_class == "bomb":
+		var bomb_behavior := sprite.get_node_or_null("BombBehavior")
+		if bomb_behavior != null and bomb_behavior.exploding:
+			return false
 
 	return sprite.get_active_cell_count() <= max_cells
 
@@ -204,11 +207,12 @@ func finish_throw(node: RegolithSprite) -> void:
 	throwable.thrown = true
 	throwable.held_by = null
 
-	# a thrown bomb fuses to burst about when it reaches the target
-	if node is EnemyBomb:
+	# a thrown bomb fuses to burst about when it reaches the target: fire
+	# start_fuse on the AiScript, the BombBehavior child picks it up
+	if node is AiScript and (node as AiScript).ai_class == "bomb":
 		var distance: float = target.distance_to(node.global_position / Steering.ppu())
 		var speed: float = node.linear_velocity.length()
-		node.start_fuse(minf(distance / maxf(speed, 0.001), 4.0))
+		(node as AiScript).emit_event(&"start_fuse", {"time": minf(distance / maxf(speed, 0.001), 4.0)})
 
 	threw.emit(node)
 
@@ -289,7 +293,7 @@ func around_direction(held_to_goal: Vector2, thrower_to_held: Vector2) -> Vector
 	return (perp if swing_left else -perp) * radius_max
 
 func draw_gizmos(g: RegolithGizmos) -> void:
-	var host_now := host if host else get_parent() as Enemy
+	var host_now := host if host else get_parent() as AiScript
 	if host_now == null:
 		return
 
@@ -300,7 +304,7 @@ func draw_gizmos(g: RegolithGizmos) -> void:
 	var name := RegolithDebugDraw.AI_THROWER
 	var ppu := Steering.ppu()
 	var to_local := host_now.global_transform.affine_inverse()
-	# inline of Enemy.local_point_units — Enemy.gd is not @tool so calling
+	# inline of AiScript.local_point_units — AiScript.gd is not @tool so calling
 	# its gdscript methods on a placeholder at editor time errors. use only
 	# c++ methods on RegolithSprite/Node2D, which work on placeholders. at
 	# edit time is_loaded() is false (no active world), so fall back to the

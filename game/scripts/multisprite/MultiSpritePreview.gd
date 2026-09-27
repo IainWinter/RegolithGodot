@@ -39,6 +39,13 @@ func document_path() -> String:
 			if value is String and value != "":
 				return value
 
+		# a GunBarrel sibling holds the path when the mount runs plain AiScript
+		var gun_barrel := parent.get_node_or_null("GunBarrel")
+		if gun_barrel != null:
+			var ms = gun_barrel.get("multisprite")
+			if ms is String and ms != "":
+				return ms
+
 	return file
 
 static func pixels_per_cell() -> float:

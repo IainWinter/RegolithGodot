@@ -11,26 +11,26 @@ local M = require("message_types")
 
 local Turret = class("turret", Gun)
 
-Turret.DEFAULTS = {
-	range = 30.0,
-	muzzle = 1.2,
-	aim_tolerance = 0.06,
-	align_torque = 6.0,
-	align_damping = 4.0,
-	-- rad/s, the slow traverse
-	max_turn_rate = 0.6,
-	greeting = "Contact. Traversing to bearing.",
-}
-
 -- the gun's numbers under the turret's own
-function Turret:defaults()
+function Turret:settings()
 	local merged = {}
 
-	for k, v in pairs(Gun.DEFAULTS) do
+	for k, v in pairs(Gun.settings(self)) do
 		merged[k] = v
 	end
 
-	for k, v in pairs(Turret.DEFAULTS) do
+	local own = {
+		range = 30.0,
+		muzzle = 1.2,
+		aim_tolerance = 0.06,
+		align_torque = 6.0,
+		align_damping = 4.0,
+		-- rad/s, the slow traverse
+		max_turn_rate = 0.6,
+		greeting = "Contact. Traversing to bearing.",
+	}
+
+	for k, v in pairs(own) do
 		merged[k] = v
 	end
 

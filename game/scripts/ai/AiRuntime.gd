@@ -4,7 +4,7 @@ extends Node
 # res://game/lua/prelude.lua, then the MODULES (plain tables scripts reach
 # with require(name), message_types holds the message kind constants),
 # then each other .lua file there as a class named after the file.
-# instances are made per node by EnemyScripted and addressed by id, the lua
+# instances are made per node by AiScript and addressed by id, the lua
 # side reaches its node through self.node and the runtime through the ai
 # table the prelude wraps around __runtime. each scripted node also owns an
 # AiStateMachine the script registers its states with, see that file.

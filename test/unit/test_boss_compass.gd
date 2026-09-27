@@ -60,13 +60,13 @@ func add_player(units: Vector2) -> Player:
 	arena.add_child(player)
 	return player
 
-func add_enemy(key: String, units: Vector2) -> Enemy:
-	var enemy: Enemy = load(SCENES[key]).instantiate()
+func add_enemy(key: String, units: Vector2) -> AiScript:
+	var enemy: AiScript = load(SCENES[key]).instantiate()
 	enemy.position = units * ppu()
 	arena.add_child(enemy)
 	return enemy
 
-func lua_value(boss: EnemyScripted, expression: String) -> Variant:
+func lua_value(boss: AiScript, expression: String) -> Variant:
 	assert_eq(Ai.lua.run("__probe = (function(self) return %s end)(__instance(%d))" % [expression, boss.ai_id]), "")
 	return Ai.lua.get_global("__probe")
 
@@ -88,7 +88,7 @@ func remove_weakpoints(sprite: RegolithSprite, code: int) -> int:
 
 func test_shell_runs_boss_compass_lua_and_settles_into_phase_one() -> void:
 	add_player(Vector2.ZERO)
-	var boss: EnemyBossCompass = add_enemy("boss_compass", Vector2(0.0, 30.0))
+	var boss: AiScript = add_enemy("boss_compass", Vector2(0.0, 30.0))
 	await wait_physics_frames(3)
 
 	assert_eq(boss.ai_class, "boss_compass")
@@ -104,19 +104,19 @@ func test_shell_runs_boss_compass_lua_and_settles_into_phase_one() -> void:
 	assert_eq(int(lua_value(boss, "self.phase")), 1)
 	assert_eq(int(lua_value(boss, "self.phases[1].alive_type")), RegolithSprite.CELL_WEAKPOINT1)
 	assert_eq(int(lua_value(boss, "self.phases[2].alive_type")), RegolithSprite.CELL_WEAKPOINT2)
-	assert_true(boss.thrower.active, "phase one throws")
+	assert_true(boss.get_thrower().active, "phase one throws")
 	assert_true(lua_value(boss, "self.weapon_active"), "phase one fires")
-	assert_true(boss.shield.active)
-	assert_true(boss.trap.active)
+	assert_true(boss.get_node("BossCompassPhase").shield.active)
+	assert_true(boss.get_node("BossCompassPhase").trap.active)
 	assert_gt(Dialog.queued_texts().size() + (1 if Dialog.current_text() != "" else 0), 0, "a line at the phase change")
 	assert_eq(errors, [])
 
 func test_phases_advance_on_weakpoint_loss_and_the_final_phase_detaches() -> void:
 	add_player(Vector2.ZERO)
-	var boss: EnemyBossCompass = add_enemy("boss_compass", Vector2(0.0, 30.0))
+	var boss: AiScript = add_enemy("boss_compass", Vector2(0.0, 30.0))
 	await wait_physics_frames(2)
 
-	boss.trap.active = false
+	boss.get_node("BossCompassPhase").trap.active = false
 	assert_eq(Ai.lua.run("__instance(%d).phases[1].zones[1].interval = 0.5" % boss.ai_id), "")
 
 	var spawned: Array = []
@@ -125,12 +125,12 @@ func test_phases_advance_on_weakpoint_loss_and_the_final_phase_detaches() -> voi
 			spawned.append(node))
 	var phases: Array = []
 	boss.state_machine.state_changed.connect(func(_from: String, to: String): phases.append(to))
-	watch_signals(boss)
+	watch_signals(boss.get_node("BossCompassPhase"))
 	await wait_physics_frames(60)
 
 	assert_eq(boss.state_machine.get_state(), "phase_1")
 	assert_gt(spawned.size(), 0, "phase one spawned something through the bus")
-	assert_true(spawned.all(func(e): return e is EnemyBomb), "phase one's zone only drops bombs")
+	assert_true(spawned.all(func(e): return (e is AiScript and (e as AiScript).ai_class == "bomb")), "phase one's zone only drops bombs")
 	assert_eq(int(lua_value(boss, "#self.spawned")), spawned.size(), "the shell heard back about each placed spawn")
 
 	for bomb in spawned:
@@ -140,7 +140,7 @@ func test_phases_advance_on_weakpoint_loss_and_the_final_phase_detaches() -> voi
 	await wait_physics_frames(3)
 	assert_eq(boss.state_machine.get_state(), "phase_2", "phase two after the weakpoints went")
 	assert_eq(phases, ["phase_2"], "the phase change was announced once")
-	assert_false(boss.thrower.active, "phase two stops throwing")
+	assert_false(boss.get_thrower().active, "phase two stops throwing")
 	assert_true(lua_value(boss, "self.weapon_active"), "phase two still fires")
 
 	remove_weakpoints(boss, MASK_WEAKPOINT2)
@@ -151,17 +151,17 @@ func test_phases_advance_on_weakpoint_loss_and_the_final_phase_detaches() -> voi
 	assert_true(boss.dead, "the shell is a rock now")
 	assert_false(boss.is_in_group("enemy"))
 	assert_false(boss.is_in_group("thrower"))
-	assert_false(boss.shield.active)
-	assert_false(boss.trap.active)
+	assert_false(boss.get_node("BossCompassPhase").shield.active)
+	assert_false(boss.get_node("BossCompassPhase").trap.active)
 	assert_eq(boss.count_cells_of_type(RegolithSprite.CELL_WEAKPOINT1) + boss.count_cells_of_type(RegolithSprite.CELL_WEAKPOINT2), 0)
 
-	var final_phase: EnemyBossStingray = null
+	var final_phase: AiScript = null
 	for enemy in get_tree().get_nodes_in_group("enemy"):
-		if enemy is EnemyBossStingray:
+		if enemy is AiScript:
 			final_phase = enemy
 
 	assert_not_null(final_phase, "the final phase detached as a spawn")
-	assert_signal_emitted(boss, "detached")
+	assert_signal_emitted(boss.get_node("BossCompassPhase"), "detached")
 	if final_phase:
 		await wait_physics_frames(3)
 		assert_gt(final_phase.get_active_cell_count(), 0)
@@ -172,8 +172,8 @@ func test_phases_advance_on_weakpoint_loss_and_the_final_phase_detaches() -> voi
 func test_shell_fires_bolts_from_a_hull_point_facing_the_player() -> void:
 	# the prefab points all sit on the hull's lower side, the player goes there
 	add_player(Vector2(0.0, 14.0))
-	var boss: EnemyBossCompass = add_enemy("boss_compass", Vector2.ZERO)
-	boss.trap.active = false
+	var boss: AiScript = add_enemy("boss_compass", Vector2.ZERO)
+	boss.get_node("BossCompassPhase").trap.active = false
 	await wait_physics_frames(5)
 
 	assert_not_null(boss.weapon, "the bolt weapon comes from weapon_props")
@@ -181,23 +181,24 @@ func test_shell_fires_bolts_from_a_hull_point_facing_the_player() -> void:
 	assert_ne(boss.weapon.local_fire_origin, Vector2.ZERO, "fires from a hull point, not the origin")
 
 	var point: Vector2 = lua_value(boss, "self.fire_point")
-	assert_true(boss.fire_points.has(point), "one of the prefab points")
+	assert_true(boss.get_node("BossCompassPhase").fire_points.has(point), "one of the prefab points")
 	var to_player := boss.player_pos - boss.pos
 	assert_gt((boss.local_point_units(point) - boss.pos).dot(to_player), 0.0, "a point on the player's side")
 	assert_eq(errors, [])
 
 func test_shell_grabs_a_bomb_that_drifts_into_the_thrower() -> void:
 	add_player(Vector2(-40.0, 0.0))
-	var boss: EnemyBossCompass = add_enemy("boss_compass", Vector2.ZERO)
-	boss.trap.active = false
+	var boss: AiScript = add_enemy("boss_compass", Vector2.ZERO)
+	var parts: BossCompassPhase = boss.get_node("BossCompassPhase")
+	parts.trap.active = false
 	await wait_physics_frames(2)
 
-	var thrower := boss.thrower
+	var thrower: EnemyThrower = boss.get_thrower()
 	var grabbed := {"count": 0}
 	thrower.grabbed.connect(func(_node): grabbed["count"] += 1)
-	var center := thrower.center_units()
-	var away := (center - boss.pos).normalized()
-	var bomb: EnemyBomb = add_enemy("bomb", center + away * 1.5)
+	var center: Vector2 = thrower.center_units()
+	var away: Vector2 = (center - boss.pos).normalized()
+	var bomb: AiScript = add_enemy("bomb", center + away * 1.5)
 
 	for i in 300:
 		await wait_physics_frames(1)

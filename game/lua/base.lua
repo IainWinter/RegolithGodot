@@ -16,19 +16,21 @@ local M = require("message_types")
 
 local Base = class("base")
 
-local DEFAULTS = {
-	move_speed = 1.0,
-	move_accel = 1.0,
-	goal_interval = 25.0,
-	far_distance = 20.0,
-	goal_ellipse = vec2(16.0, 6.0),
-	align_torque = 0.5,
-	align_damping = 2.0,
-	find_interval = 0.2,
-}
+function Base:settings()
+	return {
+		move_speed = 1.0,
+		move_accel = 1.0,
+		goal_interval = 25.0,
+		far_distance = 20.0,
+		goal_ellipse = vec2(16.0, 6.0),
+		align_torque = 0.5,
+		align_damping = 2.0,
+		find_interval = 0.2,
+	}
+end
 
 function Base:init()
-	self:config(DEFAULTS)
+	self:apply_settings()
 	self.player = nil
 	self.last_seen = nil
 	self.greeted = false

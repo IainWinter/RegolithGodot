@@ -136,10 +136,8 @@ func test_say_from_resolves_the_speaker_from_the_node() -> void:
 	assert_eq(CharacterRegistry.id_for_node(owner), FIGHTER)
 	owner.free()
 
-	# the gdscript class of an enemy, EnemyBossCompass -> boss_compass
-	var boss := EnemyBossCompass.new()
-	assert_eq(CharacterRegistry.id_for_node(boss), &"boss_compass")
-	boss.free()
+	# the gdscript class-name walk (checked directly via id_for_class_name
+	# above, since no bespoke boss subclass exists anymore)
 
 	# nothing known: the node's name stands in
 	var stray := Node.new()

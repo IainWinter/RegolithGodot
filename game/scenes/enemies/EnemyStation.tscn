@@ -1,6 +1,6 @@
 [gd_scene load_steps=9 format=3]
 
-[ext_resource type="Script" uid="uid://bw72gyuqxthyd" path="res://game/scripts/enemies/EnemyScripted.gd" id="1"]
+[ext_resource type="Script" uid="uid://bw72gyuqxthyd" path="res://game/scripts/enemies/AiScript.gd" id="1"]
 [ext_resource type="Texture2D" path="res://game/images/sprites/station.png" id="2"]
 [ext_resource type="Texture2D" path="res://game/images/sprites/station_mask.png" id="3"]
 [ext_resource type="Resource" path="res://game/config/enemies/station_cannon.tres" id="4"]

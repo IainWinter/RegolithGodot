@@ -242,7 +242,7 @@ godot::LocalVector<Vector2> pathfind(const PathfindWorld& world, Vector2 start, 
         walk = it->second;
     }
 
-    path.invert();
+    path.reverse();
     path.push_back(target);
 
     return path;

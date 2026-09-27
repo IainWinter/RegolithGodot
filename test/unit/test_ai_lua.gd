@@ -232,7 +232,7 @@ func test_spawn_answers_the_sender_with_a_spawned_message() -> void:
 		return
 	var message: Dictionary = probe.inbox[0]
 	assert_eq(message["kind"], Ai.SPAWNED)
-	assert_true(message["node"] is EnemyFighter, "the placed node rides along")
+	assert_true(message["node"] is AiScript, "the placed node rides along")
 	assert_eq(message["request"], request)
 	assert_eq(message["transport"], "runtime")
 	assert_eq(message["sender"], Ai)
@@ -240,7 +240,7 @@ func test_spawn_answers_the_sender_with_a_spawned_message() -> void:
 func test_spawn_expired_reaches_the_sender() -> void:
 	var probe := Probe.new()
 	arena.add_child(probe)
-	var blocker: EnemyFighter = FIGHTER_SCENE.instantiate()
+	var blocker: AiScript = FIGHTER_SCENE.instantiate()
 	blocker.ai_class = ""
 	arena.add_child(blocker)
 	await wait_physics_frames(2)
@@ -254,7 +254,7 @@ func test_spawn_expired_reaches_the_sender() -> void:
 		assert_eq(probe.inbox[0]["kind"], Ai.SPAWN_EXPIRED)
 
 func test_lua_spawn_lands_in_the_script_inbox() -> void:
-	var bomb: EnemyBomb = BOMB_SCENE.instantiate()
+	var bomb: AiScript = BOMB_SCENE.instantiate()
 	arena.add_child(bomb)
 	await wait_physics_frames(2)
 
@@ -262,13 +262,13 @@ func test_lua_spawn_lands_in_the_script_inbox() -> void:
 	assert_true(Ai.lua.get_global("__r") is SpawnRequest, "the request comes back to lua")
 	await wait_physics_frames(4)
 	assert_eq(Ai.lua.run("__got = __t.got"), "")
-	assert_true(Ai.lua.get_global("__got") is EnemyFighter, "the script saw its spawn land")
+	assert_true(Ai.lua.get_global("__got") is AiScript, "the script saw its spawn land")
 
 func test_group_sprites_near_and_line_of_sight() -> void:
 	var a := Probe.new()
 	a.position = Vector2.ZERO
 	arena.add_child(a)
-	var fighter: EnemyFighter = FIGHTER_SCENE.instantiate()
+	var fighter: AiScript = FIGHTER_SCENE.instantiate()
 	fighter.position = Vector2(3, 0) * ppu()
 	arena.add_child(fighter)
 	var player: Player = PLAYER_SCENE.instantiate()
@@ -306,10 +306,10 @@ func test_group_sprites_near_and_line_of_sight() -> void:
 	assert_lt(float(Ai.lua.get_global("__hit")), 4.0)
 
 func test_jointed_reports_the_joint_partner() -> void:
-	var a: EnemyFighter = FIGHTER_SCENE.instantiate()
+	var a: AiScript = FIGHTER_SCENE.instantiate()
 	a.ai_class = ""
 	arena.add_child(a)
-	var b: EnemyFighter = FIGHTER_SCENE.instantiate()
+	var b: AiScript = FIGHTER_SCENE.instantiate()
 	b.ai_class = ""
 	b.position = Vector2(4, 0) * ppu()
 	arena.add_child(b)
@@ -323,7 +323,7 @@ func test_jointed_reports_the_joint_partner() -> void:
 
 func test_lua_say_reaches_the_dialog() -> void:
 	Dialog.clear()
-	var bomb: EnemyBomb = BOMB_SCENE.instantiate()
+	var bomb: AiScript = BOMB_SCENE.instantiate()
 	arena.add_child(bomb)
 	await wait_physics_frames(2)
 
@@ -337,7 +337,7 @@ func test_lua_say_reaches_the_dialog() -> void:
 # tunables
 
 func test_ai_config_overrides_the_script_defaults() -> void:
-	var station: EnemyScripted = load("res://game/scenes/enemies/EnemyStation.tscn").instantiate()
+	var station: AiScript = load("res://game/scenes/enemies/EnemyStation.tscn").instantiate()
 	station.ai_config = {"spawn_interval": 0.5, "spawn_origin": Vector2(0.25, 0.25)}
 	arena.add_child(station)
 	await wait_physics_frames(2)
@@ -439,10 +439,10 @@ func test_shot_courier_never_lands() -> void:
 func test_broadcast_reaches_receivers_in_range() -> void:
 	var a := Probe.new()
 	arena.add_child(a)
-	var fighter: EnemyFighter = FIGHTER_SCENE.instantiate()
+	var fighter: AiScript = FIGHTER_SCENE.instantiate()
 	fighter.position = Vector2(3, 0) * ppu()
 	arena.add_child(fighter)
-	var far: EnemyFighter = FIGHTER_SCENE.instantiate()
+	var far: AiScript = FIGHTER_SCENE.instantiate()
 	far.position = Vector2(40, 0) * ppu()
 	arena.add_child(far)
 	await wait_physics_frames(2)
@@ -458,7 +458,7 @@ func test_player_sensor_reports_seen_update_lost() -> void:
 	player.set_process(false)
 	arena.add_child(player)
 
-	var host: EnemyFighter = FIGHTER_SCENE.instantiate()
+	var host: AiScript = FIGHTER_SCENE.instantiate()
 	host.ai_class = ""
 	arena.add_child(host)
 	var sensor: PlayerSensor = host.get_node("PlayerSensor")
@@ -485,7 +485,7 @@ func test_scripted_enemy_gets_sensor_messages_in_lua() -> void:
 	player.set_process(false)
 	arena.add_child(player)
 
-	var bomb: EnemyBomb = BOMB_SCENE.instantiate()
+	var bomb: AiScript = BOMB_SCENE.instantiate()
 	arena.add_child(bomb)
 	await wait_physics_frames(5)
 

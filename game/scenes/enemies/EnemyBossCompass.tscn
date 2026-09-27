@@ -1,6 +1,6 @@
-[gd_scene load_steps=14 format=3 uid="uid://c0c8o2syq3o55"]
+[gd_scene load_steps=15 format=3 uid="uid://c0c8o2syq3o55"]
 
-[ext_resource type="Script" uid="uid://bh7graqg2edvt" path="res://game/scripts/enemies/EnemyBossCompass.gd" id="1"]
+[ext_resource type="Script" uid="uid://bw72gyuqxthyd" path="res://game/scripts/enemies/AiScript.gd" id="1"]
 [ext_resource type="Texture2D" uid="uid://2aw5odt5pfnc" path="res://game/images/sprites/boss1.png" id="2"]
 [ext_resource type="Texture2D" uid="uid://dx8vhs334hja8" path="res://game/images/sprites/boss1_mask.png" id="3"]
 [ext_resource type="Resource" uid="uid://dx73j4g5x4ufx" path="res://game/config/enemies/boss_bolt.tres" id="4"]
@@ -14,18 +14,16 @@
 [ext_resource type="Script" uid="uid://d1yu43p2ctr82" path="res://game/scripts/enemies/EnemyThrower.gd" id="16"]
 [ext_resource type="Script" uid="uid://bqnl25ovoxk3b" path="res://game/scripts/ai/PlayerSensor.gd" id="17"]
 [ext_resource type="Script" path="res://game/scripts/ai/CellSensor.gd" id="18"]
+[ext_resource type="Script" path="res://game/scripts/enemies/BossCompassPhase.gd" id="19"]
 
-[node name="EnemyBossCompass" type="RegolithSprite" unique_id=413282196 node_paths=PackedStringArray("thrower", "trap", "shield") groups=["enemy", "regolith", "thrower"]]
+[node name="EnemyBossCompass" type="RegolithSprite" unique_id=413282196 groups=["enemy", "regolith", "thrower"]]
 texture = ExtResource("2")
 mask_texture = ExtResource("3")
 rope_material = ExtResource("7")
 angular_damping = 1.0
 material = ExtResource("6")
 script = ExtResource("1")
-rock_props = ExtResource("5")
-thrower = NodePath("Thrower")
-trap = NodePath("EnemyBossTrap")
-shield = NodePath("EnemyBossShield")
+ai_class = "boss_compass"
 weapon_props = ExtResource("4")
 
 [node name="Thrower" type="Node" parent="." unique_id=149625209]
@@ -47,6 +45,12 @@ lightning_material = ExtResource("15")
 [node name="EnemyBossShield" type="Node" parent="." unique_id=1752052851]
 script = ExtResource("13")
 points = PackedVector2Array(0.78, 1.31, 1, 0.58, 1.05, -0.22, 0.64, -0.57, 0.21, -1.04, -0.24, -0.95, -1, -1.25, -1.27, -0.78, -0.67, 0.07, 0.17, 0.89)
+
+[node name="BossCompassPhase" type="Node" parent="." node_paths=PackedStringArray("shield", "trap")]
+script = ExtResource("19")
+shield = NodePath("../EnemyBossShield")
+trap = NodePath("../EnemyBossTrap")
+rock_props = ExtResource("5")
 
 [node name="PlayerSensor" type="Node" parent="."]
 script = ExtResource("17")

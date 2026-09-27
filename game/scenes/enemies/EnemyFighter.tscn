@@ -1,7 +1,7 @@
 [gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://game/scripts/ai/PlayerSensor.gd" id="sensor"]
-[ext_resource type="Script" path="res://game/scripts/enemies/EnemyFighter.gd" id="1"]
+[ext_resource type="Script" uid="uid://bw72gyuqxthyd" path="res://game/scripts/enemies/AiScript.gd" id="1"]
 [ext_resource type="Texture2D" path="res://game/images/sprites/fighter.png" id="2"]
 [ext_resource type="Texture2D" path="res://game/images/sprites/fighter_mask.png" id="3"]
 [ext_resource type="Resource" path="res://game/config/enemies/fighter_cannon.tres" id="4"]
@@ -16,6 +16,7 @@ mask_texture = ExtResource("3")
 angle_fixed = true
 angular_damping = 1.0
 script = ExtResource("1")
+ai_class = "fighter"
 weapon_props = ExtResource("4")
 
 [node name="PlayerSensor" type="Node" parent="."]

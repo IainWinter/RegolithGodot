@@ -64,13 +64,13 @@ func set_box(box_center: Vector2, half_size: Vector2, box_angle: float) -> void:
 	angle = box_angle
 	push = box_center
 
-func set_hull_box(host: Enemy) -> void:
+func set_hull_box(host: AiScript) -> void:
 	center = host.local_point_units(trap_position)
 	half = trap_scale * Steering.half_extent_units(host)
 	angle = host.global_rotation - trap_angle
 	push = host.local_point_units(push_point)
 
-func update(host: Enemy, delta: float) -> void:
+func update(host: AiScript, delta: float) -> void:
 	if not active:
 		if pull_target:
 			release(false)
@@ -167,7 +167,7 @@ func draw_gizmos(g: RegolithGizmos) -> void:
 	if Engine.is_editor_hint():
 		return
 
-	var host := get_parent() as Enemy
+	var host := get_parent() as AiScript
 	if host == null:
 		return
 
@@ -191,7 +191,7 @@ func damage_player(player: RegolithSprite) -> void:
 	var reach := Steering.sprite_radius_units(player) * Steering.ppu()
 	Explosion.blast_rays(player, player.global_position, reach, damage_rays, damage_cells, false, 255, 110, 0.65, 1)
 
-func spawn_boundary_lightning(host: Enemy, player_pos: Vector2) -> void:
+func spawn_boundary_lightning(host: AiScript, player_pos: Vector2) -> void:
 	if lightning == null:
 		return
 

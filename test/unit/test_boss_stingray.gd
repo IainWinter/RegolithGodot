@@ -24,7 +24,7 @@ class FakePlayer extends RegolithSprite:
 var arena: Node2D
 var world: RegolithWorld
 var spawner: StableSpawner
-var boss: EnemyBossStingray
+var boss: AiScript
 var errors: Array = []
 
 func before_each() -> void:
@@ -107,7 +107,7 @@ func test_player_report_starts_the_orbit() -> void:
 	await wait_physics_frames(2)
 
 	assert_eq(state(), "orbit")
-	assert_almost_eq(boss.rope_angle_stiffness, boss.rope_stiffness, 0.0001, "limp while it flies")
+	assert_almost_eq(boss.rope_angle_stiffness, boss.get_setting(&"rope_stiffness", 0.02), 0.0001, "limp while it flies")
 	assert_gt(boss.linear_velocity.length(), 0.0, "steering toward the ring")
 
 	boss.receive({"kind": PlayerSensor.PLAYER_LOST})
@@ -116,7 +116,7 @@ func test_player_report_starts_the_orbit() -> void:
 	assert_eq(errors, [])
 
 func test_orbit_dives_after_orbit_roam_time() -> void:
-	boss.orbit_roam_time = 0.05
+	boss.configure({"orbit_roam_time": 0.05})
 	var player := make_player()
 	report_player(player, Vector2(20.0, 0.0))
 
@@ -131,15 +131,15 @@ func test_orbit_dives_after_orbit_roam_time() -> void:
 	assert_eq(errors, [])
 
 func test_ropes_hang_limp_in_flight_and_hold_in_the_fight() -> void:
-	assert_almost_eq(boss.rope_angle_stiffness, boss.rope_stiffness, 0.0001, "limp from the start")
-	assert_almost_eq(boss.rope_stiffness, 0.02, 0.0001, "AiBoss1FinalPhase rope_stiffness")
-	assert_almost_eq(boss.fight_rope_stiffness, 0.3, 0.0001, "AiBoss1Fight rope_stiffness")
+	assert_almost_eq(boss.rope_angle_stiffness, boss.get_setting(&"rope_stiffness", 0.02), 0.0001, "limp from the start")
+	assert_almost_eq(boss.get_setting(&"rope_stiffness", 0.02), 0.02, 0.0001, "AiBoss1FinalPhase rope_stiffness")
+	assert_almost_eq(boss.get_setting(&"fight_rope_stiffness", 0.3), 0.3, 0.0001, "AiBoss1Fight rope_stiffness")
 
-	boss.steer_fight(Vector2.ZERO, 0.0, 1.0 / 60.0)
-	assert_almost_eq(boss.rope_angle_stiffness, boss.fight_rope_stiffness, 0.0001, "held while anchored")
+	boss.get_node("StingrayBehavior").steer_fight(Vector2.ZERO, 0.0, 1.0 / 60.0)
+	assert_almost_eq(boss.rope_angle_stiffness, boss.get_setting(&"fight_rope_stiffness", 0.3), 0.0001, "held while anchored")
 
-	boss.steer_toward_target(Vector2(10.0, 0.0), 1.0, 1.0 / 60.0)
-	assert_almost_eq(boss.rope_angle_stiffness, boss.rope_stiffness, 0.0001, "limp again when it flies")
+	boss.get_node("StingrayBehavior").steer_toward_target(Vector2(10.0, 0.0), 1.0, 1.0 / 60.0)
+	assert_almost_eq(boss.rope_angle_stiffness, boss.get_setting(&"rope_stiffness", 0.02), 0.0001, "limp again when it flies")
 
 	# the states pick the steering: the fight anchors, orbit flies
 	var player := make_player()
@@ -148,23 +148,23 @@ func test_ropes_hang_limp_in_flight_and_hold_in_the_fight() -> void:
 	Ai.invoke(boss.ai_id, "start_fight")
 	await wait_physics_frames(1)
 	assert_eq(state(), "fight")
-	assert_almost_eq(boss.rope_angle_stiffness, boss.fight_rope_stiffness, 0.0001, "the fight state holds the ropes")
+	assert_almost_eq(boss.rope_angle_stiffness, boss.get_setting(&"fight_rope_stiffness", 0.3), 0.0001, "the fight state holds the ropes")
 	assert_eq(errors, [])
 
 func test_fight_rocks_match_the_original_cell_counts() -> void:
-	assert_eq(boss.fight_rock_cells_min, 100)
-	assert_eq(boss.fight_rock_cells_max, 300)
+	assert_eq(int(boss.get_setting(&"fight_rock_cells_min", 100)), 100)
+	assert_eq(int(boss.get_setting(&"fight_rock_cells_max", 300)), 300)
 
 	for i in 50:
-		assert_between(boss.fight_rock_cells(), 100, 300)
+		assert_between(int(Ai.invoke(boss.ai_id, "fight_rock_cells", [])), 100, 300)
 
-	var props := boss.fight_rock_props(200)
+	var props: RockProps = boss.get_node("StingrayBehavior").fight_rock_props(200)
 	assert_eq(props.min_chunks, 1)
 	assert_eq(props.max_chunks, 1)
 	assert_false(props.shape_variants)
 	assert_eq(props.ore_chance, 0.0)
 	assert_almost_eq(props.radius_scale, sqrt(200.0 / PI) / float(RockGenerator.CELLS), 0.0001, "a disc of about 200 cells in one chunk")
-	assert_ne(props, boss.rock_props, "the shared props are untouched")
+	assert_ne(props, boss.get_node("StingrayBehavior").rock_props, "the shared props are untouched")
 
 func test_fight_starts_beside_the_player_with_the_shield_on() -> void:
 	var player := make_player()
@@ -173,44 +173,46 @@ func test_fight_starts_beside_the_player_with_the_shield_on() -> void:
 	Ai.invoke(boss.ai_id, "start_fight")
 
 	assert_eq(state(), "fight")
-	assert_true(boss.shield.active, "start_fight turns the shield on")
+	var parts: StingrayBehavior = boss.get_node("StingrayBehavior")
+	assert_true(parts.shield.active, "start_fight turns the shield on")
 	assert_eq(float(lua_value("self.fight.side")), -1.0, "the boss is left of the player")
 	var fight_position: Vector2 = lua_value("self.fight.position")
-	assert_almost_eq(fight_position, Vector2(20.0 - EnemyBossStingray.camera_size() * boss.fight_offset_ratio, 0.0), Vector2(0.01, 0.01), "a screen beside the player")
+	var fight_offset_ratio: float = boss.get_setting(&"fight_offset_ratio", 1.0)
+	assert_almost_eq(fight_position, Vector2(20.0 - float(RegolithWorld.CAMERA_HEIGHT) * fight_offset_ratio, 0.0), Vector2(0.01, 0.01), "a screen beside the player")
 	assert_eq(errors, [])
 
 func test_player_cloud_ends_the_fight_with_a_bullet_ring() -> void:
 	var player := make_player()
 	report_player(player, Vector2(20.0, 0.0))
 	await wait_physics_frames(1)
-	boss.watch_player()
+	boss.get_node("StingrayBehavior").watch_player()
 	Ai.invoke(boss.ai_id, "start_fight")
 	assert_eq(state(), "fight")
-	assert_true(boss.shield.active)
+	assert_true(boss.get_node("StingrayBehavior").shield.active)
 
-	watch_signals(boss.burst_weapon)
+	watch_signals(boss.get_node("StingrayBehavior").burst_weapon)
 	player.cloud.entered.emit()
 	await wait_physics_frames(1)
 
 	assert_eq(state(), "reposition", "the fight ends and it swings back to orbit")
-	assert_false(boss.shield.active)
-	assert_false(boss.trap.active)
-	assert_signal_emit_count(boss.burst_weapon, "fired", boss.fight_kills_player_bullet_ring_count)
+	assert_false(boss.get_node("StingrayBehavior").shield.active)
+	assert_false(boss.get_node("StingrayBehavior").trap.active)
+	assert_signal_emit_count(boss.get_node("StingrayBehavior").burst_weapon, "fired", int(boss.get_setting(&"fight_kills_player_bullet_ring_count", 8)))
 	assert_eq(errors, [])
 
 func test_player_cloud_outside_a_fight_does_nothing() -> void:
 	var player := make_player()
 	report_player(player, Vector2(20.0, 0.0))
 	await wait_physics_frames(1)
-	boss.watch_player()
+	boss.get_node("StingrayBehavior").watch_player()
 	assert_eq(state(), "orbit")
 
-	watch_signals(boss.burst_weapon)
+	watch_signals(boss.get_node("StingrayBehavior").burst_weapon)
 	player.cloud.entered.emit()
 	await wait_physics_frames(1)
 
 	assert_eq(state(), "orbit")
-	assert_signal_not_emitted(boss.burst_weapon, "fired")
+	assert_signal_not_emitted(boss.get_node("StingrayBehavior").burst_weapon, "fired")
 	assert_eq(errors, [])
 
 func test_dive_telegraph_starts_on_the_body() -> void:

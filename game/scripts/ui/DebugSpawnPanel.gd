@@ -2,26 +2,25 @@ extends CanvasLayer
 class_name DebugSpawnPanel
 
 # backtick panel docked over the running game: one card per spawnable kind the
-# StableSpawner knows and one per RockProps in the config folder. press a
-# card and pull the cursor out of the panel to drag it: a ghost of the
-# sprite at the camera's zoom follows the cursor, the wheel or Q / E turn
-# it, escape drops it, and letting go over the world sends a SpawnRequest on
-# the SpawnBus with wait_for_room off so it lands right where it fell with
-# the ghost's facing. a plain click on a card (press and let go without
-# leaving it) spawns at the click spot, the view center pushed left of the
-# panel, or under the cursor when the SPAWN AT CURSOR toggle is on. the gun
-# and the turret carry a SIZE field, cells across, that rides on the request
-# as scale_cells meta for the StableSpawner to copy onto the node. the panel
-# never instantiates a scene. the drag is the panel's own state machine, not
-# the Control drag and drop: that one cannot be driven headless, cannot turn
-# its preview and takes the escape key itself. while open a left drag on a
-# dynamic sprite pulls it after the cursor. the game keeps running, nothing
-# dims, nothing pauses. looks come from PixelTheme. a RASTER section under
-# the title holds the three low resolution toggles (lightning, bullets /
-# effects, everything), kept in GameSettings and applied through RasterMode,
-# also once on ready so a saved choice comes back with the game, and the
-# font toggle: the ui font rastered on whole pixels or smooth, applied
-# through PixelTheme
+# StableSpawner knows, one per RockProps in the config folder, and one per
+# MultiSprite json in the multisprite folder. press a card and pull the
+# cursor out of the panel to drag it: a ghost of the sprite at the camera's
+# zoom follows the cursor, the wheel or Q / E turn it, escape drops it, and
+# letting go over the world spawns it there with the ghost's facing. a
+# plain click on a card (press and let go without leaving it) spawns at the
+# click spot, the view center pushed left of the panel, or under the cursor
+# when the SPAWN AT CURSOR toggle is on. the gun and the turret carry a
+# SIZE field, cells across, that rides on the request as scale_cells meta.
+# scene kinds and rocks ride the SpawnBus, MultiSprites are instantiated
+# straight into the world's parent. the drag is the panel's own state
+# machine, not the Control drag and drop: that one cannot be driven headless,
+# cannot turn its preview and takes the escape key itself. while open a
+# left drag on a dynamic sprite pulls it after the cursor. the game keeps
+# running, nothing dims, nothing pauses. plain flat debug styling. a RASTER
+# section under the title holds the three low resolution toggles (lightning,
+# bullets / effects, everything), kept in GameSettings and applied through
+# RasterMode, also once on ready so a saved choice comes back with the game,
+# and the font toggle: the ui font rastered on whole pixels or smooth
 
 const ACTION := Controls.SPAWN_PANEL
 const PANEL_WIDTH := 184
@@ -41,7 +40,25 @@ const SIZED_KINDS := {SpawnRequest.Kind.GUN: 32, SpawnRequest.Kind.TURRET: 96}
 const SIZE_MIN := 8
 const SIZE_MAX := 256
 
+# debug palette: flat, dark, no shadows, thin borders. lifted from Godot's
+# own debug docks so the panel reads as a dev tool
+const BG_WINDOW := Color("#181a1f")
+const BG_TITLE := Color("#23262e")
+const BG_SECTION := Color("#12131a")
+const BG_CARD := Color("#1c1f26")
+const BG_CARD_HOVER := Color("#2a3040")
+const BG_CARD_OFF := Color("#16181d")
+const BORDER := Color("#3a3f4b")
+const BORDER_HOVER := Color("#6cb2ff")
+const TEXT := Color("#d6d8de")
+const TEXT_DIM := Color("#7f838c")
+const ACCENT := Color("#6cb2ff")
+const SMALL_FONT := 10
+
 @export var rock_props_dir := "res://game/config/rocks"
+@export var multisprite_dir := "res://game/images/multisprites"
+@export var sprite_material: Material
+@export var rope_material: Material
 
 signal dropped(request: SpawnRequest)
 signal drag_started(entry: Entry)
@@ -70,10 +87,13 @@ var drag_from := Vector2.ZERO
 var dragging := false
 var drag_rotation := 0.0
 
-# a card in the list: a kind, its preview and, for sized kinds, the size
+# a card in the list: a kind, its preview and, for sized kinds, the size.
+# multisprite entries carry a json path instead of a kind, spawned as a
+# MultiSprite node
 class Entry extends PanelContainer:
 	var kind := SpawnRequest.Kind.FIGHTER
 	var rock_props: RockProps
+	var multisprite_path := ""
 	var label := ""
 	# the scene's or rock's own art, null for kinds with none
 	var art: Texture2D
@@ -87,21 +107,22 @@ class Entry extends PanelContainer:
 	var hover: StyleBox
 	var panel: DebugSpawnPanel
 
-	func _init(owner_panel: DebugSpawnPanel, of_kind: SpawnRequest.Kind, text: String, texture: Texture2D, props: RockProps = null, can_drag := true) -> void:
+	func _init(owner_panel: DebugSpawnPanel, of_kind: SpawnRequest.Kind, text: String, texture: Texture2D, props: RockProps = null, can_drag := true, ms_path := "") -> void:
 		panel = owner_panel
 		kind = of_kind
 		label = text
 		art = texture
 		preview = texture if texture else DebugSpawnPanel.placeholder_icon()
 		rock_props = props
+		multisprite_path = ms_path
 		enabled = can_drag
 		scale_cells = SIZED_KINDS.get(kind, 0)
 		mouse_filter = Control.MOUSE_FILTER_STOP
 		mouse_default_cursor_shape = Control.CURSOR_DRAG if enabled else Control.CURSOR_ARROW
 		tooltip_text = "click to spawn, drag into the world" if enabled else "no scene set on the StableSpawner"
 
-		normal = PixelTheme.box(PixelTheme.PAPER_RAISED if enabled else PixelTheme.PAPER, PixelTheme.LINE if enabled else PixelTheme.LINE_DIM, PixelTheme.BORDER, PixelTheme.BORDER, PixelTheme.BORDER, PixelTheme.BORDER, 4, 4)
-		hover = PixelTheme.box(PixelTheme.PAPER_HOVER, PixelTheme.ACCENT, PixelTheme.BORDER, PixelTheme.BORDER, PixelTheme.BORDER, PixelTheme.BORDER, 4, 4)
+		normal = DebugSpawnPanel.flat_box(BG_CARD if enabled else BG_CARD_OFF, BORDER, 1, 2)
+		hover = DebugSpawnPanel.flat_box(BG_CARD_HOVER, BORDER_HOVER, 1, 2)
 		add_theme_stylebox_override("panel", normal)
 
 		var row := HBoxContainer.new()
@@ -131,8 +152,7 @@ class Entry extends PanelContainer:
 		text_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		text_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 		text_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		if not enabled:
-			text_label.add_theme_color_override("font_color", PixelTheme.TEXT_DIM)
+		text_label.add_theme_color_override("font_color", TEXT if enabled else TEXT_DIM)
 		column.add_child(text_label)
 
 		if scale_cells > 0:
@@ -150,8 +170,8 @@ class Entry extends PanelContainer:
 
 		var size_label := Label.new()
 		size_label.text = "SIZE"
-		size_label.add_theme_font_size_override("font_size", PixelTheme.SMALL_FONT_SIZE)
-		size_label.add_theme_color_override("font_color", PixelTheme.TEXT_DIM)
+		size_label.add_theme_font_size_override("font_size", SMALL_FONT)
+		size_label.add_theme_color_override("font_color", TEXT_DIM)
 		size_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		size_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		size_row.add_child(size_label)
@@ -169,13 +189,16 @@ class Entry extends PanelContainer:
 		return size_row
 
 	func is_rock() -> bool:
-		return kind == SpawnRequest.Kind.ROCK
+		return kind == SpawnRequest.Kind.ROCK and multisprite_path == ""
+
+	func is_multisprite() -> bool:
+		return multisprite_path != ""
 
 	func is_sized() -> bool:
 		return SIZED_KINDS.has(kind)
 
 	func drag_data() -> Dictionary:
-		return {"spawn_kind": kind, "rock_props": rock_props, "label": label, "scale_cells": scale_cells}
+		return {"spawn_kind": kind, "rock_props": rock_props, "multisprite_path": multisprite_path, "label": label, "scale_cells": scale_cells}
 
 	# the art's size in cells, the size field for sized kinds
 	func art_cells() -> Vector2:
@@ -235,18 +258,18 @@ class Ghost extends Control:
 			draw_texture_rect(texture, Rect2(origin, cells), false, Color(1, 1, 1, 0.8))
 		else:
 			var radius := cells.x * 0.5
-			draw_circle(Vector2.ZERO, radius, Color(PixelTheme.PAPER, 0.5))
-			draw_arc(Vector2.ZERO, radius, 0.0, TAU, 32, PixelTheme.ACCENT, 1.0 / scale_by)
+			draw_circle(Vector2.ZERO, radius, Color(BG_WINDOW, 0.5))
+			draw_arc(Vector2.ZERO, radius, 0.0, TAU, 32, ACCENT, 1.0 / scale_by)
 
 		# the facing, a tick from the center out of the grid's right edge
 		var reach := padded().x * 0.5
-		draw_line(Vector2.ZERO, Vector2(reach, 0.0), PixelTheme.ACCENT, 1.0 / scale_by)
+		draw_line(Vector2.ZERO, Vector2(reach, 0.0), ACCENT, 1.0 / scale_by)
 
 		if not texture:
 			draw_set_transform(screen, 0.0, Vector2.ONE)
 			var font := ThemeDB.fallback_font
-			var width := font.get_string_size(label, HORIZONTAL_ALIGNMENT_CENTER, -1, PixelTheme.SMALL_FONT_SIZE).x
-			draw_string(font, Vector2(-width * 0.5, 4.0), label, HORIZONTAL_ALIGNMENT_CENTER, -1, PixelTheme.SMALL_FONT_SIZE, PixelTheme.TEXT)
+			var width := font.get_string_size(label, HORIZONTAL_ALIGNMENT_CENTER, -1, SMALL_FONT).x
+			draw_string(font, Vector2(-width * 0.5, 4.0), label, HORIZONTAL_ALIGNMENT_CENTER, -1, SMALL_FONT, TEXT)
 
 # the see through control over the whole view that takes the sprite
 # grabs. it passes what it does not use on to the game
@@ -343,7 +366,6 @@ func build() -> void:
 	root.name = "Root"
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.theme = PixelTheme.theme()
 	add_child(root)
 
 	catcher = DropCatcher.new(self)
@@ -353,7 +375,7 @@ func build() -> void:
 	window = PanelContainer.new()
 	window.name = "Window"
 	window.mouse_filter = Control.MOUSE_FILTER_STOP
-	window.add_theme_stylebox_override("panel", PixelTheme.box(PixelTheme.PAPER, PixelTheme.LINE, PixelTheme.BORDER, PixelTheme.BORDER, PixelTheme.BORDER, PixelTheme.BORDER, 0, 0))
+	window.add_theme_stylebox_override("panel", flat_box(BG_WINDOW, BORDER, 1, 0))
 	window.anchor_left = 1.0
 	window.anchor_right = 1.0
 	window.anchor_top = 0.0
@@ -373,9 +395,9 @@ func build() -> void:
 	column.add_child(build_spawn_options())
 
 	var hint := Label.new()
-	hint.text = "CLICK TO SPAWN, DRAG INTO THE WORLD\nWHEEL OR Q / E TURNS, ESC DROPS"
-	hint.add_theme_font_size_override("font_size", PixelTheme.SMALL_FONT_SIZE)
-	hint.add_theme_color_override("font_color", PixelTheme.TEXT_DIM)
+	hint.text = "click to spawn, drag into the world\nwheel or Q / E turns, esc drops"
+	hint.add_theme_font_size_override("font_size", SMALL_FONT)
+	hint.add_theme_color_override("font_color", TEXT_DIM)
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var hint_box := MarginContainer.new()
 	hint_box.add_theme_constant_override("margin_top", 6)
@@ -405,21 +427,21 @@ func build() -> void:
 
 func build_title() -> Control:
 	var bar := PanelContainer.new()
-	bar.add_theme_stylebox_override("panel", PixelTheme.box(PixelTheme.INK, PixelTheme.LINE, 0, 0, 0, PixelTheme.BORDER, 8, 4))
+	bar.add_theme_stylebox_override("panel", flat_box(BG_TITLE, BORDER, 1, 0, 8, 4))
 
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
 	bar.add_child(row)
 
 	var title := Label.new()
-	title.text = "SPAWN"
-	title.add_theme_color_override("font_color", PixelTheme.ACCENT)
+	title.text = "spawn"
+	title.add_theme_color_override("font_color", ACCENT)
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(title)
 
 	var close_button := Button.new()
-	close_button.text = "X"
-	close_button.tooltip_text = "Close (`)"
+	close_button.text = "x"
+	close_button.tooltip_text = "close (`)"
 	close_button.focus_mode = Control.FOCUS_NONE
 	close_button.pressed.connect(close)
 	row.add_child(close_button)
@@ -430,10 +452,10 @@ func build_title() -> Control:
 func build_spawn_options() -> Control:
 	var box := PanelContainer.new()
 	box.name = "SpawnOptions"
-	box.add_theme_stylebox_override("panel", PixelTheme.box(PixelTheme.PAPER_SUNKEN, PixelTheme.LINE, 0, 0, 0, PixelTheme.BORDER, 6, 4))
+	box.add_theme_stylebox_override("panel", flat_box(BG_SECTION, BORDER, 1, 0, 6, 4))
 
 	cursor_check = CheckBox.new()
-	cursor_check.text = "Spawn at cursor"
+	cursor_check.text = "spawn at cursor"
 	cursor_check.tooltip_text = "a plain click spawns under the mouse instead of the view center"
 	cursor_check.focus_mode = Control.FOCUS_NONE
 	cursor_check.set_pressed_no_signal(spawn_at_cursor)
@@ -452,22 +474,22 @@ func set_spawn_at_cursor(on: bool) -> void:
 func build_raster() -> Control:
 	var box := PanelContainer.new()
 	box.name = "Raster"
-	box.add_theme_stylebox_override("panel", PixelTheme.box(PixelTheme.PAPER_SUNKEN, PixelTheme.LINE, 0, 0, 0, PixelTheme.BORDER, 6, 4))
+	box.add_theme_stylebox_override("panel", flat_box(BG_SECTION, BORDER, 1, 0, 6, 4))
 
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", 0)
 	box.add_child(column)
 
 	var heading := Label.new()
-	heading.text = "RASTER"
-	heading.add_theme_font_size_override("font_size", PixelTheme.SMALL_FONT_SIZE)
-	heading.add_theme_color_override("font_color", PixelTheme.TEXT_DIM)
+	heading.text = "raster"
+	heading.add_theme_font_size_override("font_size", SMALL_FONT)
+	heading.add_theme_color_override("font_color", TEXT_DIM)
 	column.add_child(heading)
 
-	raster_lightning = raster_check("Lightning", "lightning bolts snap to the cell grid, off draws them as smooth lines", on_raster_lightning)
-	raster_effects = raster_check("Bullets / effects", "projectiles, trails and particles drawn at one pixel per cell", on_raster_effects)
-	raster_world = raster_check("Everything", "the whole world drawn at one pixel per cell, the UI stays native", on_raster_world)
-	raster_font = raster_check("Raster font", "the ui font drawn on whole pixels with no antialiasing, off draws it smooth like the first game's atlas", on_raster_font)
+	raster_lightning = raster_check("lightning", "lightning bolts snap to the cell grid, off draws them as smooth lines", on_raster_lightning)
+	raster_effects = raster_check("bullets / effects", "projectiles, trails and particles drawn at one pixel per cell", on_raster_effects)
+	raster_world = raster_check("everything", "the whole world drawn at one pixel per cell, the UI stays native", on_raster_world)
+	raster_font = raster_check("raster font", "the ui font drawn on whole pixels with no antialiasing, off draws it smooth like the first game's atlas", on_raster_font)
 	column.add_child(raster_lightning)
 	column.add_child(raster_effects)
 	column.add_child(raster_world)
@@ -539,6 +561,10 @@ func rebuild_entries() -> void:
 
 		add_entry(Entry.new(self, SpawnRequest.Kind.ROCK, path.get_file().get_basename().replace("_", " "), rock_preview(props), props))
 
+	for path in multisprite_paths():
+		var preview := multisprite_preview(path)
+		add_entry(Entry.new(self, SpawnRequest.Kind.FIGHTER, path.get_file().get_basename().replace("_", " "), preview, null, true, path))
+
 func add_entry(entry: Entry) -> void:
 	entries.append(entry)
 	list.add_child(entry)
@@ -583,6 +609,49 @@ func rock_props_paths() -> Array[String]:
 	paths.sort()
 	return paths
 
+func multisprite_paths() -> Array[String]:
+	var paths: Array[String] = []
+	var dir := DirAccess.open(multisprite_dir)
+
+	if dir == null:
+		return paths
+
+	for file in dir.get_files():
+		if file.get_extension() == "json":
+			paths.append(multisprite_dir.path_join(file))
+
+	paths.sort()
+	return paths
+
+# the first sprite's texture in the doc, dropped in as the card's icon
+static func multisprite_preview(path: String) -> Texture2D:
+	var data := MultiSprite.read_file(path)
+	var entries: Array = data.get("sprites", [])
+
+	if entries.is_empty():
+		return null
+
+	var root := clampi(int(data.get("root", 0)), 0, entries.size() - 1)
+	var texture_path = entries[root].get("texture", "")
+
+	if texture_path is String and texture_path != "":
+		return MultiSprite.load_texture(texture_path)
+
+	return null
+
+# flat debug stylebox: solid bg with an optional thin border, no shadow
+static func flat_box(bg: Color, border_color: Color = BORDER, border_px: int = 1, radius: int = 0, pad_x: int = 0, pad_y: int = 0) -> StyleBoxFlat:
+	var box := StyleBoxFlat.new()
+	box.bg_color = bg
+	box.border_color = border_color
+	box.set_border_width_all(border_px)
+	box.set_corner_radius_all(radius)
+	box.content_margin_left = pad_x
+	box.content_margin_right = pad_x
+	box.content_margin_top = pad_y
+	box.content_margin_bottom = pad_y
+	return box
+
 # the root sprite's texture read off the packed scene, nothing instantiated
 static func scene_texture(scene: PackedScene) -> Texture2D:
 	var state := scene.get_state()
@@ -614,9 +683,10 @@ static func rock_preview(props: RockProps) -> Texture2D:
 	return ImageTexture.create_from_image(out)
 
 static func placeholder_icon() -> Texture2D:
-	return PixelTheme.pixel_icon(16, 16, func(image: Image):
-		image.fill_rect(Rect2i(0, 0, 16, 16), PixelTheme.LINE)
-		image.fill_rect(Rect2i(2, 2, 12, 12), PixelTheme.PAPER_SUNKEN))
+	var image := Image.create(16, 16, false, Image.FORMAT_RGBA8)
+	image.fill_rect(Rect2i(0, 0, 16, 16), BORDER)
+	image.fill_rect(Rect2i(2, 2, 12, 12), BG_SECTION)
+	return ImageTexture.create_from_image(image)
 
 # screen to world
 
@@ -783,6 +853,10 @@ func click_entry(entry: Entry) -> SpawnRequest:
 
 # the request for a card at a spot in units, placed at once
 func spawn_entry(entry: Entry, at: Vector2, rotation := 0.0) -> SpawnRequest:
+	if entry.is_multisprite():
+		spawn_multisprite(entry.multisprite_path, at, rotation)
+		return null
+
 	var request: SpawnRequest
 
 	if entry.is_rock():
@@ -794,11 +868,33 @@ func spawn_entry(entry: Entry, at: Vector2, rotation := 0.0) -> SpawnRequest:
 	request.wait_for_room = false
 
 	if entry.scale_cells > 0:
-		request.set_meta(EnemyGun.META_SCALE_CELLS, entry.scale_cells)
+		request.set_meta(GunBarrel.META_SCALE_CELLS, entry.scale_cells)
 
 	last_request = request
 	dropped.emit(request)
 	return SpawnBus.send(request)
+
+# a MultiSprite node dropped straight into the world's parent, the same
+# home the StableSpawner uses. no wait for room, no bus. materials come
+# from the panel's exports, else the spawner's
+func spawn_multisprite(path: String, at: Vector2, rotation := 0.0) -> MultiSprite:
+	var world := RegolithWorld.active()
+
+	if world == null or not world.is_inside_tree():
+		return null
+
+	var spawner := find_spawner()
+	var parent := spawner.spawn_parent if spawner and spawner.spawn_parent else world.get_parent()
+	var node := MultiSprite.new()
+	node.file = path
+	node.sprite_material = sprite_material if sprite_material else (spawner.sprite_material if spawner else null)
+	node.rope_material = rope_material if rope_material else (spawner.rope_material if spawner else null)
+
+	var placement := Transform2D(rotation, at * Steering.ppu())
+	var parent_2d := parent as Node2D
+	node.transform = parent_2d.global_transform.affine_inverse() * placement if parent_2d else placement
+	parent.add_child(node)
+	return node
 
 # grabs
 

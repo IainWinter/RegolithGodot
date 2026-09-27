@@ -17,13 +17,19 @@ local M = require("message_types")
 
 local Compass = class("boss_compass")
 
-local DEFAULTS = {
-	rock_interval = 4.0,
-	rock_max_alive = 6,
-	rock_zone_position = vec2(0.0, 2.8),
-	rock_zone_scale = vec2(1.8, 0.8),
-	find_interval = 0.2,
-}
+function Compass:settings()
+	return {
+		rock_interval = 4.0,
+		rock_max_alive = 6,
+		rock_zone_position = vec2(0.0, 2.8),
+		rock_zone_scale = vec2(1.8, 0.8),
+		find_interval = 0.2,
+		align_torque = 0.5,
+		align_damping = 2.0,
+		hold_force = 0.5,
+		hold_damping = 2.0,
+	}
+end
 
 -- the phases of the original BossController. zones are in the prefab's
 -- -1..1 hull space, angles in radians, intervals in seconds
@@ -83,7 +89,8 @@ local function copy_phases()
 end
 
 function Compass:init()
-	self:config(DEFAULTS)
+	self:apply_settings()
+	self.parts = self.node:get_node_or_null("BossCompassPhase")
 	self.phases = copy_phases()
 	-- 0 until the body is loaded and advance() has looked at it
 	self.phase = 0
@@ -147,7 +154,8 @@ function Compass:on_spawned(msg)
 
 		if ai.valid(node) then
 			if node.ai_class == "bomb" then
-				node.linear_velocity = (msg.request.position - self.node.pos):normalized() * node.speed
+				local speed = node:get_setting("speed", 3.0)
+				node.linear_velocity = (msg.request.position - self.node.pos):normalized() * speed
 			end
 
 			table.insert(self.spawned, node)
@@ -194,7 +202,8 @@ function Compass:update(dt)
 	end
 
 	local node = self.node
-	node:hold_station(dt)
+	local cfg = self.cfg
+	node:hold_station(cfg.align_torque, cfg.align_damping, cfg.hold_force, cfg.hold_damping, dt)
 
 	local player = self.player
 	local thrower = self.thrower
@@ -230,12 +239,12 @@ function Compass:phase_enter()
 
 	self.weapon_active = phase.weapon_active
 
-	if ai.valid(node.shield) then
-		node.shield.active = true
+	if self.parts and ai.valid(self.parts.shield) then
+		self.parts.shield.active = true
 	end
 
-	if ai.valid(node.trap) then
-		node.trap.active = true
+	if self.parts and ai.valid(self.parts.trap) then
+		self.parts.trap.active = true
 	end
 
 	self:say(phase.line)
@@ -273,7 +282,7 @@ end
 
 function Compass:detached_enter()
 	self:say(DETACH_LINE)
-	self.node:detach_final_phase()
+	self.node:emit_event("detach_final_phase", {})
 end
 
 -- what the zones let out that is still around
@@ -320,7 +329,7 @@ function Compass:drop_rocks(dt)
 
 	self.rocks = kept
 
-	local props = self.node.rock_props
+	local props = self.parts and self.parts.rock_props or nil
 
 	if props ~= nil and #self.rocks + self.rocks_pending < cfg.rock_max_alive then
 		local at = self:zone_point(cfg.rock_zone_position, cfg.rock_zone_scale, 0)
@@ -402,7 +411,7 @@ end
 function Compass:shoot(dt)
 	local node = self.node
 	local player = self.player
-	local points = node.fire_points
+	local points = self.parts and self.parts.fire_points or {}
 
 	if player == nil or not self.weapon_active or #points == 0 then
 		node:fire(false, vec2(1, 0))
@@ -412,7 +421,7 @@ function Compass:shoot(dt)
 	self.fire_timer = self.fire_timer - dt
 
 	if self.fire_timer <= 0 or self.fire_point == nil then
-		self.fire_timer = node.fire_cooldown
+		self.fire_timer = self.parts and self.parts.fire_cooldown or 4.0
 		self.fire_point = self:pick_fire_point(points, player.position)
 	end
 

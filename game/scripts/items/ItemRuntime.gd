@@ -34,6 +34,13 @@ const SHRAPNEL_LONG := preload("res://game/config/weapons/explosion_shrapnel_lon
 # original's prefabs named. any sprite may override with a drop_table
 # property or meta
 const DROP_TABLES := {
+	# keyed by AiScript.ai_class (fighter, bomb, station, base) and by
+	# any legacy gdscript class name still in the tree. drop_table_for()
+	# checks ai_class first, then walks the script class chain
+	"fighter": preload("res://game/config/items/mixed_bad.tres"),
+	"bomb": preload("res://game/config/items/mixed_bad.tres"),
+	"station": preload("res://game/config/items/mixed_ok.tres"),
+	"base": preload("res://game/config/items/mixed_good.tres"),
 	"EnemyFighter": preload("res://game/config/items/mixed_bad.tres"),
 	"EnemyBomb": preload("res://game/config/items/mixed_bad.tres"),
 	"EnemyStation": preload("res://game/config/items/mixed_ok.tres"),
@@ -294,6 +301,13 @@ func drop_table_for(sprite: Object) -> ItemDropTable:
 
 		if table is ItemDropTable:
 			return table
+
+	# the lua class as a key: "fighter" resolves through AiScript.ai_class
+	# regardless of what gdscript class the scene runs, so scenes that used
+	# to inherit EnemyFighter still find their table now that they're plain
+	# AiScript instances
+	if "ai_class" in sprite and sprite.ai_class != "" and class_drop_tables.has(String(sprite.ai_class)):
+		return class_drop_tables[String(sprite.ai_class)]
 
 	var script: Script = sprite.get_script()
 

@@ -1,6 +1,6 @@
-[gd_scene load_steps=14 format=3]
+[gd_scene load_steps=15 format=3]
 
-[ext_resource type="Script" path="res://game/scripts/enemies/EnemyBossStingray.gd" id="1"]
+[ext_resource type="Script" uid="uid://bw72gyuqxthyd" path="res://game/scripts/enemies/AiScript.gd" id="1"]
 [ext_resource type="Texture2D" path="res://game/images/sprites/boss1phase3.png" id="2"]
 [ext_resource type="Texture2D" path="res://game/images/sprites/boss1phase3_mask.png" id="3"]
 [ext_resource type="Resource" path="res://game/config/enemies/boss_arc.tres" id="4"]
@@ -13,8 +13,9 @@
 [ext_resource type="Resource" path="res://game/config/effects/default_lightning.tres" id="12"]
 [ext_resource type="Material" path="res://game/shaders/regolith_lightning_material.tres" id="13"]
 [ext_resource type="Script" path="res://game/scripts/ai/PlayerSensor.gd" id="15"]
+[ext_resource type="Script" path="res://game/scripts/enemies/StingrayBehavior.gd" id="16"]
 
-[node name="EnemyBossStingray" type="RegolithSprite" node_paths=PackedStringArray("trap", "shield") groups=["enemy", "regolith"]]
+[node name="EnemyBossStingray" type="RegolithSprite" groups=["enemy", "regolith"]]
 material = ExtResource("6")
 rope_material = ExtResource("7")
 texture = ExtResource("2")
@@ -22,11 +23,7 @@ mask_texture = ExtResource("3")
 linear_damping = 0.05
 angular_damping = 1.0
 script = ExtResource("1")
-rock_props = ExtResource("5")
-arc_props = ExtResource("4")
-burst_props = ExtResource("14")
-trap = NodePath("EnemyBossTrap")
-shield = NodePath("EnemyBossShield")
+ai_class = "boss_stingray"
 
 [node name="EnemyBossTrap" type="Node" parent="."]
 script = ExtResource("10")
@@ -43,6 +40,14 @@ max_rock_cells = 250
 max_holding = 20
 stiffness = 0.5
 held_angular_damping = 1.0
+
+[node name="StingrayBehavior" type="Node" parent="." node_paths=PackedStringArray("trap", "shield")]
+script = ExtResource("16")
+rock_props = ExtResource("5")
+arc_props = ExtResource("4")
+burst_props = ExtResource("14")
+trap = NodePath("../EnemyBossTrap")
+shield = NodePath("../EnemyBossShield")
 
 [node name="PlayerSensor" type="Node" parent="."]
 script = ExtResource("15")

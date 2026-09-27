@@ -246,7 +246,7 @@ func test_unbound_machine_waits() -> void:
 
 func test_fighter_states_follow_the_player() -> void:
 	add_player(Vector2(200, 0))
-	var fighter: EnemyFighter = FIGHTER_SCENE.instantiate()
+	var fighter: AiScript = FIGHTER_SCENE.instantiate()
 	arena.add_child(fighter)
 	await wait_physics_frames(3)
 
@@ -269,29 +269,29 @@ func test_fighter_states_follow_the_player() -> void:
 
 func test_bomb_seeks_the_player_then_fuses() -> void:
 	var player := add_player(Vector2(2, 0))
-	var bomb: EnemyBomb = BOMB_SCENE.instantiate()
-	bomb.start_exploding_radius = 0.0
+	var bomb: AiScript = BOMB_SCENE.instantiate()
+	bomb.ai_config["start_exploding_radius"] = 0.0
 	arena.add_child(bomb)
 	await wait_physics_frames(3)
 
 	assert_eq(bomb.state_machine.get_states(), PackedStringArray(["idle", "seek_thrower", "seek_player", "fused"]))
 	assert_eq(bomb.state_machine.get_state(), "seek_player", "no thrower around, chases the player")
 
-	bomb.start_exploding_radius = 10.0
+	bomb.configure({"start_exploding_radius": 10.0})
 	await wait_physics_frames(3)
-	assert_true(bomb.exploding, "lit the fuse close to the player")
+	assert_true(bomb.get_node("BombBehavior").exploding, "lit the fuse close to the player")
 	assert_eq(bomb.state_machine.get_state(), "fused")
 	assert_eq(bomb.state_machine.get_previous_state(), "seek_player")
 	assert_true(is_instance_valid(player))
 
 func test_bomb_idles_without_a_player() -> void:
-	var bomb: EnemyBomb = BOMB_SCENE.instantiate()
+	var bomb: AiScript = BOMB_SCENE.instantiate()
 	arena.add_child(bomb)
 	await wait_physics_frames(3)
 	assert_eq(bomb.state_machine.get_state(), "idle")
 
-func add_scripted(scene: PackedScene, units: Vector2, config := {}) -> EnemyScripted:
-	var enemy: EnemyScripted = scene.instantiate()
+func add_scripted(scene: PackedScene, units: Vector2, config := {}) -> AiScript:
+	var enemy: AiScript = scene.instantiate()
 	enemy.position = units * ppu()
 	enemy.ai_config = config
 	arena.add_child(enemy)
@@ -346,7 +346,7 @@ func test_station_states_pick_escort_or_roam() -> void:
 func test_gun_states_track_then_fire() -> void:
 	# facing away from where the player will be; the body takes the node
 	# transform as it enters the tree, later sets are ignored in the sim
-	var gun: EnemyScripted = GUN_SCENE.instantiate()
+	var gun: AiScript = GUN_SCENE.instantiate()
 	gun.rotation = PI
 	arena.add_child(gun)
 	await wait_physics_frames(3)
@@ -373,7 +373,7 @@ func test_gun_states_track_then_fire() -> void:
 
 func test_debug_panel_lists_scripted_enemies() -> void:
 	add_player(Vector2(200, 0))
-	var fighter: EnemyFighter = FIGHTER_SCENE.instantiate()
+	var fighter: AiScript = FIGHTER_SCENE.instantiate()
 	arena.add_child(fighter)
 	await wait_physics_frames(3)
 

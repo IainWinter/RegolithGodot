@@ -65,7 +65,7 @@ func test_request_spawns_on_a_clear_spot_with_the_spawners_setup() -> void:
 	if node == null:
 		return
 
-	assert_true(node is EnemyFighter)
+	assert_true(node is AiScript and (node as AiScript).ai_class == "fighter")
 	assert_eq(node.get_parent(), arena, "under the world's parent")
 	assert_true(node.is_in_group("regolith"))
 	assert_eq(node.material, SPRITE_MATERIAL)
@@ -212,7 +212,7 @@ func test_turret_kind_spawns_the_turret_scene() -> void:
 	if node == null:
 		return
 
-	assert_true(node is EnemyGun)
+	assert_true((node is AiScript and (node as AiScript).ai_class == "turret"))
 	assert_eq(node.ai_class, "turret")
 	assert_true(node.is_in_group("regolith"))
 
@@ -241,10 +241,10 @@ func test_request_meta_is_copied_onto_the_node_before_it_enters_the_tree() -> vo
 	SpawnBus.send(turret_request)
 	await wait_physics_frames(2)
 
-	var turret: EnemyGun = turret_seen["node"]
+	var turret: AiScript = turret_seen["node"]
 	assert_not_null(turret)
 	if turret == null:
 		return
 
-	assert_eq(turret.art_cells, 64, "the hint reached _ready")
+	assert_eq(turret.get_node("GunBarrel").art_cells, 64, "the hint reached _ready")
 	assert_eq(turret.get_cell_count().x, 64)

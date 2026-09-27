@@ -177,10 +177,24 @@ function Ai:ray_cast(from, to, ignore_groups) return ai.ray_cast(self.node, from
 function Ai:jointed() return ai.jointed(self.node) end
 function Ai:say(text, duration) return ai.say(self.node, text, duration) end
 
--- tunables: the class's defaults under the node's ai_config dictionary
--- (EnemyScripted export, so a scene or a test can override a number
--- without touching the script). kept on self.cfg, configure(overrides)
--- changes them on a live instance
+-- tunables: override in your class to declare the settings the script
+-- exposes, as {key = default_value}. AiScript reads this on init and
+-- caches it as ai_script.settings so the inspector, the scenario editor
+-- and tests can see what a class configures without opening the lua.
+-- self:apply_settings() below merges settings ⊕ node.ai_config into
+-- self.cfg. the old self:config(DEFAULTS) pattern still works
+function Ai:settings()
+	return {}
+end
+
+-- runs once at init: seeds self.cfg with settings() overlaid by
+-- node.ai_config so the script reads a single merged dict at runtime
+function Ai:apply_settings()
+	return self:config(self:settings())
+end
+
+-- backward compat: hand in a local DEFAULTS and get self.cfg. new
+-- classes should override settings() and call self:apply_settings()
 function Ai:config(defaults)
 	local cfg = {}
 

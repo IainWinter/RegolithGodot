@@ -262,7 +262,7 @@ func test_gun_drag_spawns_an_enemy_gun_at_the_spot_with_the_ghosts_facing() -> v
 	assert_not_null(request)
 	assert_eq(request.kind, SpawnRequest.Kind.GUN)
 	assert_almost_eq(request.rotation, DebugSpawnPanel.ROTATE_STEP * 3.0, 0.0001, "three notches of turn")
-	assert_eq(request.get_meta(EnemyGun.META_SCALE_CELLS), 32, "the size rides as meta")
+	assert_eq(request.get_meta(GunBarrel.META_SCALE_CELLS), 32, "the size rides as meta")
 	assert_almost_eq(request.position, expected_units(screen), Vector2.ONE * 0.01)
 
 	var seen := watch(request)
@@ -273,14 +273,14 @@ func test_gun_drag_spawns_an_enemy_gun_at_the_spot_with_the_ghosts_facing() -> v
 	if node == null:
 		return
 
-	assert_true(node is EnemyGun, "an EnemyGun")
+	assert_true((node is AiScript and (node as AiScript).ai_class == "gun"), "an EnemyGun")
 	assert_true(node.is_in_group("gun"))
 	assert_false(node.is_in_group("turret"))
 	assert_almost_eq(seen["position"], expected_units(screen) * ppu(), Vector2.ONE * 0.5, "at the drop spot")
 	assert_almost_eq(seen["rotation"], DebugSpawnPanel.ROTATE_STEP * 3.0, 0.02, "facing the ghost's way")
-	assert_eq(node.art_cells, 32, "built at the field's size")
-	assert_true(node.has_barrel(), "mount and barrel")
-	assert_eq(get_tree().get_nodes_in_group("gun").filter(func(n): return n is EnemyGun).size(), 1, "one gun")
+	assert_eq(node.get_node("GunBarrel").art_cells, 32, "built at the field's size")
+	assert_true(node.get_node("GunBarrel").has_barrel(), "mount and barrel")
+	assert_eq(get_tree().get_nodes_in_group("gun").filter(func(n): return n is AiScript and (n as AiScript).ai_class == "gun").size(), 1, "one gun")
 
 func test_turret_drag_passes_scale_cells_and_spawns_the_large_turret() -> void:
 	press_toggle()
@@ -291,8 +291,8 @@ func test_turret_drag_passes_scale_cells_and_spawns_the_large_turret() -> void:
 
 	assert_not_null(request)
 	assert_eq(request.kind, SpawnRequest.Kind.TURRET)
-	assert_true(request.has_meta(EnemyGun.META_SCALE_CELLS))
-	assert_eq(request.get_meta(EnemyGun.META_SCALE_CELLS), 96, "the default size")
+	assert_true(request.has_meta(GunBarrel.META_SCALE_CELLS))
+	assert_eq(request.get_meta(GunBarrel.META_SCALE_CELLS), 96, "the default size")
 
 	var seen := watch(request)
 	await wait_physics_frames(2)
@@ -302,10 +302,10 @@ func test_turret_drag_passes_scale_cells_and_spawns_the_large_turret() -> void:
 	if node == null:
 		return
 
-	assert_true(node is EnemyGun)
+	assert_true((node is AiScript and (node as AiScript).ai_class == "turret"))
 	assert_true(node.is_in_group("turret"))
-	assert_eq(node.get_meta(EnemyGun.META_SCALE_CELLS), 96, "the meta rode onto the node")
-	assert_eq(node.art_cells, 96, "built large")
+	assert_eq(node.get_meta(GunBarrel.META_SCALE_CELLS), 96, "the meta rode onto the node")
+	assert_eq(node.get_node("GunBarrel").art_cells, 96, "built large")
 	assert_gt(node.get_cell_count().x, int(96 * 0.9), "cells across follow the size")
 	assert_almost_eq(seen["position"], expected_units(screen) * ppu(), Vector2.ONE * 0.5)
 
@@ -316,7 +316,7 @@ func test_size_field_changes_the_meta_on_the_next_drag() -> void:
 
 	var request := drag(SpawnRequest.Kind.TURRET, entry_center(turret), Vector2(300.0, 260.0))
 
-	assert_eq(request.get_meta(EnemyGun.META_SCALE_CELLS), 64, "the field's value")
+	assert_eq(request.get_meta(GunBarrel.META_SCALE_CELLS), 64, "the field's value")
 
 func test_drag_of_a_rock_entry_spawns_a_rock_with_its_props() -> void:
 	press_toggle()
@@ -381,7 +381,7 @@ func test_mouse_events_on_the_entry_drive_the_drag() -> void:
 	assert_eq(request.kind, SpawnRequest.Kind.GUN)
 	assert_almost_eq(request.rotation, DebugSpawnPanel.ROTATE_STEP * 2.0, 0.0001)
 	assert_almost_eq(request.position, expected_units(screen), Vector2.ONE * 0.01)
-	assert_eq(request.get_meta(EnemyGun.META_SCALE_CELLS), 32)
+	assert_eq(request.get_meta(GunBarrel.META_SCALE_CELLS), 32)
 	assert_eq(spawner.pending(), 1)
 
 func test_escape_cancels_the_drag_and_spawns_nothing() -> void:
@@ -492,7 +492,7 @@ func test_spawn_at_cursor_toggle_moves_the_click_spawn_under_the_mouse() -> void
 	assert_not_null(request)
 	assert_eq(request.kind, SpawnRequest.Kind.GUN)
 	assert_almost_eq(request.position, panel.screen_to_units(mouse), Vector2.ONE * 0.01, "under the cursor")
-	assert_eq(request.get_meta(EnemyGun.META_SCALE_CELLS), 32, "the size still rides along")
+	assert_eq(request.get_meta(GunBarrel.META_SCALE_CELLS), 32, "the size still rides along")
 
 	panel.set_spawn_at_cursor(false)
 	var plain := panel.click_entry(gun)

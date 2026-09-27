@@ -1,10 +1,10 @@
 extends GutTest
 
-# Enemy ai: scenes load with cells, fighters chase and shoot, keep apart,
+# AiScript ai: scenes load with cells, fighters chase and shoot, keep apart,
 # bombs burst on the player, bases grab and throw bombs, stations drift,
 # shoot and let fighters and bombs out, the boss runs its phases, the
 # spawner fills the field. base, station and both boss phases are
-# EnemyScripted hosts running base.lua, station.lua, boss_compass.lua and
+# AiScript hosts running base.lua, station.lua, boss_compass.lua and
 # boss_stingray.lua
 
 const SCENES := {
@@ -58,15 +58,15 @@ func add_player(units: Vector2) -> Player:
 	arena.add_child(player)
 	return player
 
-func add_enemy(key: String, units: Vector2) -> Enemy:
-	var enemy: Enemy = load(SCENES[key]).instantiate()
+func add_enemy(key: String, units: Vector2) -> AiScript:
+	var enemy: AiScript = load(SCENES[key]).instantiate()
 	enemy.position = units * ppu()
 	arena.add_child(enemy)
 	return enemy
 
 # a scripted enemy with tunables set before it enters the tree
-func add_scripted(key: String, units: Vector2, config: Dictionary) -> EnemyScripted:
-	var enemy: EnemyScripted = load(SCENES[key]).instantiate()
+func add_scripted(key: String, units: Vector2, config: Dictionary) -> AiScript:
+	var enemy: AiScript = load(SCENES[key]).instantiate()
 	enemy.position = units * ppu()
 	enemy.ai_config = config
 	arena.add_child(enemy)
@@ -76,10 +76,10 @@ func units_between(a: Node2D, b: Node2D) -> float:
 	return a.global_position.distance_to(b.global_position) / ppu()
 
 func is_scripted(node: Node, ai_class: String) -> bool:
-	return node is EnemyScripted and node.ai_class == ai_class
+	return node is AiScript and node.ai_class == ai_class
 
 # a number read off the lua instance behind a scripted enemy, self is the instance
-func lua_number(enemy: EnemyScripted, expression: String) -> float:
+func lua_number(enemy: AiScript, expression: String) -> float:
 	assert_eq(Ai.lua.run("__probe = (function(self) return %s end)(__instance(%d))" % [expression, enemy.ai_id]), "")
 	var value: Variant = Ai.lua.get_global("__probe")
 	return float(value) if value is float or value is int else -1.0
@@ -95,16 +95,16 @@ func test_enemy_scenes_load_with_cells() -> void:
 	await wait_physics_frames(3)
 
 	for key in enemies:
-		var enemy: Enemy = enemies[key]
+		var enemy: AiScript = enemies[key]
 		assert_gt(enemy.get_active_cell_count(), 0, "%s has cells" % key)
 		assert_true(enemy.is_in_group("enemy"), "%s in group enemy" % key)
 		assert_true(enemy.is_in_group("regolith"), "%s in group regolith" % key)
 
-	assert_true(enemies["fighter"] is EnemyFighter)
-	assert_true(enemies["bomb"] is EnemyBomb)
+	assert_true(enemies["fighter"] is AiScript)
+	assert_true((enemies["bomb"] is AiScript and (enemies["bomb"] as AiScript).ai_class == "bomb"))
 	assert_true(is_scripted(enemies["station"], "station"), "station runs station.lua")
 	assert_true(is_scripted(enemies["base"], "base"), "base runs base.lua")
-	assert_true(enemies["boss_compass"] is EnemyBossCompass)
+	assert_true((enemies["boss_compass"] is AiScript and (enemies["boss_compass"] as AiScript).ai_class == "boss_compass"))
 	assert_true(is_scripted(enemies["boss_compass"], "boss_compass"), "the shell runs boss_compass.lua")
 	assert_true(is_scripted(enemies["boss_stingray"], "boss_stingray"), "the stingray runs boss_stingray.lua")
 	assert_gt(enemies["station"].ai_id, 0, "station has a lua instance")
@@ -120,7 +120,7 @@ func test_enemy_scenes_load_with_cells() -> void:
 
 func test_fighter_moves_toward_player_and_fires() -> void:
 	var player := add_player(Vector2.ZERO)
-	var fighter: EnemyFighter = add_enemy("fighter", Vector2(12.0, 0.0))
+	var fighter: AiScript = add_enemy("fighter", Vector2(12.0, 0.0))
 	await wait_physics_frames(2)
 
 	var counts := {"fired": 0}
@@ -132,19 +132,19 @@ func test_fighter_moves_toward_player_and_fires() -> void:
 	assert_gt(counts["fired"], 0, "fighter fired at the player")
 
 func test_fighters_separate() -> void:
-	var a: EnemyFighter = add_enemy("fighter", Vector2(0.0, 0.0))
-	var b: EnemyFighter = add_enemy("fighter", Vector2(0.1, 0.0))
+	var a: AiScript = add_enemy("fighter", Vector2(0.0, 0.0))
+	var b: AiScript = add_enemy("fighter", Vector2(0.1, 0.0))
 	await wait_physics_frames(90)
 
 	assert_gt(units_between(a, b), 1.0, "overlapping fighters pushed apart")
 
 func test_bomb_reaches_player_and_removes_cells() -> void:
 	var player := add_player(Vector2.ZERO)
-	var bomb: EnemyBomb = add_enemy("bomb", Vector2(8.0, 0.0))
+	var bomb: AiScript = add_enemy("bomb", Vector2(8.0, 0.0))
 	await wait_physics_frames(2)
 
 	var counts := {"exploded": 0}
-	bomb.exploded.connect(func(_position): counts["exploded"] += 1)
+	bomb.get_node("BombBehavior").exploded.connect(func(_position): counts["exploded"] += 1)
 	var cells := player.get_active_cell_count()
 
 	for i in 360:
@@ -159,8 +159,8 @@ func test_bomb_reaches_player_and_removes_cells() -> void:
 
 func test_base_throws_nearby_bomb() -> void:
 	var player := add_player(Vector2(10.0, 0.0))
-	var base: EnemyScripted = add_enemy("base", Vector2.ZERO)
-	var bomb: EnemyBomb = add_enemy("bomb", Vector2(0.0, -2.0))
+	var base: AiScript = add_enemy("base", Vector2.ZERO)
+	var bomb: AiScript = add_enemy("bomb", Vector2(0.0, -2.0))
 	await wait_physics_frames(2)
 
 	var thrown := {}
@@ -182,17 +182,17 @@ func test_base_throws_nearby_bomb() -> void:
 	assert_true(Throwable.of(bomb).thrown, "the bomb is marked thrown")
 	assert_gt(thrown["velocity"].length(), 3.0, "thrown fast")
 	assert_gt(thrown["velocity"].normalized().dot(thrown["to_player"]), 0.5, "thrown at the player")
-	assert_true(bomb.exploding, "a thrown bomb fuses to burst on arrival")
+	assert_true(bomb.get_node("BombBehavior").exploding, "a thrown bomb fuses to burst on arrival")
 	assert_eq(base.state_machine.get_state(), "throw", "player inside the throw radius")
 
 func test_base_holds_what_it_grabs_until_the_player_is_close() -> void:
 	add_player(Vector2(40.0, 0.0))
-	var base: EnemyScripted = add_enemy("base", Vector2.ZERO)
+	var base: AiScript = add_enemy("base", Vector2.ZERO)
 	# the grab can land on the very first step, listen before it
 	var thrower := base.get_thrower()
 	var grabbed := {"count": 0}
 	thrower.grabbed.connect(func(_node): grabbed["count"] += 1)
-	var bomb: EnemyBomb = add_enemy("bomb", Vector2(0.0, -2.0))
+	var bomb: AiScript = add_enemy("bomb", Vector2(0.0, -2.0))
 
 	for i in 300:
 		await wait_physics_frames(1)
@@ -213,13 +213,13 @@ func test_base_holds_what_it_grabs_until_the_player_is_close() -> void:
 # test_boss_compass.gd
 func test_boss_shell_runs_its_phases_in_lua() -> void:
 	add_player(Vector2.ZERO)
-	var boss: EnemyBossCompass = add_enemy("boss_compass", Vector2(0.0, 30.0))
+	var boss: AiScript = add_enemy("boss_compass", Vector2(0.0, 30.0))
 	await wait_physics_frames(3)
 
 	assert_true(is_scripted(boss, "boss_compass"), "the shell runs boss_compass.lua")
 	assert_gt(boss.ai_id, 0, "the shell has a lua instance")
 	assert_eq(boss.state_machine.get_state(), "phase_1", "phase one while its weakpoints last")
-	assert_true(boss.thrower.active, "phase one throws")
+	assert_true(boss.get_thrower().active, "phase one throws")
 
 func test_station_moves_and_spawns() -> void:
 	add_player(Vector2(30.0, 0.0))
@@ -235,7 +235,7 @@ func test_station_moves_and_spawns() -> void:
 	assert_eq(station.state_machine.get_state(), "roam", "no base around, roams near the player")
 	assert_gt(station.linear_velocity.length(), 0.1, "station drifts to its goal")
 	assert_gt(launched.size(), 0, "station let something out through the bus")
-	assert_true(launched.all(func(e): return e is EnemyFighter or e is EnemyBomb), "fighters and bombs only")
+	assert_true(launched.all(func(e): return (e is AiScript and (e as AiScript).ai_class == "fighter") or (e is AiScript and (e as AiScript).ai_class == "bomb")), "fighters and bombs only")
 	assert_eq(lua_number(station, "#self.spawned"), float(launched.size()), "the station heard back about each placed spawn")
 	assert_gte(lua_number(station, "self.pending"), 0.0, "what waits for room is still pending")
 
@@ -269,7 +269,7 @@ func test_station_fires_at_the_player_in_range() -> void:
 
 func test_station_escorts_a_base_with_room() -> void:
 	add_player(Vector2(40.0, 0.0))
-	var base: EnemyScripted = add_enemy("base", Vector2(10.0, 0.0))
+	var base: AiScript = add_enemy("base", Vector2(10.0, 0.0))
 	var station := add_scripted("station", Vector2.ZERO, {"spawn_interval": 1000.0})
 	await wait_physics_frames(5)
 
@@ -299,12 +299,12 @@ func test_spawner_produces_each_type() -> void:
 	while frames < 600:
 		await wait_physics_frames(10)
 		frames += 10
-		if seen.any(func(e): return e is EnemyFighter) and seen.any(func(e): return e is EnemyBomb) and seen.any(func(e): return is_scripted(e, "station")) and seen.any(func(e): return is_scripted(e, "base")):
+		if seen.any(func(e): return (e is AiScript and (e as AiScript).ai_class == "fighter")) and seen.any(func(e): return (e is AiScript and (e as AiScript).ai_class == "bomb")) and seen.any(func(e): return is_scripted(e, "station")) and seen.any(func(e): return is_scripted(e, "base")):
 			break
 
-	assert_true(seen.any(func(e): return e is EnemyFighter), "spawned a fighter")
-	assert_true(seen.any(func(e): return e is EnemyBomb), "spawned a bomb")
+	assert_true(seen.any(func(e): return (e is AiScript and (e as AiScript).ai_class == "fighter")), "spawned a fighter")
+	assert_true(seen.any(func(e): return (e is AiScript and (e as AiScript).ai_class == "bomb")), "spawned a bomb")
 	assert_true(seen.any(func(e): return is_scripted(e, "station")), "spawned a station")
 	assert_true(seen.any(func(e): return is_scripted(e, "base")), "spawned a base")
-	assert_false(seen.any(func(e): return e is EnemyBossCompass), "the boss only spawns on request")
+	assert_false(seen.any(func(e): return (e is AiScript and (e as AiScript).ai_class == "boss_compass")), "the boss only spawns on request")
 	assert_gte(enemy_spawner.enemies().size(), 4, "one of each kind at least")

@@ -19,7 +19,24 @@ local SQUAD_INTERVAL_MIN = 0.25
 local SQUAD_INTERVAL_MAX = 0.5
 local TARGET_CHECK_INTERVAL = 0.5
 
+function Fighter:settings()
+	return {
+		fire_radius = 10.0,
+		separation_radius = 2.0,
+		neighbor_radius = 5.0,
+		cohesion_weight = 0.15,
+		alignment_weight = 0.1,
+		max_followers = 4,
+		formation_spacing = 1.5,
+		roam_distance = 10.0,
+		meander_radius = 3.0,
+		pick_target_inner = vec2(3, 3),
+		pick_target_outer = vec2(4, 4),
+	}
+end
+
 function Fighter:init()
+	self:apply_settings()
 	self.player = nil
 	self.leader = nil
 	self.followers = {}
@@ -42,7 +59,7 @@ function Fighter:on_message(msg)
 	elseif kind == M.PLAYER_LOST then
 		self.player = nil
 	elseif kind == M.SQUAD_JOIN then
-		if self.leader == nil and #self.followers < self.node.max_followers and msg.sender ~= self.node then
+		if self.leader == nil and #self.followers < self.cfg.max_followers and msg.sender ~= self.node then
 			self:send_instant(msg.sender, { kind = M.SQUAD_ACCEPT })
 		end
 	elseif kind == M.SQUAD_ACCEPT then
@@ -51,7 +68,7 @@ function Fighter:on_message(msg)
 			self:send_instant(self.leader, { kind = M.SQUAD_JOINED })
 		end
 	elseif kind == M.SQUAD_JOINED then
-		if #self.followers < self.node.max_followers then
+		if #self.followers < self.cfg.max_followers then
 			table.insert(self.followers, msg.sender)
 		else
 			self:send_instant(msg.sender, { kind = M.SQUAD_FULL })
@@ -91,7 +108,7 @@ function Fighter:update_squad(dt)
 		return
 	end
 
-	self:broadcast(self.node.neighbor_radius * 2, { kind = M.SQUAD_JOIN })
+	self:broadcast(self.cfg.neighbor_radius * 2, { kind = M.SQUAD_JOIN })
 end
 
 function Fighter:formation_waypoint(pos)
@@ -121,7 +138,7 @@ function Fighter:formation_waypoint(pos)
 	local side = (index % 2 == 0) and 1 or -1
 	local back = -direction
 	local right = vec2(direction.y, -direction.x)
-	local spacing = node.formation_spacing
+	local spacing = self.cfg.formation_spacing
 
 	local waypoint = leader_pos + back * (spacing * rank) + right * (spacing * 0.8 * rank * side)
 	local match_speed = -1
@@ -135,18 +152,19 @@ end
 
 function Fighter:roam_waypoint(pos, dt)
 	local node = self.node
+	local cfg = self.cfg
 	local player = self.player
 
 	self.target_timer = self.target_timer - dt
 
 	if self.target == nil
-		or self.target:distance_to(player.position) > node.roam_distance
+		or self.target:distance_to(player.position) > cfg.roam_distance
 		or (self.target_timer <= 0 and node:point_blocked(self.target)) then
 		self.target_timer = TARGET_CHECK_INTERVAL
-		self.target = node:pick_target(player.position)
+		self.target = node:pick_target(player.position, cfg.pick_target_inner, cfg.pick_target_outer)
 	end
 
-	local meander = self.target:distance_to(pos) < node.meander_radius
+	local meander = self.target:distance_to(pos) < cfg.meander_radius
 
 	if meander then
 		self.meander_angle = (self.meander_angle + dt * 0.4) % (2 * math.pi)
@@ -191,10 +209,12 @@ end
 -- range and in sight
 function Fighter:fly(waypoint, meander, match_speed, dt)
 	local node = self.node
+	local cfg = self.cfg
 	local pos = node.pos
 	local seek = node:path_steer_target(waypoint, dt)
+	local correction = node:steer_correction(dt, cfg.separation_radius, cfg.neighbor_radius, cfg.cohesion_weight, cfg.alignment_weight, "fighter")
 
-	node:steer_to_waypoint(pos + node:steer_correction(dt) + (seek - pos))
+	node:steer_to_waypoint(pos + correction + (seek - pos))
 
 	if meander then
 		node.desired_speed = math.min(node.desired_speed, node.drive_max_speed * 0.35)
@@ -212,7 +232,7 @@ function Fighter:fly(waypoint, meander, match_speed, dt)
 
 	if self.player ~= nil then
 		aim = self.player.position - pos
-		pull = aim:length() < node.fire_radius and self.player.in_sight
+		pull = aim:length() < cfg.fire_radius and self.player.in_sight
 	end
 
 	node:fire(pull, aim)

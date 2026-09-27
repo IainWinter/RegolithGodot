@@ -33,8 +33,8 @@ func after_each() -> void:
 	get_tree().current_scene = null
 	arena.free()
 
-func spawn(path: String) -> Enemy:
-	var enemy: Enemy = load(path).instantiate()
+func spawn(path: String) -> AiScript:
+	var enemy: AiScript = load(path).instantiate()
 	arena.add_child(enemy)
 	return enemy
 

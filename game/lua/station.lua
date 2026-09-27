@@ -15,24 +15,26 @@ local M = require("message_types")
 
 local Station = class("station")
 
-local DEFAULTS = {
-	move_speed = 1.0,
-	move_accel = 1.0,
-	goal_interval = 25.0,
-	goal_ellipse = vec2(16.0, 6.0),
-	standoff_distance = 8.0,
-	spawn_interval = 4.0,
-	max_spawned = 8,
-	spawn_origin = vec2(-0.29686213, -0.2961769),
-	spawn_kinds = { "fighter", "bomb" },
-	fire_radius = 10.0,
-}
+function Station:settings()
+	return {
+		move_speed = 1.0,
+		move_accel = 1.0,
+		goal_interval = 25.0,
+		goal_ellipse = vec2(16.0, 6.0),
+		standoff_distance = 8.0,
+		spawn_interval = 4.0,
+		max_spawned = 8,
+		spawn_origin = vec2(-0.29686213, -0.2961769),
+		spawn_kinds = { "fighter", "bomb" },
+		fire_radius = 10.0,
+	}
+end
 
 -- the hangar sides, rotated with the hull
 local SPAWN_OFFSETS = { vec2(0, -1), vec2(0, 1), vec2(1, 0), vec2(-1, 0) }
 
 function Station:init()
-	self:config(DEFAULTS)
+	self:apply_settings()
 	self.player = nil
 	self.goal = nil
 	self.goal_timer = 0

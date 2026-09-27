@@ -61,7 +61,7 @@ static func scripted_enemies(tree: SceneTree) -> Array:
 	var out := []
 
 	for enemy in tree.get_nodes_in_group("enemy"):
-		if enemy is EnemyScripted and Steering.alive(enemy) and not enemy.dead and enemy.state_machine != null:
+		if enemy is AiScript and Steering.alive(enemy) and not enemy.dead and enemy.state_machine != null:
 			out.append(enemy)
 
 	return out
@@ -181,7 +181,7 @@ func ai_report() -> String:
 		lines.append("scripted %d" % enemies.size())
 
 	var player := Steering.find_player(get_tree())
-	var nearest: EnemyScripted = null
+	var nearest: AiScript = null
 	var nearest_distance := INF
 
 	for enemy in enemies:

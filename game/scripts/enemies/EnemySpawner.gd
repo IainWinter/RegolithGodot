@@ -12,7 +12,7 @@ class_name EnemySpawner
 @export var padding := 2.0
 @export var kinds: Array[SpawnRequest.Kind] = [SpawnRequest.Kind.FIGHTER, SpawnRequest.Kind.BOMB, SpawnRequest.Kind.STATION, SpawnRequest.Kind.BASE]
 
-signal spawned(enemy: Enemy)
+signal spawned(enemy: AiScript)
 
 var timer := 0.0
 var bag: Array[SpawnRequest.Kind] = []
@@ -31,7 +31,7 @@ func _physics_process(delta: float) -> void:
 	spawn_random()
 
 func enemies() -> Array:
-	return get_tree().get_nodes_in_group("enemy").filter(func(n): return n is Enemy and not n.dead)
+	return get_tree().get_nodes_in_group("enemy").filter(func(n): return n is AiScript and not n.dead)
 
 func next_kind() -> SpawnRequest.Kind:
 	if bag.is_empty():
@@ -63,5 +63,5 @@ func spawn(kind: SpawnRequest.Kind, position: Vector2) -> SpawnRequest:
 func on_spawned(node: RegolithSprite) -> void:
 	pending -= 1
 
-	if node is Enemy:
+	if node is AiScript:
 		spawned.emit(node)

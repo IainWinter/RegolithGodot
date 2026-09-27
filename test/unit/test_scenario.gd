@@ -237,7 +237,7 @@ func test_placements_go_over_the_bus_in_order_with_rotation_and_meta() -> void:
 	if first.node == null:
 		return
 
-	assert_true(first.node is EnemyFighter)
+	assert_true(first.node is AiScript and (first.node as AiScript).ai_class == "fighter")
 	assert_eq(first.node.get_meta(EnemyPlacement.META_SCALE_CELLS), 12, "meta copied onto the node")
 	assert_almost_eq(first.node.global_rotation, 0.5, 0.01)
 	assert_lt(first.node.global_position.distance_to(Vector2(5.0, 1.0) * ppu()), 1.0)

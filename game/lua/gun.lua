@@ -1,13 +1,12 @@
--- gun: the GunEntity with AiGunHostSystem and AiAngleAlignment. the node
--- is an EnemyGun, a mount with a barrel part hanging on a pin joint at its
--- center. it turns the barrel onto the player with a spring (align_aim, the
--- AiAngleAlignment torque and damping) and pulls the trigger along the
--- barrel's facing when it is aimed within aim_tolerance, the player is
--- within range and the muzzle has a clear line to them. the host is
+-- gun: turns a barrel onto the player with a spring, pulls the trigger
+-- when aimed within tolerance, in range and with a clear line. the barrel
+-- and the aim mechanics live on the GunBarrel scene component under the
+-- host; self.barrel holds the ref and gun.lua calls it for aim_angle,
+-- align_aim, muzzle_position, has_barrel and is_part. the host is
 -- whatever else shares a world joint with the mount (ai.jointed, the
 -- barrel does not count); its gun_fire property, when it has one, holds
--- the trigger. a gun with no host fires on its own and looks for one every
--- host_retry_interval. the player sensor tells it where they are
+-- the trigger. a gun with no host fires on its own and looks for one
+-- every host_retry_interval. the player sensor tells it where they are
 --
 -- states: idle until the player sensor reports them, track while turning
 -- onto them or held back (out of range, blocked, host says no), fire while
@@ -20,27 +19,25 @@ local M = require("message_types")
 
 Gun = class("gun")
 
-Gun.DEFAULTS = {
-	range = 10.0,
-	-- where the shots leave along the facing when the node has no barrel
-	muzzle = 0.4,
-	aim_tolerance = 0.2,
-	-- the enemy_gun prefab's AiAngleAlignment
-	align_torque = 40.0,
-	align_damping = 6.0,
-	-- rad/s cap on the barrel's spin, zero for none
-	max_turn_rate = 0.0,
-	host_retry_interval = 0.5,
-	los_ignore_groups = { "player", "gun", "gun_host" },
-}
-
--- the tunables this class starts from, a subclass merges its own on top
-function Gun:defaults()
-	return Gun.DEFAULTS
+function Gun:settings()
+	return {
+		range = 10.0,
+		-- where the shots leave along the facing when there is no barrel
+		muzzle = 0.4,
+		aim_tolerance = 0.2,
+		-- the alignment spring on the barrel
+		align_torque = 40.0,
+		align_damping = 6.0,
+		-- rad/s cap on the barrel's spin, zero for none
+		max_turn_rate = 0.0,
+		host_retry_interval = 0.5,
+		los_ignore_groups = { "player", "gun", "gun_host" },
+	}
 end
 
 function Gun:init()
-	self:config(self:defaults())
+	self:apply_settings()
+	self.barrel = self.node:get_node_or_null("GunBarrel")
 	self.player = nil
 	self.host = nil
 	self.host_timer = 0
@@ -63,7 +60,10 @@ end
 
 -- the barrel's angle, the mount's own without one
 function Gun:aim_angle()
-	return self.node:aim_angle()
+	if self.barrel then
+		return self.barrel:aim_angle()
+	end
+	return self.node.global_rotation
 end
 
 function Gun:facing()
@@ -72,13 +72,11 @@ end
 
 -- the barrel's tip, where the shots leave
 function Gun:muzzle_position()
-	local node = self.node
-
-	if node:has_barrel() then
-		return node:muzzle_position()
+	if self.barrel and self.barrel:has_barrel() then
+		return self.barrel:muzzle_position()
 	end
 
-	return node.pos + self:facing() * self.cfg.muzzle
+	return self.node.pos + self:facing() * self.cfg.muzzle
 end
 
 -- the sprite on the other end of a joint that is not one of the gun's own
@@ -98,7 +96,7 @@ function Gun:find_host(dt)
 	self.host_timer = self.cfg.host_retry_interval
 
 	for _, other in ipairs(self:jointed()) do
-		if not self.node:is_part(other) then
+		if not (self.barrel and self.barrel:is_part(other)) then
 			self.host = other
 			break
 		end
@@ -118,7 +116,23 @@ end
 -- turns the barrel onto an angle with the alignment spring
 function Gun:aim(target_angle, dt)
 	local cfg = self.cfg
-	self.node:align_aim(target_angle, cfg.align_torque, cfg.align_damping, dt, cfg.max_turn_rate or 0)
+
+	if self.barrel then
+		self.barrel:align_aim(target_angle, cfg.align_torque, cfg.align_damping, dt, cfg.max_turn_rate or 0)
+	else
+		self.node:align_angle(target_angle, cfg.align_torque, cfg.align_damping, dt)
+	end
+end
+
+function Gun:has_barrel()
+	return self.barrel and self.barrel:has_barrel()
+end
+
+function Gun:pivot_position()
+	if self.barrel then
+		return self.barrel:pivot_position()
+	end
+	return self.node.pos
 end
 
 function Gun:idle_enter()
@@ -138,7 +152,7 @@ function Gun:update(dt)
 
 	local node = self.node
 	local cfg = self.cfg
-	local to_player = player.position - node:pivot_position()
+	local to_player = player.position - self:pivot_position()
 	local distance = to_player:length()
 	local aim_angle = self:aim_angle()
 	local delta_angle = ai.wrap_angle(to_player:angle() - aim_angle)
@@ -146,7 +160,7 @@ function Gun:update(dt)
 	self:aim(aim_angle + delta_angle, dt)
 
 	local aimed = math.abs(delta_angle) < cfg.aim_tolerance
-	local pull = self:host_fires() and aimed and distance < cfg.range
+	local pull = self:host_fires() and aimed and distance < cfg.range and self:has_barrel()
 
 	if pull then
 		pull = self:line_of_sight(self:muzzle_position(), player.position, cfg.los_ignore_groups)

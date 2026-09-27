@@ -4,9 +4,9 @@
 -- can. a close pass starts a fight: it parks a screen away, cages the
 -- player with the trap, shields itself with rocks and pushes them out,
 -- sprays arcs, and spawns bombs and fighters, then swings around to orbit
--- again. the player sensor says where the player is (their center of
--- mass), the node steers, shoots, rams, sizes the fight rocks and tells
--- us when the player turned to cloud. the numbers are exports on the node
+-- again. the StingrayBehavior scene component owns the arc/burst weapons,
+-- the rope stiffness, the rocks props and the trap/shield refs. AiScript
+-- provides the generic steering, ram and touching verbs
 --
 -- states: idle until the player sensor reports them, orbit (a ring at
 -- roam_radius, a dive every orbit_roam_time), prepare_dive (turn onto the
@@ -22,7 +22,64 @@ local M = require("message_types")
 
 local Stingray = class("boss_stingray")
 
+function Stingray:settings()
+	return {
+		accel = 4.05,
+		turn_speed = 1.5,
+		roam_speed = 6.0,
+		roam_radius = 25.0,
+		rope_stiffness = 0.02,
+
+		orbit_speed = 0.7,
+		orbit_roam_time = 12.0,
+
+		dive_speed = 16.0,
+		dive_overshoot = 15.0,
+		dive_tangent = 6.0,
+		dive_hit_impulse = 20.0,
+		dive_near_radius = 10.0,
+		dive_max_misses = 2,
+		dive_barrage_interval = 0.35,
+		dive_volley_small = 2,
+		dive_volley_big = 8,
+		dive_bomb_interval = 0.12,
+		dive_bombs_per_dive = 10,
+		dive_warning_time = 2.5,
+
+		fight_time = 16.0,
+		fight_offset_ratio = 1.0,
+		fight_angle = 0.0,
+		fight_arrive_radius = 3.0,
+		fight_trap_camera_scale = 1.5,
+		fight_return_time = 5.0,
+		fight_align_torque = 1.5,
+		fight_align_damping = 2.0,
+		fight_rope_stiffness = 0.3,
+		fight_rock_count_min = 5,
+		fight_rock_count_max = 10,
+		fight_rock_cells_min = 100,
+		fight_rock_cells_max = 300,
+		fight_rock_speed = 2.0,
+		fight_push_speed = 3.0,
+		fight_spawn_band = 0.5,
+		fight_spawn_behind = 2.0,
+		fight_bomb_speed = 4.0,
+		fight_bomb_interval = 3.0,
+		fight_fighter_interval = 8.0,
+		fight_max_fighters = 4,
+		fight_kills_player_bullet_ring_count = 8,
+
+		aggress_speed = 14.0,
+		aggress_engage_radius = 8.0,
+		aggress_give_up_time = 12.0,
+
+		reposition_clearance = 2.5,
+	}
+end
+
 function Stingray:init()
+	self:apply_settings()
+	self.parts = self.node:get_node_or_null("StingrayBehavior")
 	self.player = nil
 	self.greeted = false
 	self.pos = vec2(0, 0)
@@ -73,6 +130,13 @@ function Stingray:init()
 	self:transition("idle")
 end
 
+-- a fight rock's cell count, biased small like the original's t cubed
+function Stingray:fight_rock_cells()
+	local cfg = self.cfg
+	local t = math.random()
+	return cfg.fight_rock_cells_min + math.floor((cfg.fight_rock_cells_max - cfg.fight_rock_cells_min) * t * t * t)
+end
+
 function Stingray:on_message(msg)
 	local kind = msg.kind
 
@@ -95,18 +159,16 @@ function Stingray:on_message(msg)
 			self.fight.pending = math.max(self.fight.pending - 1, 0)
 		end
 	elseif kind == M.PLAYER_ENTERED_CLOUD then
-		-- PlayerEnteredCloudStateEvent: killing the player mid fight ends
-		-- it with a ring of bullets
 		if self:state() == "fight" then
-			self.node:fire_burst(vec2(1, 0), self.node.fight_kills_player_bullet_ring_count)
+			self.parts:fire_burst(vec2(1, 0), self.cfg.fight_kills_player_bullet_ring_count)
 			self:say("Down. Back to the dark.", 1.5)
 			self:transition("reposition")
 		end
 	end
 end
 
--- where things are this tick: the body's center of mass (the node keeps
--- pos at it), the player's from their last report, the camera box
+-- where things are this tick: the body's center of mass (the parts node
+-- keeps pos at it), the player's from their last report, the camera box
 function Stingray:sense()
 	local node = self.node
 	self.pos = node.pos
@@ -134,7 +196,7 @@ function Stingray:update(dt)
 	end
 
 	self:sense()
-	self.node:fire_arc(false, vec2(0, 0))
+	self.parts:fire_arc(false, vec2(0, 0))
 end
 
 -- orbit
@@ -144,17 +206,17 @@ function Stingray:orbit_enter()
 end
 
 function Stingray:orbit_update(dt)
-	local node = self.node
-	self.orbit_angle = (self.pos - self.player_pos):angle() + node.orbit_speed
+	local cfg = self.cfg
+	self.orbit_angle = (self.pos - self.player_pos):angle() + cfg.orbit_speed
 	self.roam_timer = self.roam_timer + dt
 
-	if self.roam_timer >= node.orbit_roam_time then
+	if self.roam_timer >= cfg.orbit_roam_time then
 		self.roam_timer = 0
 		self.dive.miss_count = 0
-		self:start_prepare_dive(self.pos + node.linear_velocity / math.max(node.accel, 0.01))
+		self:start_prepare_dive(self.pos + self.node.linear_velocity / math.max(cfg.accel, 0.01))
 	end
 
-	node:steer_toward_target(self.player_pos + from_angle(self.orbit_angle) * node.roam_radius, node.roam_speed, dt)
+	self.parts:steer_toward_target(self.player_pos + from_angle(self.orbit_angle) * cfg.roam_radius, cfg.roam_speed, dt)
 end
 
 -- prepare dive: the line is laid from where the dive starts (from, nil
@@ -168,6 +230,7 @@ end
 
 function Stingray:prepare_dive_enter()
 	local node = self.node
+	local cfg = self.cfg
 	local d = self.dive
 	local from = d.from or self.pos
 	d.from = nil
@@ -179,17 +242,14 @@ function Stingray:prepare_dive_enter()
 
 	local direction = (self.player_pos - from):normalized()
 	local tangent = vec2(-direction.y, direction.x) * (math.random() < 0.5 and 1 or -1)
-	local pass_point = self.player_pos + tangent * node.dive_tangent
+	local pass_point = self.player_pos + tangent * cfg.dive_tangent
 	local dive_direction = (pass_point - from):normalized()
 
-	d.point = pass_point + dive_direction * node.dive_overshoot
+	d.point = pass_point + dive_direction * cfg.dive_overshoot
 	d.big_volley = math.random() < 0.5
 	d.volley_fired = false
 	d.closest = from:distance_to(self.player_pos)
 
-	-- the telegraph of start_prepare_dive_warned, a line along the dive
-	-- out to a camera height past the turn point. it starts on the body
-	-- when the dive starts from where the boss is
 	local warn_direction = (d.point - from):normalized()
 	local warn_from = from
 
@@ -197,7 +257,7 @@ function Stingray:prepare_dive_enter()
 		warn_from = node:effect_origin_units()
 	end
 
-	ai.warn(warn_from, d.point + warn_direction * ai.camera_size(), node.dive_warning_time)
+	ai.warn(warn_from, d.point + warn_direction * ai.camera_size(), cfg.dive_warning_time)
 
 	if d.dropping_bombs then
 		self:say("Lining up. Bombs on this pass.", 1.5)
@@ -216,7 +276,7 @@ function Stingray:prepare_dive_update(dt)
 		self:transition("dive")
 	end
 
-	node:steer_toward_target(d.point, 0, dt)
+	self.parts:steer_toward_target(d.point, 0, dt)
 end
 
 -- dive
@@ -232,6 +292,7 @@ end
 
 function Stingray:dive_update(dt)
 	local node = self.node
+	local cfg = self.cfg
 	local d = self.dive
 	d.closest = math.min(d.closest, self.pos:distance_to(self.player_pos))
 
@@ -240,7 +301,7 @@ function Stingray:dive_update(dt)
 	if inside and d.dropping_bombs then
 		d.bomb_timer = d.bomb_timer + dt
 
-		if d.bombs_dropped < node.dive_bombs_per_dive and d.bomb_timer >= node.dive_bomb_interval then
+		if d.bombs_dropped < cfg.dive_bombs_per_dive and d.bomb_timer >= cfg.dive_bomb_interval then
 			d.bomb_timer = 0
 			d.bombs_dropped = d.bombs_dropped + 1
 
@@ -253,14 +314,14 @@ function Stingray:dive_update(dt)
 		if d.big_volley then
 			if not d.volley_fired then
 				d.volley_fired = true
-				node:fire_burst(vec2(1, 0), node.dive_volley_big)
+				self.parts:fire_burst(vec2(1, 0), cfg.dive_volley_big)
 			end
 		else
 			d.barrage_timer = d.barrage_timer + dt
 
-			if d.barrage_timer >= node.dive_barrage_interval then
+			if d.barrage_timer >= cfg.dive_barrage_interval then
 				d.barrage_timer = 0
-				node:fire_burst(vec2(1, 0), node.dive_volley_small)
+				self.parts:fire_burst(vec2(1, 0), cfg.dive_volley_small)
 			end
 		end
 	end
@@ -268,14 +329,13 @@ function Stingray:dive_update(dt)
 	local target = self.player.player
 
 	if node:touching(target) then
-		-- the ContactEvent of the original: the ram, then the fight
-		node:ram(target)
+		node:ram(target, cfg.dive_hit_impulse)
 		self:transition("fight")
 	elseif (d.point - self.pos):dot(node:forward()) < 0 or self.pos:distance_to(d.point) < 1.5 then
-		if d.closest > node.dive_near_radius then
+		if d.closest > cfg.dive_near_radius then
 			d.miss_count = d.miss_count + 1
 
-			if d.miss_count >= node.dive_max_misses then
+			if d.miss_count >= cfg.dive_max_misses then
 				self:transition("aggress")
 			else
 				self:start_prepare_dive(self.pos)
@@ -285,7 +345,7 @@ function Stingray:dive_update(dt)
 		end
 	end
 
-	node:steer_toward_target(d.point, node.dive_speed, dt)
+	self.parts:steer_toward_target(d.point, cfg.dive_speed, dt)
 end
 
 -- aggress
@@ -296,15 +356,15 @@ function Stingray:aggress_enter()
 end
 
 function Stingray:aggress_update(dt)
-	local node = self.node
+	local cfg = self.cfg
 	self.aggress_timer = self.aggress_timer + dt
 
-	if self.pos:distance_to(self.player_pos) < node.aggress_engage_radius or self.aggress_timer >= node.aggress_give_up_time then
+	if self.pos:distance_to(self.player_pos) < cfg.aggress_engage_radius or self.aggress_timer >= cfg.aggress_give_up_time then
 		self:transition("fight")
 		return
 	end
 
-	node:steer_toward_target(self.player_pos, node.aggress_speed, dt)
+	self.parts:steer_toward_target(self.player_pos, cfg.aggress_speed, dt)
 end
 
 -- fight
@@ -315,19 +375,19 @@ function Stingray:start_fight()
 end
 
 function Stingray:fight_enter()
-	local node = self.node
+	local cfg = self.cfg
 	local f = self.fight
 	self.dive.miss_count = 0
 	f.side = self.pos.x >= self.player_pos.x and 1 or -1
 	f.timer = 0
 	f.bomb_timer = 0
 	f.fighter_timer = 0
-	f.position = self.player_pos + vec2(f.side * ai.camera_size() * node.fight_offset_ratio, 0)
+	f.position = self.player_pos + vec2(f.side * ai.camera_size() * cfg.fight_offset_ratio, 0)
 	f.rocks_spawned = false
 	f.rocks_pushed = false
 
-	if ai.valid(node.shield) then
-		node.shield.active = true
+	if self.parts and ai.valid(self.parts.shield) then
+		self.parts.shield.active = true
 	end
 
 	self:say("Stay in the box.", 2.0)
@@ -335,21 +395,20 @@ end
 
 -- the trap and shield let go however the fight ends
 function Stingray:fight_exit()
-	local node = self.node
-
-	if ai.valid(node.trap) then
-		node.trap.active = false
+	if self.parts and ai.valid(self.parts.trap) then
+		self.parts.trap.active = false
 	end
 
-	if ai.valid(node.shield) then
-		node.shield.active = false
+	if self.parts and ai.valid(self.parts.shield) then
+		self.parts.shield.active = false
 	end
 end
 
 -- the band just off the camera on the fight side, where rocks and bombs
 -- come from
 function Stingray:fight_offscreen_zone()
-	local band = math.max(self.active_zone.x * self.node.fight_spawn_band, 0.5)
+	local cfg = self.cfg
+	local band = math.max(self.active_zone.x * cfg.fight_spawn_band, 0.5)
 	return {
 		center = vec2(self.camera_pos.x + self.fight.side * (self.active_zone.x + band), self.camera_pos.y),
 		half = vec2(band, self.active_zone.y),
@@ -359,20 +418,20 @@ end
 -- fight_rock_count_min..max one chunk rocks from off screen, drifting at
 -- the fight spot for the shield to gather
 function Stingray:spawn_fight_rocks()
-	local node = self.node
-	local props = node.rock_props
+	local cfg = self.cfg
+	local props = self.parts and self.parts.rock_props or nil
 
 	if props == nil then
 		return
 	end
 
 	local zone = self:fight_offscreen_zone()
-	local count = math.random(node.fight_rock_count_min, node.fight_rock_count_max)
+	local count = math.random(cfg.fight_rock_count_min, cfg.fight_rock_count_max)
 
 	for _ = 1, count do
 		local at = ai.random_in_box(zone.center, zone.half, 0)
-		local velocity = (self.fight.position - at):normalized() * node.fight_rock_speed
-		self:spawn_rock(node:fight_rock_props(node:fight_rock_cells()), at, velocity, true, 10, "rock")
+		local velocity = (self.fight.position - at):normalized() * cfg.fight_rock_speed
+		self:spawn_rock(self.parts:fight_rock_props(self:fight_rock_cells()), at, velocity, true, 10, "rock")
 	end
 end
 
@@ -391,19 +450,20 @@ end
 
 function Stingray:fight_update(dt)
 	local node = self.node
+	local cfg = self.cfg
 	local f = self.fight
 	local distance = self.pos:distance_to(f.position)
-	local trap_zone = self.active_zone * node.fight_trap_camera_scale
+	local trap_zone = self.active_zone * cfg.fight_trap_camera_scale
 	local near_camera = math.abs(self.pos.x - self.camera_pos.x) < trap_zone.x and math.abs(self.pos.y - self.camera_pos.y) < trap_zone.y
 
-	if ai.valid(node.trap) then
+	if self.parts and ai.valid(self.parts.trap) then
 		local size = ai.camera_size()
-		node.trap.active = near_camera and distance < node.fight_arrive_radius
-		node.trap:set_box(vec2(self.pos.x - f.side * size, self.pos.y), vec2(1, 1) * size * 0.8, 0)
+		self.parts.trap.active = near_camera and distance < cfg.fight_arrive_radius
+		self.parts.trap:set_box(vec2(self.pos.x - f.side * size, self.pos.y), vec2(1, 1) * size * 0.8, 0)
 	end
 
-	if distance >= node.fight_arrive_radius then
-		node:steer_fight(f.position, math.max(node.roam_speed, distance / math.max(node.fight_return_time, 0.1)), dt)
+	if distance >= cfg.fight_arrive_radius then
+		self.parts:steer_fight(f.position, math.max(cfg.roam_speed, distance / math.max(cfg.fight_return_time, 0.1)), dt)
 		return
 	end
 
@@ -412,33 +472,33 @@ function Stingray:fight_update(dt)
 		self:spawn_fight_rocks()
 	end
 
-	if not f.rocks_pushed and f.timer / node.fight_time >= 0.5 then
+	if not f.rocks_pushed and f.timer / cfg.fight_time >= 0.5 then
 		f.rocks_pushed = true
 
-		if ai.valid(node.shield) then
-			node.shield:push_rocks(self.pos, node.fight_push_speed)
+		if self.parts and ai.valid(self.parts.shield) then
+			self.parts.shield:push_rocks(self.pos, cfg.fight_push_speed)
 		end
 	end
 
-	node:fire_arc(true, self.player_pos - self.pos)
+	self.parts:fire_arc(true, self.player_pos - self.pos)
 
 	local zone = self:fight_offscreen_zone()
 
 	f.bomb_timer = f.bomb_timer + dt
 
-	if f.bomb_timer >= node.fight_bomb_interval then
+	if f.bomb_timer >= cfg.fight_bomb_interval then
 		f.bomb_timer = 0
 		local at = ai.random_in_box(zone.center, zone.half, 0)
-		self:spawn("bomb", at, (self.player_pos - at):normalized() * node.fight_bomb_speed, true, 10, "bomb")
+		self:spawn("bomb", at, (self.player_pos - at):normalized() * cfg.fight_bomb_speed, true, 10, "bomb")
 	end
 
 	f.fighter_timer = f.fighter_timer + dt
 
-	if f.fighter_timer >= node.fight_fighter_interval then
-		if self:fight_alive_count() + f.pending < node.fight_max_fighters then
+	if f.fighter_timer >= cfg.fight_fighter_interval then
+		if self:fight_alive_count() + f.pending < cfg.fight_max_fighters then
 			f.fighter_timer = 0
-			local behind = node:radius_units() + node.fight_spawn_behind
-			local at = self.pos + vec2(f.side * behind, 0) + ai.random_in_circle(node.fight_spawn_behind)
+			local behind = node:radius_units() + cfg.fight_spawn_behind
+			local at = self.pos + vec2(f.side * behind, 0) + ai.random_in_circle(cfg.fight_spawn_behind)
 
 			if self:spawn("fighter", at, vec2(0, 0), false, 10, "fighter") ~= nil then
 				f.pending = f.pending + 1
@@ -448,23 +508,23 @@ function Stingray:fight_update(dt)
 
 	f.timer = f.timer + dt
 
-	if f.timer >= node.fight_time then
+	if f.timer >= cfg.fight_time then
 		self:transition("reposition")
 	end
 
-	node:steer_fight(f.position, 0, dt)
+	self.parts:steer_fight(f.position, 0, dt)
 end
 
 -- reposition: swing around the player, the way the body was already
 -- moving, to the first clear spot on the ring at least a quarter turn on
 
 function Stingray:reposition_enter()
-	local node = self.node
+	local cfg = self.cfg
 	local r = self.reposition
 	self.orbit_angle = (self.pos - self.player_pos):angle()
 
 	local radial = from_angle(self.orbit_angle)
-	r.dir = radial:cross(node.linear_velocity) >= 0 and 1 or -1
+	r.dir = radial:cross(self.node.linear_velocity) >= 0 and 1 or -1
 
 	local min_arc = math.pi * 0.5
 	local step = 2 * math.pi / 12
@@ -472,9 +532,9 @@ function Stingray:reposition_enter()
 
 	for i = 0, 11 do
 		local candidate = min_arc + step * i
-		local point = self.player_pos + from_angle(self.orbit_angle + r.dir * candidate) * node.roam_radius
+		local point = self.player_pos + from_angle(self.orbit_angle + r.dir * candidate) * cfg.roam_radius
 
-		if node:space_is_free(point, node.reposition_clearance) then
+		if self.parts:space_is_free(point, cfg.reposition_clearance) then
 			arc = candidate
 			break
 		end
@@ -484,16 +544,16 @@ function Stingray:reposition_enter()
 end
 
 function Stingray:reposition_update(dt)
-	local node = self.node
+	local cfg = self.cfg
 	local r = self.reposition
-	local radius = math.max(node.roam_radius, 1)
-	self.orbit_angle = self.orbit_angle + r.dir * node.roam_speed / radius * dt
+	local radius = math.max(cfg.roam_radius, 1)
+	self.orbit_angle = self.orbit_angle + r.dir * cfg.roam_speed / radius * dt
 
 	if r.dir * (r.target_angle - self.orbit_angle) <= 0 then
 		self:transition("orbit")
 	end
 
-	node:steer_toward_target(self.player_pos + from_angle(self.orbit_angle) * radius, node.roam_speed, dt)
+	self.parts:steer_toward_target(self.player_pos + from_angle(self.orbit_angle) * radius, cfg.roam_speed, dt)
 end
 
 return Stingray

@@ -27,7 +27,7 @@ var capture_timer := 0.0
 var local_points := PackedVector2Array()
 var local_centroid := Vector2.ZERO
 
-func update(host: Enemy, delta: float) -> void:
+func update(host: AiScript, delta: float) -> void:
 	if not active:
 		holding.clear()
 		return
@@ -78,21 +78,21 @@ func update(host: Enemy, delta: float) -> void:
 		rock.angular_velocity *= 1.0 / (1.0 + delta * held_angular_damping)
 
 # the hull polygon and its centroid in world units, built on first use
-func world_points(host: Enemy) -> PackedVector2Array:
+func world_points(host: AiScript) -> PackedVector2Array:
 	build_local_points(host)
 
 	return host.global_transform.scaled(Vector2.ONE / Steering.ppu()) * local_points
 
-func world_centroid(host: Enemy) -> Vector2:
+func world_centroid(host: AiScript) -> Vector2:
 	build_local_points(host)
 
 	return host.global_transform.scaled(Vector2.ONE / Steering.ppu()) * local_centroid
 
 # where rocks are driven to for a threat at point, world units
-func slot_point(host: Enemy, point: Vector2) -> Vector2:
+func slot_point(host: AiScript, point: Vector2) -> Vector2:
 	return Steering.closest_point_on_polygon(world_points(host), point)
 
-func build_local_points(host: Enemy) -> void:
+func build_local_points(host: AiScript) -> void:
 	local_points.clear()
 	local_centroid = Vector2.ZERO
 
@@ -116,7 +116,7 @@ func build_local_points(host: Enemy) -> void:
 
 	local_centroid /= points.size()
 
-func capture(host: Enemy, centroid: Vector2) -> void:
+func capture(host: AiScript, centroid: Vector2) -> void:
 	var world := RegolithWorld.active()
 
 	if world == null:
@@ -150,17 +150,17 @@ func push_rocks(away_from: Vector2, speed: float) -> void:
 
 	holding.clear()
 
-static func is_rock(sprite: Node, host: Enemy) -> bool:
+static func is_rock(sprite: Node, host: AiScript) -> bool:
 	if not sprite is RegolithSprite or sprite == host or not sprite.is_dynamic():
 		return false
 
-	return not sprite is Enemy and sprite != host.player
+	return not sprite is AiScript and sprite != host.player
 
 # computes everything in world sim units; Steering.gz_* lift each emitted
 # point to host-local scene pixels via to_local * (p * ppu), and the walker's
 # host.global_transform puts it back at world position
 func draw_gizmos(g: RegolithGizmos) -> void:
-	var host := get_parent() as Enemy
+	var host := get_parent() as AiScript
 	if host == null or points.size() < 3:
 		return
 
